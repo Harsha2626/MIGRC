@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Policies{% endblock %}
+{% block breadcrumb %}<span>Policy Management</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Policy Management</h1>
+        <p>Create, manage, and track policy acknowledgements</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary"><i class="fas fa-book"></i> Policy Library</button>
+        <button class="btn btn-primary" onclick="showAddPolicyModal()"><i class="fas fa-plus"></i> Create Policy</button>
+    </div>
+</div>
+
+<!-- Policy Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-file-lines"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Total Policies</div>
+            <div class="stat-value">{{ policies|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Published</div>
+            <div class="stat-value">{{ policies|selectattr('status', 'equalto', 'Published')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">In Review</div>
+            <div class="stat-value">{{ policies|selectattr('status', 'equalto', 'In Review')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-pen-to-square"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Drafts</div>
+            <div class="stat-value">{{ policies|selectattr('status', 'equalto', 'Draft')|list|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+    <div class="search-input-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" class="filter-input" placeholder="Search policies..." id="policySearch" oninput="filterPolicies()">
+    </div>
+    <select class="filter-select" id="policyStatusFilter" onchange="filterPolicies()">
+        <option value="">All Statuses</option>
+        <option value="Published">Published</option>
+        <option value="In Review">In Review</option>
+        <option value="Draft">Draft</option>
+    </select>
+</div>
+
+<!-- Policy Table -->
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table id="policyTable">
+                <thead>
+                    <tr>
+                        <th>Policy Name</th>
+                        <th>Version</th>
+                        <th>Owner</th>
+                        <th>Framework</th>
+                        <th>Status</th>
+                        <th>Last Reviewed</th>
+                        <th>Acknowledgements</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in policies %}
+                    <tr data-status="{{ p.status }}">
+                        <td>
+                            <div class="font-semibold">{{ p.name }}</div>
+                            <div class="text-sm text-muted">Next review: {{ p.next_review }}</div>
+                        </td>
+                        <td>v{{ p.version }}</td>
+                        <td>{{ p.owner }}</td>
+                        <td><span class="badge badge-neutral">{{ p.framework }}</span></td>
+                        <td>
+                            {% if p.status == 'Published' %}<span class="badge badge-success">{{ p.status }}</span>
+                            {% elif p.status == 'In Review' %}<span class="badge badge-warning">{{ p.status }}</span>
+                            {% else %}<span class="badge badge-info">{{ p.status }}</span>{% endif %}
+                        </td>
+                        <td>{{ p.last_reviewed }}</td>
+                        <td>
+                            <div class="flex-center gap-8">
+                                <div class="progress-bar" style="width:80px;">
+                                    <div class="progress-fill {% if (p.acknowledgements / p.total_employees * 100) >= 90 %}green{% elif (p.acknowledgements / p.total_employees * 100) >= 60 %}orange{% else %}red{% endif %}" style="width:{{ (p.acknowledgements / p.total_employees * 100)|round }}%"></div>
+                                </div>
+                                <span class="text-sm">{{ p.acknowledgements }}/{{ p.total_employees }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="flex gap-8">
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Reminder" onclick="showToast('Reminder sent to pending employees','info')"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterPolicies() {
+    const search = document.getElementById('policySearch').value.toLowerCase();
+    const status = document.getElementById('policyStatusFilter').value;
+    document.querySelectorAll('#policyTable tbody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchStatus = !status || row.dataset.status === status;
+        row.style.display = matchSearch && matchStatus ? '' : 'none';
+    });
+}
+
+function showAddPolicyModal() {
+    openModal('Create New Policy', `
+        <div class="form-group">
+            <label>Policy Name</label>
+            <input type="text" class="form-control" placeholder="Enter policy name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>Owner</label>
+                <input type="text" class="form-control" placeholder="Policy owner">
+            </div>
+            <div class="form-group">
+                <label>Framework</label>
+                <select class="form-control">
+                    <option>SOC 2</option>
+                    <option>ISO 27001</option>
+                    <option>GDPR</option>
+                    <option>HIPAA</option>
+                    <option>PCI DSS</option>
+                    <option>General</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Use Template</label>
+            <select class="form-control">
+                <option>Start from scratch</option>
+                <option>Information Security Policy Template</option>
+                <option>Acceptable Use Policy Template</option>
+                <option>Data Classification Template</option>
+                <option>Incident Response Template</option>
+                <option>Access Control Template</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Policy Content</label>
+            <textarea class="form-control" rows="6" placeholder="Enter policy content or use a template..."></textarea>
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-secondary" onclick="closeModal();showToast(\'Policy saved as draft\',\'info\')">Save as Draft</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Policy published successfully\',\'success\')">Publish</button>');
+}
+</script>
+{% endblock %}

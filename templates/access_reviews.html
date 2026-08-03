@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Access Reviews{% endblock %}
+{% block breadcrumb %}<span>Access Reviews</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Access Reviews</h1>
+        <p>Validate and audit user access privileges across systems</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary"><i class="fas fa-clock-rotate-left"></i> Review History</button>
+        <button class="btn btn-primary" onclick="showStartReviewModal()"><i class="fas fa-play"></i> Start Review Campaign</button>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value">{{ reviews|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Active Reviews</div>
+            <div class="stat-value">{{ reviews|selectattr('status', 'equalto', 'Active')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-user-clock"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Review Due</div>
+            <div class="stat-value">{{ reviews|selectattr('status', 'equalto', 'Review Due')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-user-shield"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">High Risk Users</div>
+            <div class="stat-value">{{ reviews|selectattr('risk', 'equalto', 'High')|list|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Access Review Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>User Access Summary</h3>
+    </div>
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Systems</th>
+                        <th>Risk Level</th>
+                        <th>Last Review</th>
+                        <th>Next Review</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in reviews %}
+                    <tr>
+                        <td>
+                            <div class="flex-center gap-8">
+                                <div class="avatar" style="width:30px;height:30px;font-size:10px;">{{ r.user.split(' ')[0][0] }}{{ r.user.split(' ')[1][0] }}</div>
+                                <span class="font-semibold">{{ r.user }}</span>
+                            </div>
+                        </td>
+                        <td><span class="badge badge-neutral">{{ r.role }}</span></td>
+                        <td>
+                            <div class="tag-list">
+                                {% for s in r.systems %}
+                                <span class="tag">{{ s }}</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if r.risk == 'High' %}<span class="badge badge-danger">{{ r.risk }}</span>
+                            {% elif r.risk == 'Medium' %}<span class="badge badge-warning">{{ r.risk }}</span>
+                            {% else %}<span class="badge badge-success">{{ r.risk }}</span>{% endif %}
+                        </td>
+                        <td>{{ r.last_review }}</td>
+                        <td>{{ r.next_review }}</td>
+                        <td>
+                            {% if r.status == 'Active' %}<span class="badge badge-success">{{ r.status }}</span>
+                            {% else %}<span class="badge badge-warning">{{ r.status }}</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="flex gap-8">
+                                <button class="btn btn-sm btn-secondary" onclick="showToast('Access approved for {{ r.user }}','success')">Approve</button>
+                                <button class="btn btn-sm btn-danger" onclick="showToast('Access revoked for {{ r.user }}','warning')">Revoke</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showStartReviewModal() {
+    openModal('Start Access Review Campaign', `
+        <div class="form-group">
+            <label>Campaign Name</label>
+            <input type="text" class="form-control" placeholder="e.g., Q3 2026 Access Review">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>Scope</label>
+                <select class="form-control">
+                    <option>All Users</option>
+                    <option>Admin Users Only</option>
+                    <option>High Risk Users</option>
+                    <option>Specific Department</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" class="form-control">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Reviewers</label>
+            <input type="text" class="form-control" placeholder="Enter reviewer names...">
+        </div>
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea class="form-control" placeholder="Additional instructions for reviewers..."></textarea>
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Review campaign started\',\'success\')">Start Campaign</button>');
+}
+</script>
+{% endblock %}

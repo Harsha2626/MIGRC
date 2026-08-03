@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Risk Management{% endblock %}
+{% block breadcrumb %}<span>Risk Management</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Risk Management</h1>
+        <p>Identify, assess, and manage organizational risks</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary"><i class="fas fa-download"></i> Export</button>
+        <button class="btn btn-primary" onclick="showAddRiskModal()"><i class="fas fa-plus"></i> Add Risk</button>
+    </div>
+</div>
+
+<!-- Risk Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-exclamation-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Total Risks</div>
+            <div class="stat-value">{{ risks|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-fire"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Open</div>
+            <div class="stat-value">{{ risks|selectattr('status', 'equalto', 'Open')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-wrench"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">In Treatment</div>
+            <div class="stat-value">{{ risks|selectattr('status', 'equalto', 'In Treatment')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Accepted</div>
+            <div class="stat-value">{{ risks|selectattr('status', 'equalto', 'Accepted')|list|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab active" onclick="switchRiskView(this, 'register')">Risk Register</button>
+    <button class="tab" onclick="switchRiskView(this, 'matrix')">Risk Matrix</button>
+</div>
+
+<!-- Risk Register View -->
+<div id="registerView">
+    <div class="toolbar">
+        <div class="search-input-wrapper">
+            <i class="fas fa-search"></i>
+            <input type="text" class="filter-input" placeholder="Search risks..." id="riskSearch" oninput="filterRisks()">
+        </div>
+        <select class="filter-select" id="riskStatusFilter" onchange="filterRisks()">
+            <option value="">All Statuses</option>
+            <option value="Open">Open</option>
+            <option value="In Treatment">In Treatment</option>
+            <option value="Accepted">Accepted</option>
+        </select>
+        <select class="filter-select" id="riskImpactFilter" onchange="filterRisks()">
+            <option value="">All Impacts</option>
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <div class="card-body no-padding">
+            <div class="table-container">
+                <table id="riskTable">
+                    <thead>
+                        <tr>
+                            <th>Risk</th>
+                            <th>Category</th>
+                            <th>Impact</th>
+                            <th>Likelihood</th>
+                            <th>Score</th>
+                            <th>Owner</th>
+                            <th>Treatment</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in risks %}
+                        <tr data-status="{{ r.status }}" data-impact="{{ r.impact }}">
+                            <td>
+                                <div class="font-semibold">{{ r.title }}</div>
+                                <div class="text-sm text-muted">Created {{ r.created }}</div>
+                            </td>
+                            <td><span class="badge badge-neutral">{{ r.category }}</span></td>
+                            <td>
+                                {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
+                                {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
+                                {% elif r.impact == 'Medium' %}<span class="badge badge-info">{{ r.impact }}</span>
+                                {% else %}<span class="badge badge-success">{{ r.impact }}</span>{% endif %}
+                            </td>
+                            <td>{{ r.likelihood }}</td>
+                            <td>
+                                <strong style="font-size:16px;{% if r.score >= 20 %}color:var(--accent-danger){% elif r.score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ r.score }}</strong>
+                            </td>
+                            <td>{{ r.owner }}</td>
+                            <td><span class="badge badge-neutral">{{ r.treatment }}</span></td>
+                            <td>
+                                {% if r.status == 'Open' %}<span class="badge badge-danger">{{ r.status }}</span>
+                                {% elif r.status == 'In Treatment' %}<span class="badge badge-warning">{{ r.status }}</span>
+                                {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit"><i class="fas fa-pen"></i></button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Risk Matrix View -->
+<div id="matrixView" style="display:none;">
+    <div class="card">
+        <div class="card-header">
+            <h3>Risk Heatmap</h3>
+        </div>
+        <div class="card-body" style="display:flex;justify-content:center;">
+            <div>
+                <div style="text-align:center;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--text-secondary);">IMPACT &rarr;</div>
+                <div style="display:grid;grid-template-columns:60px repeat(4,90px);grid-template-rows:30px repeat(3,70px);gap:4px;align-items:center;">
+                    <!-- Header row -->
+                    <div></div>
+                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">Low</div>
+                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">Medium</div>
+                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">High</div>
+                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">Critical</div>
+
+                    <!-- High Likelihood -->
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">High</div>
+                    <div class="risk-cell medium" id="rm-high-low">0</div>
+                    <div class="risk-cell high" id="rm-high-medium">0</div>
+                    <div class="risk-cell critical" id="rm-high-high">0</div>
+                    <div class="risk-cell critical" id="rm-high-critical">0</div>
+
+                    <!-- Medium Likelihood -->
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">Medium</div>
+                    <div class="risk-cell low" id="rm-medium-low">0</div>
+                    <div class="risk-cell medium" id="rm-medium-medium">0</div>
+                    <div class="risk-cell high" id="rm-medium-high">0</div>
+                    <div class="risk-cell critical" id="rm-medium-critical">0</div>
+
+                    <!-- Low Likelihood -->
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">Low</div>
+                    <div class="risk-cell low" id="rm-low-low">0</div>
+                    <div class="risk-cell low" id="rm-low-medium">0</div>
+                    <div class="risk-cell medium" id="rm-low-high">0</div>
+                    <div class="risk-cell high" id="rm-low-critical">0</div>
+                </div>
+                <div style="text-align:left;margin-top:12px;margin-left:60px;font-size:12px;font-weight:600;color:var(--text-secondary);">&uarr; LIKELIHOOD</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Populate risk matrix
+const risks = {{ risks|tojson }};
+risks.forEach(r => {
+    const cellId = `rm-${r.likelihood.toLowerCase()}-${r.impact.toLowerCase()}`;
+    const cell = document.getElementById(cellId);
+    if (cell) cell.textContent = parseInt(cell.textContent) + 1;
+});
+
+function switchRiskView(el, view) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('registerView').style.display = view === 'register' ? '' : 'none';
+    document.getElementById('matrixView').style.display = view === 'matrix' ? '' : 'none';
+}
+
+function filterRisks() {
+    const search = document.getElementById('riskSearch').value.toLowerCase();
+    const status = document.getElementById('riskStatusFilter').value;
+    const impact = document.getElementById('riskImpactFilter').value;
+    document.querySelectorAll('#riskTable tbody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchStatus = !status || row.dataset.status === status;
+        const matchImpact = !impact || row.dataset.impact === impact;
+        row.style.display = matchSearch && matchStatus && matchImpact ? '' : 'none';
+    });
+}
+
+function showAddRiskModal() {
+    openModal('Add New Risk', `
+        <div class="form-group">
+            <label>Risk Title</label>
+            <input type="text" class="form-control" placeholder="Describe the risk...">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>Category</label>
+                <select class="form-control">
+                    <option>Access Control</option>
+                    <option>Data Protection</option>
+                    <option>Vendor Risk</option>
+                    <option>Cloud Security</option>
+                    <option>Business Continuity</option>
+                    <option>Social Engineering</option>
+                    <option>Vulnerability Mgmt</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Owner</label>
+                <input type="text" class="form-control" placeholder="Risk owner">
+            </div>
+            <div class="form-group">
+                <label>Impact</label>
+                <select class="form-control">
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                    <option>Critical</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Likelihood</label>
+                <select class="form-control">
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Treatment Plan</label>
+            <select class="form-control">
+                <option>Mitigate</option>
+                <option>Transfer</option>
+                <option>Accept</option>
+                <option>Avoid</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <textarea class="form-control" placeholder="Detailed description of the risk and its potential impact..."></textarea>
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Risk added successfully\',\'success\')">Add Risk</button>');
+}
+</script>
+{% endblock %}

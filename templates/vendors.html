@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Vendors{% endblock %}
+{% block breadcrumb %}<span>Vendor Management</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Vendor Risk Management</h1>
+        <p>Assess and monitor third-party vendor security posture</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary"><i class="fas fa-file-import"></i> Send Questionnaire</button>
+        <button class="btn btn-primary" onclick="showAddVendorModal()"><i class="fas fa-plus"></i> Add Vendor</button>
+    </div>
+</div>
+
+<!-- Vendor Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-building"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Total Vendors</div>
+            <div class="stat-value">{{ vendors|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-exclamation-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Critical Tier</div>
+            <div class="stat-value">{{ vendors|selectattr('risk_tier', 'equalto', 'Critical')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">High Tier</div>
+            <div class="stat-value">{{ vendors|selectattr('risk_tier', 'equalto', 'High')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Approved</div>
+            <div class="stat-value">{{ vendors|selectattr('status', 'equalto', 'Approved')|list|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+    <div class="search-input-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" class="filter-input" placeholder="Search vendors..." id="vendorSearch" oninput="filterVendors()">
+    </div>
+    <select class="filter-select" id="vendorTierFilter" onchange="filterVendors()">
+        <option value="">All Risk Tiers</option>
+        <option value="Critical">Critical</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+    </select>
+</div>
+
+<!-- Vendor Table -->
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table id="vendorTable">
+                <thead>
+                    <tr>
+                        <th>Vendor</th>
+                        <th>Category</th>
+                        <th>Risk Tier</th>
+                        <th>Risk Score</th>
+                        <th>Status</th>
+                        <th>Compliance</th>
+                        <th>Last Assessment</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vendors %}
+                    <tr data-tier="{{ v.risk_tier }}">
+                        <td>
+                            <div class="font-semibold">{{ v.name }}</div>
+                        </td>
+                        <td class="text-muted">{{ v.category }}</td>
+                        <td>
+                            {% if v.risk_tier == 'Critical' %}<span class="badge badge-danger">{{ v.risk_tier }}</span>
+                            {% elif v.risk_tier == 'High' %}<span class="badge badge-warning">{{ v.risk_tier }}</span>
+                            {% else %}<span class="badge badge-info">{{ v.risk_tier }}</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="flex-center gap-8">
+                                <div class="risk-score-bar">
+                                    <div class="risk-score-fill" style="width:{{ v.risk_score }}%;background:{% if v.risk_score >= 80 %}#10b981{% elif v.risk_score >= 60 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+                                </div>
+                                <span class="font-semibold">{{ v.risk_score }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if v.status == 'Approved' %}<span class="badge badge-success">{{ v.status }}</span>
+                            {% else %}<span class="badge badge-warning">{{ v.status }}</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="tag-list">
+                                {% for c in v.compliance %}
+                                <span class="tag">{{ c }}</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="text-sm">{{ v.last_assessment }}</div>
+                            <div class="text-sm text-muted">Next: {{ v.next_assessment }}</div>
+                        </td>
+                        <td>
+                            <div class="flex gap-8">
+                                <button class="btn btn-sm btn-secondary btn-icon" title="View Details"><i class="fas fa-eye"></i></button>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Questionnaire" onclick="showToast('Questionnaire sent to {{ v.name }}','info')"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterVendors() {
+    const search = document.getElementById('vendorSearch').value.toLowerCase();
+    const tier = document.getElementById('vendorTierFilter').value;
+    document.querySelectorAll('#vendorTable tbody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchTier = !tier || row.dataset.tier === tier;
+        row.style.display = matchSearch && matchTier ? '' : 'none';
+    });
+}
+
+function showAddVendorModal() {
+    openModal('Add New Vendor', `
+        <div class="form-group">
+            <label>Vendor Name</label>
+            <input type="text" class="form-control" placeholder="Enter vendor name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>Category</label>
+                <select class="form-control">
+                    <option>Cloud Infrastructure</option>
+                    <option>Communication</option>
+                    <option>Development</option>
+                    <option>CRM</option>
+                    <option>Payment Processing</option>
+                    <option>Project Management</option>
+                    <option>Monitoring</option>
+                    <option>Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Risk Tier</label>
+                <select class="form-control">
+                    <option>Critical</option>
+                    <option>High</option>
+                    <option>Medium</option>
+                    <option>Low</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Website URL</label>
+            <input type="url" class="form-control" placeholder="https://vendor.com">
+        </div>
+        <div class="form-group">
+            <label>Contact Email</label>
+            <input type="email" class="form-control" placeholder="security@vendor.com">
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Vendor added successfully\',\'success\')">Add Vendor</button>');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,8 @@
+venv-migrc/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.flask_session/
+instance/
+.DS_Store

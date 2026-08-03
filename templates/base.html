@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIGRC - {% block title %}Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-shield-halved"></i></div>
+                <span class="logo-text">MIGRC</span>
+            </div>
+            <button class="sidebar-toggle" id="sidebarToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <div class="sidebar-search">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search..." id="sidebarSearch">
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <span class="nav-section-title">Overview</span>
+                <a href="/" class="nav-item {% if page == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-section-title">Governance</span>
+                <a href="/compliance" class="nav-item {% if page == 'compliance' %}active{% endif %}">
+                    <i class="fas fa-clipboard-check"></i>
+                    <span>Compliance</span>
+                </a>
+                <a href="/risks" class="nav-item {% if page == 'risks' %}active{% endif %}">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Risk Management</span>
+                </a>
+                <a href="/policies" class="nav-item {% if page == 'policies' %}active{% endif %}">
+                    <i class="fas fa-file-shield"></i>
+                    <span>Policies</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-section-title">Operations</span>
+                <a href="/audits" class="nav-item {% if page == 'audits' %}active{% endif %}">
+                    <i class="fas fa-magnifying-glass-chart"></i>
+                    <span>Audit Center</span>
+                </a>
+                <a href="/vendors" class="nav-item {% if page == 'vendors' %}active{% endif %}">
+                    <i class="fas fa-building"></i>
+                    <span>Vendors</span>
+                </a>
+                <a href="/assets" class="nav-item {% if page == 'assets' %}active{% endif %}">
+                    <i class="fas fa-server"></i>
+                    <span>Assets</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-section-title">People</span>
+                <a href="/access-reviews" class="nav-item {% if page == 'access_reviews' %}active{% endif %}">
+                    <i class="fas fa-user-lock"></i>
+                    <span>Access Reviews</span>
+                </a>
+                <a href="/training" class="nav-item {% if page == 'training' %}active{% endif %}">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Training</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-section-title">External</span>
+                <a href="/trust-center" class="nav-item {% if page == 'trust_center' %}active{% endif %}">
+                    <i class="fas fa-certificate"></i>
+                    <span>Trust Center</span>
+                </a>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a href="/settings" class="nav-item {% if page == 'settings' %}active{% endif %}">
+                <i class="fas fa-gear"></i>
+                <span>Settings</span>
+            </a>
+            <div class="user-profile">
+                <div class="avatar">HP</div>
+                <div class="user-info">
+                    <span class="user-name">Harsha P</span>
+                    <span class="user-role">Admin</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="mobile-toggle" id="mobileToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="breadcrumb">
+                    {% block breadcrumb %}
+                    <span>Dashboard</span>
+                    {% endblock %}
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="topbar-btn" id="themeToggle" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="topbar-btn" title="Notifications">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+                <button class="topbar-btn" title="Help">
+                    <i class="fas fa-question-circle"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Notification Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Modal Container -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Modal Title</h3>
+                <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Assets{% endblock %}
+{% block breadcrumb %}<span>Asset Management</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Asset Management</h1>
+        <p>Track and secure all critical organizational assets</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary"><i class="fas fa-download"></i> Export</button>
+        <button class="btn btn-primary" onclick="showAddAssetModal()"><i class="fas fa-plus"></i> Add Asset</button>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-server"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Total Assets</div>
+            <div class="stat-value">{{ assets|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-lock"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Confidential</div>
+            <div class="stat-value">{{ assets|selectattr('classification', 'equalto', 'Confidential')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-cloud"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Cloud (AWS)</div>
+            <div class="stat-value">{{ assets|selectattr('cloud_provider', 'equalto', 'AWS')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Restricted</div>
+            <div class="stat-value">{{ assets|selectattr('classification', 'equalto', 'Restricted')|list|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+    <div class="search-input-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" class="filter-input" placeholder="Search assets..." id="assetSearch" oninput="filterAssets()">
+    </div>
+    <select class="filter-select" id="assetTypeFilter" onchange="filterAssets()">
+        <option value="">All Types</option>
+        <option value="Database">Database</option>
+        <option value="Compute">Compute</option>
+        <option value="Storage">Storage</option>
+        <option value="Network">Network</option>
+        <option value="Endpoint">Endpoint</option>
+    </select>
+    <select class="filter-select" id="assetClassFilter" onchange="filterAssets()">
+        <option value="">All Classifications</option>
+        <option value="Restricted">Restricted</option>
+        <option value="Confidential">Confidential</option>
+        <option value="Internal">Internal</option>
+        <option value="Public">Public</option>
+    </select>
+</div>
+
+<!-- Asset Table -->
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table id="assetTable">
+                <thead>
+                    <tr>
+                        <th>Asset Name</th>
+                        <th>Type</th>
+                        <th>Environment</th>
+                        <th>Classification</th>
+                        <th>Owner</th>
+                        <th>Cloud Provider</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in assets %}
+                    <tr data-type="{{ a.type }}" data-class="{{ a.classification }}">
+                        <td>
+                            <div class="flex-center gap-8">
+                                <div class="stat-icon {% if a.type == 'Database' %}blue{% elif a.type == 'Compute' %}green{% elif a.type == 'Storage' %}purple{% elif a.type == 'Network' %}orange{% else %}red{% endif %}" style="width:32px;height:32px;font-size:13px;">
+                                    <i class="fas fa-{% if a.type == 'Database' %}database{% elif a.type == 'Compute' %}microchip{% elif a.type == 'Storage' %}hard-drive{% elif a.type == 'Network' %}network-wired{% else %}laptop{% endif %}"></i>
+                                </div>
+                                <span class="font-semibold">{{ a.name }}</span>
+                            </div>
+                        </td>
+                        <td><span class="badge badge-neutral">{{ a.type }}</span></td>
+                        <td>{{ a.environment }}</td>
+                        <td>
+                            {% if a.classification == 'Restricted' %}<span class="badge badge-danger">{{ a.classification }}</span>
+                            {% elif a.classification == 'Confidential' %}<span class="badge badge-warning">{{ a.classification }}</span>
+                            {% else %}<span class="badge badge-info">{{ a.classification }}</span>{% endif %}
+                        </td>
+                        <td>{{ a.owner }}</td>
+                        <td>{{ a.cloud_provider }}</td>
+                        <td><span class="badge badge-success">{{ a.status }}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary btn-icon" title="View"><i class="fas fa-eye"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterAssets() {
+    const search = document.getElementById('assetSearch').value.toLowerCase();
+    const type = document.getElementById('assetTypeFilter').value;
+    const cls = document.getElementById('assetClassFilter').value;
+    document.querySelectorAll('#assetTable tbody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchType = !type || row.dataset.type === type;
+        const matchClass = !cls || row.dataset.class === cls;
+        row.style.display = matchSearch && matchType && matchClass ? '' : 'none';
+    });
+}
+
+function showAddAssetModal() {
+    openModal('Add New Asset', `
+        <div class="form-group">
+            <label>Asset Name</label>
+            <input type="text" class="form-control" placeholder="Enter asset name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>Type</label>
+                <select class="form-control">
+                    <option>Database</option>
+                    <option>Compute</option>
+                    <option>Storage</option>
+                    <option>Network</option>
+                    <option>Endpoint</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Environment</label>
+                <select class="form-control">
+                    <option>Production</option>
+                    <option>Staging</option>
+                    <option>Development</option>
+                    <option>DR</option>
+                    <option>Corporate</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Classification</label>
+                <select class="form-control">
+                    <option>Restricted</option>
+                    <option>Confidential</option>
+                    <option>Internal</option>
+                    <option>Public</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Owner</label>
+                <input type="text" class="form-control" placeholder="Asset owner">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Cloud Provider</label>
+            <select class="form-control">
+                <option>AWS</option>
+                <option>Azure</option>
+                <option>GCP</option>
+                <option>N/A</option>
+            </select>
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Asset added successfully\',\'success\')">Add Asset</button>');
+}
+</script>
+{% endblock %}

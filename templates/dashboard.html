@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block breadcrumb %}<span>Dashboard</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Compliance Dashboard</h1>
+        <p>Real-time overview of your compliance and security posture</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary"><i class="fas fa-download"></i> Export Report</button>
+        <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Framework</button>
+    </div>
+</div>
+
+<!-- KPI Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Compliance Score</div>
+            <div class="stat-value">{{ compliance_score }}%</div>
+            <div class="stat-change up"><i class="fas fa-arrow-up"></i> 3% from last month</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Controls Passing</div>
+            <div class="stat-value">{{ passing_controls }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_controls }}</span></div>
+            <div class="stat-change up"><i class="fas fa-arrow-up"></i> 12 new this month</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Open Risks</div>
+            <div class="stat-value">{{ open_risks }}</div>
+            <div class="stat-change down"><i class="fas fa-arrow-up"></i> {{ critical_risks }} critical</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-file-shield"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Active Policies</div>
+            <div class="stat-value">{{ policy_count }}</div>
+            <div class="stat-change up"><i class="fas fa-check"></i> All reviewed</div>
+        </div>
+    </div>
+</div>
+
+<!-- Row: Compliance Donut + Framework Progress -->
+<div class="grid-2">
+    <!-- Compliance Overview Donut -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Control Status Overview</h3>
+            <select class="filter-select" style="font-size:12px;padding:4px 10px;">
+                <option>All Frameworks</option>
+                {% for fw in frameworks %}
+                <option>{{ fw.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:40px;flex-wrap:wrap;">
+            <div class="chart-container" style="width:220px;height:220px;">
+                <canvas id="controlsDonut"></canvas>
+                <div class="chart-center-label">
+                    <div class="value">{{ passing_controls }}</div>
+                    <div class="label">Passing</div>
+                </div>
+            </div>
+            <div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Passing ({{ passing_controls }})</div>
+                </div>
+                <div class="legend" style="margin-top:8px;">
+                    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Failing ({{ failing_controls }})</div>
+                </div>
+                <div class="legend" style="margin-top:8px;">
+                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A ({{ total_controls - passing_controls - failing_controls }})</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Framework Compliance -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Framework Compliance</h3>
+            <a href="/compliance" class="btn btn-sm btn-secondary">View All</a>
+        </div>
+        <div class="card-body">
+            {% for fw in frameworks %}
+            <div style="margin-bottom:18px;">
+                <div class="flex-between mb-8">
+                    <span class="font-semibold" style="font-size:13px;">{{ fw.name }}</span>
+                    <span class="text-sm text-muted">{{ ((fw.passing / fw.total_controls) * 100)|round|int }}%</span>
+                </div>
+                <div class="progress-stacked">
+                    <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round }}%;background:#10b981;"></div>
+                    <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round }}%;background:#ef4444;"></div>
+                    <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round }}%;background:#94a3b8;"></div>
+                </div>
+                <div class="progress-label">
+                    <span>{{ fw.passing }} passing</span>
+                    <span>{{ fw.failing }} failing</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Row: Risk Trend + Audits -->
+<div class="grid-2">
+    <!-- Risk Trend -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Risk Trend (6 Months)</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container-wide" style="height:260px;">
+                <canvas id="riskTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Audits -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Active Audits</h3>
+            <a href="/audits" class="btn btn-sm btn-secondary">View All</a>
+        </div>
+        <div class="card-body no-padding">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Audit</th>
+                            <th>Status</th>
+                            <th>Evidence</th>
+                            <th>Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in audits %}
+                        <tr>
+                            <td>
+                                <div class="font-semibold">{{ a.name }}</div>
+                                <div class="text-sm text-muted">{{ a.auditor }}</div>
+                            </td>
+                            <td>
+                                {% if a.status == 'Completed' %}
+                                <span class="badge badge-success">{{ a.status }}</span>
+                                {% elif a.status == 'In Progress' %}
+                                <span class="badge badge-primary">{{ a.status }}</span>
+                                {% else %}
+                                <span class="badge badge-neutral">{{ a.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ a.evidence_collected }}/{{ a.evidence_total }}</td>
+                            <td style="width:120px;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill blue" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round }}%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row: Top Risks Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>Top Risks</h3>
+        <a href="/risks" class="btn btn-sm btn-secondary">View All Risks</a>
+    </div>
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Risk</th>
+                        <th>Category</th>
+                        <th>Impact</th>
+                        <th>Likelihood</th>
+                        <th>Score</th>
+                        <th>Owner</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in risks %}
+                    <tr>
+                        <td class="font-semibold">{{ r.title }}</td>
+                        <td><span class="badge badge-neutral">{{ r.category }}</span></td>
+                        <td>
+                            {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
+                            {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
+                            {% else %}<span class="badge badge-info">{{ r.impact }}</span>{% endif %}
+                        </td>
+                        <td>{{ r.likelihood }}</td>
+                        <td><strong>{{ r.score }}</strong></td>
+                        <td>{{ r.owner }}</td>
+                        <td>
+                            {% if r.status == 'Open' %}<span class="badge badge-danger">{{ r.status }}</span>
+                            {% elif r.status == 'In Treatment' %}<span class="badge badge-warning">{{ r.status }}</span>
+                            {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Controls Donut Chart
+    const donutCtx = document.getElementById('controlsDonut').getContext('2d');
+    new Chart(donutCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Passing', 'Failing', 'N/A'],
+            datasets: [{
+                data: [{{ passing_controls }}, {{ failing_controls }}, {{ total_controls - passing_controls - failing_controls }}],
+                backgroundColor: ['#10b981', '#ef4444', '#94a3b8'],
+                borderWidth: 0,
+                cutout: '75%'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // Risk Trend Chart
+    const trendCtx = document.getElementById('riskTrendChart').getContext('2d');
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+            datasets: [
+                {
+                    label: 'Critical',
+                    data: [4, 3, 5, 3, 2, {{ critical_risks }}],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239,68,68,0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 3
+                },
+                {
+                    label: 'High',
+                    data: [6, 8, 7, 5, 6, {{ open_risks }}],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245,158,11,0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 3
+                },
+                {
+                    label: 'Medium',
+                    data: [10, 12, 9, 11, 8, 7],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 11 } } }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

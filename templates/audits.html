@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Audit Center{% endblock %}
+{% block breadcrumb %}<span>Audit Center</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Audit Center</h1>
+        <p>Track audits, collect evidence, and manage findings</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="showCreateAuditModal()"><i class="fas fa-plus"></i> Create Audit</button>
+    </div>
+</div>
+
+<!-- Audit Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Total Audits</div>
+            <div class="stat-value">{{ audits|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-spinner"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">In Progress</div>
+            <div class="stat-value">{{ audits|selectattr('status', 'equalto', 'In Progress')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-calendar"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Scheduled</div>
+            <div class="stat-value">{{ audits|selectattr('status', 'equalto', 'Scheduled')|list|length }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Completed</div>
+            <div class="stat-value">{{ audits|selectattr('status', 'equalto', 'Completed')|list|length }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit Cards -->
+<div class="grid-2">
+    {% for a in audits %}
+    <div class="card" style="cursor:pointer;" onclick="showAuditDetail({{ loop.index0 }})">
+        <div class="card-header">
+            <div>
+                <h3>{{ a.name }}</h3>
+                <span class="text-sm text-muted">{{ a.framework }} &middot; {{ a.auditor }}</span>
+            </div>
+            {% if a.status == 'Completed' %}<span class="badge badge-success">{{ a.status }}</span>
+            {% elif a.status == 'In Progress' %}<span class="badge badge-primary">{{ a.status }}</span>
+            {% else %}<span class="badge badge-neutral">{{ a.status }}</span>{% endif %}
+        </div>
+        <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:20px;">
+                <div>
+                    <div class="text-sm text-muted mb-8">Start Date</div>
+                    <div class="font-semibold">{{ a.start_date }}</div>
+                </div>
+                <div>
+                    <div class="text-sm text-muted mb-8">End Date</div>
+                    <div class="font-semibold">{{ a.end_date }}</div>
+                </div>
+                <div>
+                    <div class="text-sm text-muted mb-8">Findings</div>
+                    <div class="font-semibold">{{ a.findings }}</div>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <div class="flex-between mb-8">
+                    <span class="text-sm text-muted">Evidence Collection</span>
+                    <span class="text-sm font-semibold">{{ a.evidence_collected }}/{{ a.evidence_total }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill {% if (a.evidence_collected / a.evidence_total * 100) >= 90 %}green{% elif (a.evidence_collected / a.evidence_total * 100) >= 50 %}blue{% else %}orange{% endif %}" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round }}%"></div>
+                </div>
+                <div class="progress-label">
+                    <span>{{ (a.evidence_collected / a.evidence_total * 100)|round|int }}% complete</span>
+                    <span>{{ a.evidence_total - a.evidence_collected }} remaining</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const audits = {{ audits|tojson }};
+
+function showAuditDetail(idx) {
+    const a = audits[idx];
+    const pct = Math.round((a.evidence_collected / a.evidence_total) * 100);
+    openModal(a.name, `
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;">
+            <div>
+                <div class="text-sm text-muted">Framework</div>
+                <div class="font-semibold">${a.framework}</div>
+            </div>
+            <div>
+                <div class="text-sm text-muted">Auditor</div>
+                <div class="font-semibold">${a.auditor}</div>
+            </div>
+            <div>
+                <div class="text-sm text-muted">Period</div>
+                <div class="font-semibold">${a.start_date} to ${a.end_date}</div>
+            </div>
+            <div>
+                <div class="text-sm text-muted">Status</div>
+                <div class="font-semibold">${a.status}</div>
+            </div>
+        </div>
+        <h4 style="margin-bottom:12px;">Evidence Progress (${pct}%)</h4>
+        <div class="progress-bar" style="height:12px;margin-bottom:16px;">
+            <div class="progress-fill blue" style="width:${pct}%"></div>
+        </div>
+        <h4 style="margin-bottom:12px;">Evidence Items</h4>
+        <div style="border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;">
+                <span>Access control documentation</span>
+                <span class="badge badge-success">Collected</span>
+            </div>
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;">
+                <span>Network security logs</span>
+                <span class="badge badge-success">Collected</span>
+            </div>
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;">
+                <span>Encryption configuration</span>
+                <span class="badge badge-warning">Pending</span>
+            </div>
+            <div style="padding:10px 14px;display:flex;justify-content:space-between;">
+                <span>Incident response test results</span>
+                <span class="badge badge-warning">Pending</span>
+            </div>
+        </div>
+        ${a.findings > 0 ? `
+        <h4 style="margin:16px 0 12px;">Findings (${a.findings})</h4>
+        <div style="border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;">
+                <span>MFA not enforced for all admin accounts</span>
+                <span class="badge badge-danger">High</span>
+            </div>
+            <div style="padding:10px 14px;display:flex;justify-content:space-between;">
+                <span>Logging retention below required period</span>
+                <span class="badge badge-warning">Medium</span>
+            </div>
+        </div>` : ''}
+    `);
+}
+
+function showCreateAuditModal() {
+    openModal('Create New Audit', `
+        <div class="form-group">
+            <label>Audit Name</label>
+            <input type="text" class="form-control" placeholder="e.g., SOC 2 Type II Annual Audit">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>Framework</label>
+                <select class="form-control">
+                    <option>SOC 2</option>
+                    <option>ISO 27001</option>
+                    <option>GDPR</option>
+                    <option>HIPAA</option>
+                    <option>PCI DSS</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Auditor</label>
+                <input type="text" class="form-control" placeholder="Auditing firm or Internal">
+            </div>
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>End Date</label>
+                <input type="date" class="form-control">
+            </div>
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Audit created successfully\',\'success\')">Create Audit</button>');
+}
+</script>
+{% endblock %}
