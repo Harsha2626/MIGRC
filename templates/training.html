@@ -29,7 +29,7 @@
             <div class="stat-label">Avg Completion</div>
             {% set total_completed = modules|sum(attribute='completed') %}
             {% set total_assigned = modules|sum(attribute='assigned') %}
-            <div class="stat-value">{{ ((total_completed / total_assigned) * 100)|round|int }}%</div>
+            <div class="stat-value">{{ ((total_completed / total_assigned) * 100)|round|int if total_assigned > 0 else 0 }}%</div>
         </div>
     </div>
     <div class="stat-card">
