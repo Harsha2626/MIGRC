@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template, jsonify
+from flask_login import login_required
 from app.models import Risk
 
 risks_bp = Blueprint('risks', __name__)
 
 
 @risks_bp.route('/risks')
+@login_required
 def risks():
     all_risks = Risk.query.order_by(Risk.score.desc()).all()
     # Template uses {{ risks|tojson }} for JS risk matrix, so pass dicts
@@ -13,6 +15,7 @@ def risks():
 
 
 @risks_bp.route('/api/risks/matrix')
+@login_required
 def api_risk_matrix():
     matrix = {
         "Critical": {"High": 0, "Medium": 0, "Low": 0},

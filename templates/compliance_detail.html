@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{{ framework.name }}{% endblock %}
+{% block breadcrumb %}<a href="/compliance" style="color:var(--text-secondary);text-decoration:none;">Compliance</a> <i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i> <span>{{ framework.name }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ framework.name }}</h1>
+        <p>{{ framework.description }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/compliance" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<!-- Framework Summary -->
+<div class="grid-4" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Total Controls</span>
+                <div class="stat-value">{{ controls|length }}</div>
+            </div>
+            <div class="stat-icon blue"><i class="fas fa-list-check"></i></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Passing</span>
+                <div class="stat-value" style="color:var(--accent-success);">{{ controls|selectattr('status','equalto','Passing')|list|length }}</div>
+            </div>
+            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Failing</span>
+                <div class="stat-value" style="color:var(--accent-danger);">{{ controls|selectattr('status','equalto','Failing')|list|length }}</div>
+            </div>
+            <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Not Assessed</span>
+                <div class="stat-value" style="color:var(--text-secondary);">{{ controls|selectattr('status','equalto','Not Assessed')|list|length }}</div>
+            </div>
+            <div class="stat-icon gray"><i class="fas fa-question-circle"></i></div>
+        </div>
+    </div>
+</div>
+
+<!-- Controls by Category -->
+{% for category, cat_controls in categories.items() %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <h3>
+            {% if category == 'Organizational' %}<i class="fas fa-sitemap" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'People' %}<i class="fas fa-users" style="margin-right:8px;color:var(--accent-warning);"></i>
+            {% elif category == 'Physical' %}<i class="fas fa-building-shield" style="margin-right:8px;color:var(--accent-success);"></i>
+            {% elif category == 'Technological' %}<i class="fas fa-microchip" style="margin-right:8px;color:var(--accent-danger);"></i>
+            {% endif %}
+            {{ category }} Controls ({{ cat_controls|length }})
+        </h3>
+    </div>
+    <div class="card-body no-padding">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:90px;">Code</th>
+                    <th>Control</th>
+                    <th style="width:130px;">Status</th>
+                    <th style="width:120px;">Owner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in cat_controls %}
+                <tr>
+                    <td><strong>{{ c.code }}</strong></td>
+                    <td>{{ c.title }}</td>
+                    <td>
+                        <span class="badge {% if c.status == 'Passing' %}badge-success{% elif c.status == 'Failing' %}badge-danger{% elif c.status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}">
+                            {{ c.status }}
+                        </span>
+                    </td>
+                    <td class="text-muted">{{ c.owner or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

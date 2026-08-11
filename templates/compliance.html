@@ -17,7 +17,7 @@
 <!-- Framework Cards Grid -->
 <div class="grid-3" id="frameworkGrid">
     {% for fw in frameworks %}
-    <div class="framework-card" data-category="{{ fw.category|lower }}" onclick="showFrameworkDetail({{ loop.index0 }})">
+    <div class="framework-card" data-category="{{ fw.category|lower }}" onclick="window.location='/compliance/{{ fw.id }}'" style="cursor:pointer;">
         <div class="framework-card-header">
             <div>
                 <h4>{{ fw.name }}</h4>

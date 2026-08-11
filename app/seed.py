@@ -19,7 +19,7 @@ def seed_database():
         db.create_all()
 
         # ---- DEFAULT USER ----
-        admin = User(email='harsha@migrc.com', name='Harsha P', role='Admin')
+        admin = User(email='harsha@migrc.com', name='Harsha S', role='Admin')
         admin.set_password('admin123')
         db.session.add(admin)
 

@@ -96,10 +96,10 @@
                 <span>Settings</span>
             </a>
             <div class="user-profile">
-                <div class="avatar">HP</div>
+                <div class="avatar">{{ current_user.name.split()[0][0] }}{{ current_user.name.split()[-1][0] if ' ' in current_user.name else '' }}</div>
                 <div class="user-info">
-                    <span class="user-name">Harsha P</span>
-                    <span class="user-role">Admin</span>
+                    <span class="user-name">{{ current_user.name }}</span>
+                    <span class="user-role">{{ current_user.role }}</span>
                 </div>
             </div>
         </div>
@@ -130,11 +130,26 @@
                 <button class="topbar-btn" title="Help">
                     <i class="fas fa-question-circle"></i>
                 </button>
+                <a href="/logout" class="topbar-btn" title="Logout" style="text-decoration:none;color:inherit;">
+                    <i class="fas fa-right-from-bracket"></i>
+                </a>
             </div>
         </header>
 
         <!-- Page Content -->
         <div class="page-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}" style="padding: 12px 16px; margin-bottom: 16px; border-radius: 8px; font-size: 14px;
+                        {% if category == 'error' %}background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+                        {% elif category == 'success' %}background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;
+                        {% else %}background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe;{% endif %}">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
             {% block content %}{% endblock %}
         </div>
     </main>

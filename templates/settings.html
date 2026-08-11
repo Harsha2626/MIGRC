@@ -206,7 +206,7 @@
             <div class="card">
                 <div class="card-header">
                     <h3>Users & Roles</h3>
-                    <button class="btn btn-sm btn-primary"><i class="fas fa-user-plus"></i> Invite User</button>
+                    <button class="btn btn-sm btn-primary" onclick="openInviteUser()"><i class="fas fa-user-plus"></i> Invite User</button>
                 </div>
                 <div class="card-body no-padding">
                     <table>
@@ -214,27 +214,15 @@
                             <tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
                         </thead>
                         <tbody>
+                            {% for u in users %}
                             <tr>
-                                <td class="flex-center gap-8"><div class="avatar" style="width:28px;height:28px;font-size:10px;">HP</div> Harsha P</td>
-                                <td>harsha@midevops.com</td>
-                                <td><span class="badge badge-primary">Admin</span></td>
-                                <td><span class="badge badge-success">Active</span></td>
+                                <td class="flex-center gap-8"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] if ' ' in u.name else '' }}</div> {{ u.name }}</td>
+                                <td>{{ u.email }}</td>
+                                <td><span class="badge {% if u.role == 'Admin' %}badge-primary{% elif u.role == 'Auditor' %}badge-neutral{% else %}badge-info{% endif %}">{{ u.role }}</span></td>
+                                <td><span class="badge {% if u.is_active_user %}badge-success{% else %}badge-neutral{% endif %}">{{ 'Active' if u.is_active_user else 'Inactive' }}</span></td>
                                 <td><button class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-pen"></i></button></td>
                             </tr>
-                            <tr>
-                                <td class="flex-center gap-8"><div class="avatar" style="width:28px;height:28px;font-size:10px;">RP</div> Raj Patel</td>
-                                <td>raj@midevops.com</td>
-                                <td><span class="badge badge-info">Security Lead</span></td>
-                                <td><span class="badge badge-success">Active</span></td>
-                                <td><button class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-pen"></i></button></td>
-                            </tr>
-                            <tr>
-                                <td class="flex-center gap-8"><div class="avatar" style="width:28px;height:28px;font-size:10px;">PS</div> Priya Sharma</td>
-                                <td>priya@midevops.com</td>
-                                <td><span class="badge badge-neutral">Auditor</span></td>
-                                <td><span class="badge badge-success">Active</span></td>
-                                <td><button class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-pen"></i></button></td>
-                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
@@ -299,5 +287,48 @@ function switchSettings(el, panel) {
     document.querySelectorAll('.settings-panel').forEach(p => p.style.display = 'none');
     document.getElementById('panel-' + panel).style.display = '';
 }
+
+function openInviteUser() {
+    document.getElementById('modalTitle').textContent = 'Invite User';
+    document.getElementById('modalBody').innerHTML = `
+        <form id="inviteUserForm" action="/register" method="POST">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. John Doe" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" class="form-control" placeholder="e.g. john@company.com" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" class="form-control" placeholder="Min 6 characters" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select name="role" class="form-control">
+                    <option value="Viewer">Viewer</option>
+                    <option value="Auditor">Auditor</option>
+                    <option value="Compliance Manager">Compliance Manager</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </div>
+        </form>
+    `;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="document.getElementById('inviteUserForm').submit()">Create User</button>
+    `;
+    document.getElementById('modalOverlay').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('active');
+}
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
 </script>
 {% endblock %}

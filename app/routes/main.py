@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template, jsonify
-from app.models import db, Framework, Risk, Policy, Audit, Vendor, Asset, Control
+from flask_login import login_required
+from app.models import db, Framework, Risk, Policy, Audit, Vendor, Asset, Control, User
 
 main_bp = Blueprint('main', __name__)
 
 
 @main_bp.route('/')
+@login_required
 def dashboard():
     frameworks = Framework.query.all()
     framework_dicts = [fw.to_dict() for fw in frameworks]
@@ -41,6 +43,7 @@ def dashboard():
 
 
 @main_bp.route('/trust-center')
+@login_required
 def trust_center():
     published_policies = Policy.query.filter_by(status='Published').all()
     active_frameworks = Framework.query.all()
@@ -49,13 +52,16 @@ def trust_center():
 
 
 @main_bp.route('/settings')
+@login_required
 def settings():
-    return render_template('settings.html', page='settings')
+    users = User.query.all()
+    return render_template('settings.html', page='settings', users=users)
 
 
 # ---- API Endpoints ----
 
 @main_bp.route('/api/dashboard/stats')
+@login_required
 def api_dashboard_stats():
     frameworks = Framework.query.all()
     total_controls = sum(fw.total_controls for fw in frameworks)
