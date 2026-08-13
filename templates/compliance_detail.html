@@ -73,18 +73,29 @@
                     <th style="width:90px;">Code</th>
                     <th>Control</th>
                     <th style="width:130px;">Status</th>
+                    <th style="width:90px;">Evidence</th>
                     <th style="width:120px;">Owner</th>
                 </tr>
             </thead>
             <tbody>
                 {% for c in cat_controls %}
-                <tr>
+                <tr onclick="window.location='/compliance/{{ framework.id }}/control/{{ c.id }}'" style="cursor:pointer;" title="Click to view control details & upload evidence">
                     <td><strong>{{ c.code }}</strong></td>
                     <td>{{ c.title }}</td>
                     <td>
                         <span class="badge {% if c.status == 'Passing' %}badge-success{% elif c.status == 'Failing' %}badge-danger{% elif c.status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}">
                             {{ c.status }}
                         </span>
+                    </td>
+                    <td>
+                        {% set count = evidence_counts.get(c.id, 0) %}
+                        {% if count > 0 %}
+                        <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent-primary);font-weight:600;">
+                            <i class="fas fa-file-lines"></i> {{ count }}
+                        </span>
+                        {% else %}
+                        <span style="font-size:11px;color:var(--text-muted);">—</span>
+                        {% endif %}
                     </td>
                     <td class="text-muted">{{ c.owner or '—' }}</td>
                 </tr>

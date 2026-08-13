@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}{{ control.code }} - {{ control.title }}{% endblock %}
+{% block breadcrumb %}
+<a href="/compliance" style="color:var(--text-secondary);text-decoration:none;">Compliance</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<a href="/compliance/{{ framework.id }}" style="color:var(--text-secondary);text-decoration:none;">{{ framework.name }}</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<span>{{ control.code }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ control.code }} — {{ control.title }}</h1>
+        <p>{{ control.category }} Control &middot; {{ framework.name }}</p>
+    </div>
+    <div class="page-actions">
+        <span class="badge {% if control.status == 'Passing' %}badge-success{% elif control.status == 'Failing' %}badge-danger{% elif control.status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}" style="font-size:14px;padding:8px 16px;">
+            {{ control.status }}
+        </span>
+        <a href="/compliance/{{ framework.id }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<!-- Control Info -->
+{% if control.description or control.evidence_requirement %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        {% if control.description %}
+        <div style="margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Description</div>
+            <p style="font-size:13px;line-height:1.6;">{{ control.description }}</p>
+        </div>
+        {% endif %}
+        {% if control.evidence_requirement %}
+        <div>
+            <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Evidence Requirements</div>
+            <p style="font-size:13px;line-height:1.6;color:var(--accent-primary);">{{ control.evidence_requirement }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Evidence Summary -->
+<div class="grid-4" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Total Evidence</span>
+                <div class="stat-value">{{ evidence_list|length }}</div>
+            </div>
+            <div class="stat-icon blue"><i class="fas fa-file-lines"></i></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Approved</span>
+                <div class="stat-value" style="color:var(--accent-success);">{{ evidence_list|selectattr('status','equalto','Approved')|list|length }}</div>
+            </div>
+            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Pending Review</span>
+                <div class="stat-value" style="color:var(--accent-warning);">{{ evidence_list|selectattr('status','equalto','Pending Review')|list|length }}</div>
+            </div>
+            <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-content">
+            <div>
+                <span class="stat-label">Rejected</span>
+                <div class="stat-value" style="color:var(--accent-danger);">{{ evidence_list|selectattr('status','equalto','Rejected')|list|length }}</div>
+            </div>
+            <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+        </div>
+    </div>
+</div>
+
+<!-- Evidence Table -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <h3><i class="fas fa-folder-open" style="margin-right:8px;"></i> Uploaded Evidence</h3>
+        <button class="btn btn-sm btn-primary" onclick="document.getElementById('uploadSection').style.display = document.getElementById('uploadSection').style.display === 'none' ? '' : 'none'">
+            <i class="fas fa-cloud-upload-alt"></i> Upload Evidence
+        </button>
+    </div>
+    <div class="card-body no-padding">
+        {% if evidence_list %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Evidence</th>
+                    <th style="width:100px;">Type</th>
+                    <th style="width:120px;">Uploaded By</th>
+                    <th style="width:110px;">Status</th>
+                    <th style="width:160px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ev in evidence_list %}
+                <tr>
+                    <td>
+                        <div style="font-weight:600;font-size:13px;">{{ ev.title }}</div>
+                        <div style="font-size:11px;color:var(--text-muted);">
+                            {{ ev.file_name }}
+                            {% if ev.file_size %}· {{ (ev.file_size / 1024)|round|int }} KB{% endif %}
+                        </div>
+                        {% if ev.description %}
+                        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">{{ ev.description[:100] }}{% if ev.description|length > 100 %}...{% endif %}</div>
+                        {% endif %}
+                    </td>
+                    <td><span class="mini-badge mb-blue" style="padding:3px 8px;border-radius:4px;font-size:10px;background:var(--accent-primary-light);color:var(--accent-primary);">{{ ev.source_type }}</span></td>
+                    <td style="font-size:12px;">{{ ev.uploaded_by }}</td>
+                    <td>
+                        <span class="badge {% if ev.status == 'Approved' %}badge-success{% elif ev.status == 'Rejected' %}badge-danger{% else %}badge-warning{% endif %}">
+                            {{ ev.status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if ev.status == 'Pending Review' %}
+                        <div style="display:flex;gap:4px;">
+                            <form action="/evidence/{{ ev.id }}/review" method="POST" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="approve">
+                                <button type="submit" class="btn btn-sm btn-primary btn-icon" title="Approve"><i class="fas fa-check"></i></button>
+                            </form>
+                            <form action="/evidence/{{ ev.id }}/review" method="POST" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="reject">
+                                <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Reject" style="color:var(--accent-danger);"><i class="fas fa-times"></i></button>
+                            </form>
+                            <form action="/evidence/{{ ev.id }}/delete" method="POST" style="display:inline;" onsubmit="return confirm('Delete this evidence?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <div style="display:flex;gap:4px;">
+                            {% if ev.review_notes %}
+                            <span title="{{ ev.review_notes }}" style="font-size:11px;color:var(--text-muted);cursor:help;"><i class="fas fa-comment"></i> Notes</span>
+                            {% endif %}
+                            <form action="/evidence/{{ ev.id }}/delete" method="POST" style="display:inline;margin-left:auto;" onsubmit="return confirm('Delete this evidence?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:var(--text-muted);">
+            <i class="fas fa-cloud-upload-alt" style="font-size:32px;margin-bottom:12px;opacity:0.3;"></i>
+            <p>No evidence uploaded yet. Click "Upload Evidence" to get started.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Upload Form (hidden by default) -->
+<div id="uploadSection" class="card" style="display:none;margin-bottom:20px;">
+    <div class="card-header">
+        <h3><i class="fas fa-upload" style="margin-right:8px;"></i> Upload New Evidence</h3>
+        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('uploadSection').style.display='none'"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="card-body">
+        <form action="/compliance/{{ framework.id }}/control/{{ control.id }}/upload" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label>Evidence Title *</label>
+                    <input type="text" name="title" class="form-control" placeholder="e.g. Information Security Policy v3.0" required>
+                </div>
+                <div class="form-group">
+                    <label>Source Type</label>
+                    <select name="source_type" class="form-control">
+                        <option value="Manual Upload">Manual Upload</option>
+                        <option value="Screenshot">Screenshot</option>
+                        <option value="System Export">System Export</option>
+                        <option value="Third Party">Third Party Report</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Brief description of this evidence..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>File * <span style="font-size:11px;color:var(--text-muted);">(pdf, png, jpg, csv, xlsx, doc, docx — max 10MB)</span></label>
+                <input type="file" name="file" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.doc,.docx" required>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label>Audit Period Start</label>
+                    <input type="date" name="audit_period_start" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Audit Period End</label>
+                    <input type="date" name="audit_period_end" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Also map to additional controls <span style="font-size:11px;color:var(--text-muted);">(optional, hold Ctrl to multi-select)</span></label>
+                <select name="map_controls" class="form-control" multiple style="height:120px;">
+                    {% for c in all_controls %}
+                    {% if c.id != control.id %}
+                    <option value="{{ c.id }}">{{ c.code }} — {{ c.title }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Upload & Map</button>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('uploadSection').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

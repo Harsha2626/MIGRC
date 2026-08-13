@@ -60,6 +60,18 @@ class Framework(db.Model):
     def not_applicable(self):
         return self.controls.filter_by(status='Not Applicable').count()
 
+    @property
+    def not_assessed(self):
+        return self.controls.filter_by(status='Not Assessed').count()
+
+    @property
+    def compliance_score(self):
+        """Passing / (Total - N/A) × 100"""
+        applicable = self.total_controls - self.not_applicable
+        if applicable == 0:
+            return 0.0
+        return round((self.passing / applicable) * 100, 1)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -72,6 +84,8 @@ class Framework(db.Model):
             'passing': self.passing,
             'failing': self.failing,
             'not_applicable': self.not_applicable,
+            'not_assessed': self.not_assessed,
+            'compliance_score': self.compliance_score,
             'status': self.status,
         }
 
@@ -435,3 +449,19 @@ class AccessReview(db.Model):
             'recurrence': self.recurrence,
             'applications': [v.name for v in self.applications],
         }
+
+
+class ComplianceSnapshot(db.Model):
+    __tablename__ = 'compliance_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    framework_id = db.Column(db.Integer, db.ForeignKey('frameworks.id'), nullable=False)
+    score = db.Column(db.Float, default=0.0)
+    passing = db.Column(db.Integer, default=0)
+    failing = db.Column(db.Integer, default=0)
+    not_assessed = db.Column(db.Integer, default=0)
+    not_applicable = db.Column(db.Integer, default=0)
+    total_controls = db.Column(db.Integer, default=0)
+    snapshot_date = db.Column(db.Date, default=date.today)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    framework = db.relationship('Framework', backref='snapshots')
