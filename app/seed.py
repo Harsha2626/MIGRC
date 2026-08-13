@@ -9,7 +9,10 @@ start empty - data should be added by the user through the application.
 Run: python -m app.seed
 """
 from app import create_app
-from app.models import db, User, Framework, Control
+from app.models import (
+    db, User, Framework, Control, Vendor, Employee, TrainingCampaign,
+    TrainingCampaignEnrollment, EmployeeAccess, AccessReview,
+)
 
 
 def seed_database():
@@ -146,6 +149,101 @@ def seed_database():
 
         db.session.commit()
 
+        # ---- INTEGRATED PLATFORMS (VENDORS) ----
+        vendors_data = [
+            dict(name='AWS', category='Cloud Infrastructure', risk_tier='Critical', risk_score=82,
+                 status='Approved', contact_name='AWS Support', contact_email='security@aws.com',
+                 last_assessment='2026-06-15', next_assessment='2026-12-15',
+                 compliance=['SOC 2', 'ISO 27001', 'HIPAA']),
+            dict(name='Google Workspace', category='Communication', risk_tier='High', risk_score=74,
+                 status='Approved', contact_name='Google Workspace Admin', contact_email='security@google.com',
+                 last_assessment='2026-05-20', next_assessment='2026-11-20',
+                 compliance=['SOC 2', 'ISO 27001']),
+            dict(name='GitHub', category='Development', risk_tier='Critical', risk_score=78,
+                 status='Approved', contact_name='GitHub Support', contact_email='security@github.com',
+                 last_assessment='2026-04-10', next_assessment='2026-10-10',
+                 compliance=['SOC 2', 'ISO 27001']),
+            dict(name='Slack', category='Communication', risk_tier='Medium', risk_score=60,
+                 status='Approved', contact_name='Slack Support', contact_email='security@slack.com',
+                 last_assessment='2026-03-15', next_assessment='2026-09-15',
+                 compliance=['SOC 2']),
+        ]
+        vendors = {}
+        for data in vendors_data:
+            vendor = Vendor(**data)
+            db.session.add(vendor)
+            vendors[data['name']] = vendor
+        db.session.flush()
+
+        # ---- EMPLOYEES ----
+        employees_data = [
+            ('Aditi Rao', 'aditi.rao@midevops.io', 'Engineering', True, True, True),
+            ('Karan Mehta', 'karan.mehta@midevops.io', 'Engineering', True, True, True),
+            ('Neha Verma', 'neha.verma@midevops.io', 'IT', True, True, True),
+            ('Rohan Iyer', 'rohan.iyer@midevops.io', 'Security', True, True, True),
+            ('Sanya Kapoor', 'sanya.kapoor@midevops.io', 'Finance', True, True, True),
+            ('Farhan Ali', 'farhan.ali@midevops.io', 'Engineering', True, True, True),
+            ('Divya Nair', 'divya.nair@midevops.io', 'HR', True, True, True),
+            ('Arjun Malhotra', 'arjun.malhotra@midevops.io', 'IT', True, True, True),
+            ('Meera Pillai', 'meera.pillai@midevops.io', 'Finance', True, True, False),
+            ('Vikram Chawla', 'vikram.chawla@midevops.io', 'Security', True, True, False),
+        ]
+        employees = {}
+        for name, email, department, monitoring, device_compliant, policy_ack in employees_data:
+            employee = Employee(
+                name=name, email=email, department=department, source='Manual', status='Active',
+                monitoring_agent_installed=monitoring, device_security_compliant=device_compliant,
+                policy_acknowledged=policy_ack,
+            )
+            db.session.add(employee)
+            employees[name] = employee
+        db.session.flush()
+
+        # ---- TRAINING CAMPAIGNS ----
+        isms_training = TrainingCampaign(name='ISMS Training', status='Completed',
+            launch_date='10 Jul 2024', end_date='31 Jan 2025')
+        isms_campaign = TrainingCampaign(name='ISMS Training Campaign', status='Completed',
+            launch_date='19 Jun 2024', end_date='30 Sept 2024')
+        db.session.add_all([isms_training, isms_campaign])
+        db.session.flush()
+
+        incomplete_pairs = {('Vikram Chawla', isms_training.id), ('Meera Pillai', isms_campaign.id)}
+        for campaign in (isms_training, isms_campaign):
+            for name, employee in employees.items():
+                completed = (name, campaign.id) not in incomplete_pairs
+                db.session.add(TrainingCampaignEnrollment(
+                    campaign_id=campaign.id, employee_id=employee.id, completed=completed,
+                ))
+
+        # ---- EMPLOYEE ACCESS (per integrated platform) ----
+        access_grants = [
+            ('Aditi Rao', 'AWS', 'Admin'), ('Aditi Rao', 'GitHub', 'Standard'),
+            ('Karan Mehta', 'GitHub', 'Admin'), ('Karan Mehta', 'AWS', 'Standard'),
+            ('Neha Verma', 'Google Workspace', 'Admin'),
+            ('Rohan Iyer', 'AWS', 'Admin'), ('Rohan Iyer', 'Slack', 'Standard'),
+            ('Sanya Kapoor', 'Google Workspace', 'Standard'),
+            ('Farhan Ali', 'GitHub', 'Standard'), ('Farhan Ali', 'Slack', 'Standard'),
+            ('Divya Nair', 'Google Workspace', 'Standard'), ('Divya Nair', 'Slack', 'Standard'),
+            ('Arjun Malhotra', 'AWS', 'Standard'), ('Arjun Malhotra', 'Google Workspace', 'Standard'),
+            ('Meera Pillai', 'Google Workspace', 'Standard'),
+            ('Vikram Chawla', 'AWS', 'Read-only'),
+        ]
+        for employee_name, vendor_name, access_level in access_grants:
+            db.session.add(EmployeeAccess(
+                employee_id=employees[employee_name].id, vendor_id=vendors[vendor_name].id,
+                access_level=access_level,
+            ))
+
+        # ---- ACCESS REVIEW ----
+        access_review = AccessReview(
+            name='Q3 2026 Access Review', owner='Compliance Team', status='Overdue',
+            review_period_start='2026-05-01', review_period_end='2026-07-31', recurrence='Once',
+        )
+        access_review.applications = [vendors['AWS'], vendors['GitHub']]
+        db.session.add(access_review)
+
+        db.session.commit()
+
         print("Database seeded successfully!")
         print(f"  Users: {User.query.count()}")
         print(f"  Frameworks: {Framework.query.count()}")
@@ -153,8 +251,11 @@ def seed_database():
         print(f"  Risks: 0 (add your own)")
         print(f"  Policies: 0 (add your own)")
         print(f"  Audits: 0 (add your own)")
-        print(f"  Vendors: 0 (add your own)")
+        print(f"  Vendors: {Vendor.query.count()}")
         print(f"  Assets: 0 (add your own)")
+        print(f"  Employees: {Employee.query.count()}")
+        print(f"  Training Campaigns: {TrainingCampaign.query.count()}")
+        print(f"  Access Reviews: {AccessReview.query.count()}")
 
 
 if __name__ == '__main__':

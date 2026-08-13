@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Employees{% endblock %}
+{% block breadcrumb %}<span>Employees</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Employees</h1>
+        <p>Track employee onboarding, device compliance, and policy acceptance</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="showAddEmployeeModal()"><i class="fas fa-plus"></i> Add Employee</button>
+    </div>
+</div>
+
+<div class="tabs">
+    <a href="{{ url_for('people.employees', tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}">Overview</a>
+    <a href="{{ url_for('people.employees', tab='all') }}" class="tab {% if tab == 'all' %}active{% endif %}">All Employees</a>
+</div>
+
+{% if tab == 'overview' %}
+<form method="get" style="margin-bottom:20px;">
+    <input type="hidden" name="tab" value="overview">
+    <div class="flex-center gap-8">
+        <span class="text-sm font-semibold">Group:</span>
+        <select class="filter-select" name="group" onchange="this.form.submit()">
+            <option value="">All Employees</option>
+            {% for c in campaigns %}
+            <option value="{{ c.id }}" {% if selected_group == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-list-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Employees with Pending Tasks</div>
+            <div class="stat-value">{{ pending_tasks_count }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_overview }}</span></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-desktop"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Monitoring Agent Installed</div>
+            <div class="stat-value">{{ monitoring_count }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_overview }}</span></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Device Security Compliant</div>
+            <div class="stat-value">{{ device_compliant_count }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_overview }}</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header"><h3>Policy Acceptance Rate</h3></div>
+        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
+            <div class="chart-container" style="width:220px;height:220px;">
+                <canvas id="policyChart"></canvas>
+            </div>
+            <div class="legend" style="flex-direction:column;align-items:flex-start;">
+                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Accepted ({{ policy_accepted_count }})</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Not Accepted ({{ policy_not_accepted_count }})</div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>Employee Campaign Completion Rate</h3></div>
+        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
+            <div class="chart-container" style="width:220px;height:220px;">
+                <canvas id="campaignChart"></canvas>
+            </div>
+            <div class="legend" style="flex-direction:column;align-items:flex-start;">
+                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Completed ({{ completed_enrollments }})</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Not Completed ({{ incomplete_enrollments }})</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Active</div>
+            <div class="stat-value">{{ active_count }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-user-clock"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Offboarding Needed</div>
+            <div class="stat-value">{{ offboarding_count }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-user-slash"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Offboarded</div>
+            <div class="stat-value">{{ offboarded_count }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-user-group"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Non Personnel</div>
+            <div class="stat-value">{{ non_personnel_count }}</div>
+        </div>
+    </div>
+</div>
+
+<form method="get" class="toolbar">
+    <input type="hidden" name="tab" value="all">
+    <div class="search-input-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" class="filter-input" name="q" placeholder="Search Employee" value="{{ search }}">
+    </div>
+    <select class="filter-select" name="department" onchange="this.form.submit()">
+        <option value="">Department</option>
+        {% for d in departments %}
+        <option value="{{ d }}" {% if selected_department == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+    </select>
+    <select class="filter-select" name="task_status" onchange="this.form.submit()">
+        <option value="">Task Status</option>
+        <option value="pending" {% if selected_task_status == 'pending' %}selected{% endif %}>Pending Tasks</option>
+        <option value="clear" {% if selected_task_status == 'clear' %}selected{% endif %}>No Pending Tasks</option>
+    </select>
+    <select class="filter-select" name="group" onchange="this.form.submit()">
+        <option value="">Employee Groups</option>
+        {% for c in campaigns %}
+        <option value="{{ c.id }}" {% if selected_group == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary btn-icon" title="Apply filters"><i class="fas fa-filter"></i></button>
+    <a href="{{ url_for('people.employees', tab='all') }}" class="btn btn-secondary btn-icon" title="Reset filters"><i class="fas fa-rotate-left"></i></a>
+</form>
+
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Employee Name</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Group</th>
+                        <th>Department</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in employees %}
+                    <tr>
+                        <td>
+                            <div class="flex-center gap-8">
+                                <div class="avatar" style="width:30px;height:30px;font-size:10px;">{{ e.name.split(' ')[0][0] }}{{ e.name.split(' ')[-1][0] if ' ' in e.name else '' }}</div>
+                                <span class="font-semibold">{{ e.name }}</span>
+                            </div>
+                        </td>
+                        <td class="text-muted">{{ e.email }}</td>
+                        <td>
+                            {% if e.status == 'Active' %}<span class="badge badge-success">{{ e.status }}</span>
+                            {% elif e.status == 'Offboarding Needed' %}<span class="badge badge-warning">{{ e.status }}</span>
+                            {% elif e.status == 'Offboarded' %}<span class="badge badge-danger">{{ e.status }}</span>
+                            {% else %}<span class="badge badge-info">{{ e.status }}</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="tag-list">
+                                {% for name in e.campaign_names[:2] %}
+                                <span class="tag">{{ name }}</span>
+                                {% endfor %}
+                                {% if e.campaign_names|length > 2 %}
+                                <span class="tag">+{{ e.campaign_names|length - 2 }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-muted">{{ e.department }}</td>
+                        <td>
+                            <div class="flex gap-8">
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Reminder" onclick="showToast('Reminder sent to {{ e.name }}','info')"><i class="fas fa-paper-plane"></i></button>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditEmployeeModal({{ e.id }}, '{{ e.name }}', '{{ e.status }}', '{{ e.department or '' }}')"><i class="fas fa-pen"></i></button>
+                                <form method="POST" action="{{ url_for('people.delete_employee', employee_id=e.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ e.name }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Remove"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if tab == 'overview' %}
+document.addEventListener('DOMContentLoaded', function() {
+    new Chart(document.getElementById('policyChart').getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: ['Accepted', 'Not Accepted'],
+            datasets: [{
+                data: [{{ policy_accepted_count }}, {{ policy_not_accepted_count }}],
+                backgroundColor: ['#10b981', '#ef4444'],
+                borderWidth: 0
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('campaignChart').getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: ['Completed', 'Not Completed'],
+            datasets: [{
+                data: [{{ completed_enrollments }}, {{ incomplete_enrollments }}],
+                backgroundColor: ['#10b981', '#ef4444'],
+                borderWidth: 0
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+    });
+});
+{% endif %}
+
+function showAddEmployeeModal() {
+    openModal('Add Employee', `
+        <form id="addEmployeeForm" method="POST" action="{{ url_for('people.create_employee') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. Priya Sharma" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" class="form-control" placeholder="e.g. priya@midevops.io" required>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label>Department</label>
+                    <input type="text" name="department" class="form-control" placeholder="e.g. Engineering">
+                </div>
+                <div class="form-group">
+                    <label>Source</label>
+                    <select name="source" class="form-control">
+                        <option>Manual</option>
+                        <option>Google Workspace</option>
+                        <option>HRIS</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'addEmployeeForm\').submit()">Add Employee</button>');
+}
+
+function showEditEmployeeModal(id, name, status, department) {
+    openModal('Edit ' + name, `
+        <form id="editEmployeeForm" method="POST" action="/people/employees/${id}/edit">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    <option ${status === 'Active' ? 'selected' : ''}>Active</option>
+                    <option ${status === 'Offboarding Needed' ? 'selected' : ''}>Offboarding Needed</option>
+                    <option ${status === 'Offboarded' ? 'selected' : ''}>Offboarded</option>
+                    <option ${status === 'Non Personnel' ? 'selected' : ''}>Non Personnel</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Department</label>
+                <input type="text" name="department" class="form-control" value="${department}">
+            </div>
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'editEmployeeForm\').submit()">Save</button>');
+}
+</script>
+{% endblock %}

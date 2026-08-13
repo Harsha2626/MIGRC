@@ -71,13 +71,17 @@
 
             <div class="nav-section">
                 <span class="nav-section-title">People</span>
-                <a href="/access-reviews" class="nav-item {% if page == 'access_reviews' %}active{% endif %}">
+                <a href="/people/employees" class="nav-item {% if page == 'employees' %}active{% endif %}">
+                    <i class="fas fa-users"></i>
+                    <span>Employees</span>
+                </a>
+                <a href="/people/training-campaigns" class="nav-item {% if page == 'training_campaigns' %}active{% endif %}">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Training Campaigns</span>
+                </a>
+                <a href="/people/access-reviews" class="nav-item {% if page == 'access_reviews' %}active{% endif %}">
                     <i class="fas fa-user-lock"></i>
                     <span>Access Reviews</span>
-                </a>
-                <a href="/training" class="nav-item {% if page == 'training' %}active{% endif %}">
-                    <i class="fas fa-graduation-cap"></i>
-                    <span>Training</span>
                 </a>
             </div>
 

@@ -292,6 +292,7 @@ function openInviteUser() {
     document.getElementById('modalTitle').textContent = 'Invite User';
     document.getElementById('modalBody').innerHTML = `
         <form id="inviteUserForm" action="/register" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label>Full Name</label>
                 <input type="text" name="name" class="form-control" placeholder="e.g. John Doe" required>

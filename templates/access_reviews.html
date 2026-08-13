@@ -6,98 +6,118 @@
 <div class="page-header">
     <div>
         <h1>Access Reviews</h1>
-        <p>Validate and audit user access privileges across systems</p>
+        <p>Validate and audit access privileges across integrated platforms</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-secondary"><i class="fas fa-clock-rotate-left"></i> Review History</button>
-        <button class="btn btn-primary" onclick="showStartReviewModal()"><i class="fas fa-play"></i> Start Review Campaign</button>
+        {% if tab == 'reviews' %}
+        <button class="btn btn-primary" onclick="showAddReviewModal()"><i class="fas fa-plus"></i> Add Review</button>
+        {% endif %}
     </div>
 </div>
 
-<!-- Stats -->
+<div class="tabs">
+    <a href="{{ url_for('people.access_reviews', tab='reviews') }}" class="tab {% if tab == 'reviews' %}active{% endif %}">Reviews</a>
+    <a href="{{ url_for('people.access_reviews', tab='applications') }}" class="tab {% if tab == 'applications' %}active{% endif %}">Applications</a>
+    <a href="{{ url_for('people.access_reviews', tab='chart') }}" class="tab {% if tab == 'chart' %}active{% endif %}">Access Chart</a>
+</div>
+
+{% if tab == 'reviews' %}
 <div class="stats-grid">
     <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+        <div class="stat-icon blue"><i class="fas fa-file-circle-plus"></i></div>
         <div class="stat-info">
-            <div class="stat-label">Total Users</div>
-            <div class="stat-value">{{ reviews|length }}</div>
+            <div class="stat-label">Created</div>
+            <div class="stat-value">{{ created_count }}</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
+        <div class="stat-icon orange"><i class="fas fa-spinner"></i></div>
         <div class="stat-info">
-            <div class="stat-label">Active Reviews</div>
-            <div class="stat-value">{{ reviews|selectattr('status', 'equalto', 'Active')|list|length }}</div>
+            <div class="stat-label">In Progress</div>
+            <div class="stat-value">{{ in_progress_count }}</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-user-clock"></i></div>
+        <div class="stat-icon red"><i class="fas fa-clock"></i></div>
         <div class="stat-info">
-            <div class="stat-label">Review Due</div>
-            <div class="stat-value">{{ reviews|selectattr('status', 'equalto', 'Review Due')|list|length }}</div>
+            <div class="stat-label">Overdue</div>
+            <div class="stat-value">{{ overdue_count }}</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-user-shield"></i></div>
+        <div class="stat-icon purple"><i class="fas fa-box-archive"></i></div>
         <div class="stat-info">
-            <div class="stat-label">High Risk Users</div>
-            <div class="stat-value">{{ reviews|selectattr('risk', 'equalto', 'High')|list|length }}</div>
+            <div class="stat-label">Archived</div>
+            <div class="stat-value">{{ archived_count }}</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Completed</div>
+            <div class="stat-value">{{ completed_count }}</div>
         </div>
     </div>
 </div>
 
-<!-- Access Review Table -->
 <div class="card">
-    <div class="card-header">
-        <h3>User Access Summary</h3>
-    </div>
     <div class="card-body no-padding">
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>User</th>
-                        <th>Role</th>
-                        <th>Systems</th>
-                        <th>Risk Level</th>
-                        <th>Last Review</th>
-                        <th>Next Review</th>
+                        <th>Name</th>
+                        <th>Owner</th>
                         <th>Status</th>
+                        <th>Review Period</th>
+                        <th>Apps in Review</th>
+                        <th>Recurrence</th>
+                        <th>Added On</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for r in reviews %}
                     <tr>
+                        <td class="font-semibold">{{ r.name }}</td>
+                        <td class="text-muted">{{ r.owner or '-' }}</td>
                         <td>
-                            <div class="flex-center gap-8">
-                                <div class="avatar" style="width:30px;height:30px;font-size:10px;">{{ r.user.split(' ')[0][0] }}{{ r.user.split(' ')[1][0] }}</div>
-                                <span class="font-semibold">{{ r.user }}</span>
-                            </div>
+                            {% if r.status == 'Completed' %}<span class="badge badge-success">{{ r.status }}</span>
+                            {% elif r.status == 'In Progress' %}<span class="badge badge-primary">{{ r.status }}</span>
+                            {% elif r.status == 'Overdue' %}<span class="badge badge-danger">{{ r.status }}</span>
+                            {% elif r.status == 'Archived' %}<span class="badge badge-neutral">{{ r.status }}</span>
+                            {% else %}<span class="badge badge-info">{{ r.status }}</span>{% endif %}
                         </td>
-                        <td><span class="badge badge-neutral">{{ r.role }}</span></td>
+                        <td class="text-sm">{{ r.review_period_start }} &ndash; {{ r.review_period_end }}</td>
                         <td>
-                            <div class="tag-list">
-                                {% for s in r.systems %}
-                                <span class="tag">{{ s }}</span>
+                            <div class="flex gap-8">
+                                {% for app in r.applications %}
+                                <div class="stat-icon blue" style="width:28px;height:28px;font-size:13px;" title="{{ app.name }}"><i class="fab {{ app.name|vendor_icon }}"></i></div>
                                 {% endfor %}
                             </div>
                         </td>
-                        <td>
-                            {% if r.risk == 'High' %}<span class="badge badge-danger">{{ r.risk }}</span>
-                            {% elif r.risk == 'Medium' %}<span class="badge badge-warning">{{ r.risk }}</span>
-                            {% else %}<span class="badge badge-success">{{ r.risk }}</span>{% endif %}
-                        </td>
-                        <td>{{ r.last_review }}</td>
-                        <td>{{ r.next_review }}</td>
-                        <td>
-                            {% if r.status == 'Active' %}<span class="badge badge-success">{{ r.status }}</span>
-                            {% else %}<span class="badge badge-warning">{{ r.status }}</span>{% endif %}
-                        </td>
+                        <td class="text-muted">{{ r.recurrence }}</td>
+                        <td class="text-sm text-muted">{{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}</td>
                         <td>
                             <div class="flex gap-8">
-                                <button class="btn btn-sm btn-secondary" onclick="showToast('Access approved for {{ r.user }}','success')">Approve</button>
-                                <button class="btn btn-sm btn-danger" onclick="showToast('Access revoked for {{ r.user }}','warning')">Revoke</button>
+                                {% if r.status != 'Completed' %}
+                                <form method="POST" action="{{ url_for('people.update_access_review_status', review_id=r.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="status" value="Completed">
+                                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Mark Completed"><i class="fas fa-check"></i></button>
+                                </form>
+                                {% endif %}
+                                {% if r.status != 'Archived' %}
+                                <form method="POST" action="{{ url_for('people.update_access_review_status', review_id=r.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="status" value="Archived">
+                                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Archive"><i class="fas fa-box-archive"></i></button>
+                                </form>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('people.delete_access_review', review_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ r.name }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -107,40 +127,140 @@
         </div>
     </div>
 </div>
+
+{% elif tab == 'applications' %}
+<div class="card">
+    <div class="card-header">
+        <h3>Integrated Platforms</h3>
+        <a href="/vendors" class="btn btn-sm btn-secondary">Manage in Vendors</a>
+    </div>
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Application</th>
+                        <th>Category</th>
+                        <th>Risk Tier</th>
+                        <th>Status</th>
+                        <th>Employees with Access</th>
+                        <th>Linked Reviews</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vendors %}
+                    <tr>
+                        <td>
+                            <div class="flex-center gap-8">
+                                <div class="stat-icon blue" style="width:30px;height:30px;font-size:13px;"><i class="fab {{ v.name|vendor_icon }}"></i></div>
+                                <span class="font-semibold">{{ v.name }}</span>
+                            </div>
+                        </td>
+                        <td class="text-muted">{{ v.category }}</td>
+                        <td>
+                            {% if v.risk_tier == 'Critical' %}<span class="badge badge-danger">{{ v.risk_tier }}</span>
+                            {% elif v.risk_tier == 'High' %}<span class="badge badge-warning">{{ v.risk_tier }}</span>
+                            {% else %}<span class="badge badge-info">{{ v.risk_tier }}</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if v.status == 'Approved' %}<span class="badge badge-success">{{ v.status }}</span>
+                            {% else %}<span class="badge badge-warning">{{ v.status }}</span>{% endif %}
+                        </td>
+                        <td>{{ access_by_vendor.get(v.id, 0) }}</td>
+                        <td>{{ linked_reviews_by_vendor.get(v.id, 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-header"><h3>Employee Access per Application</h3></div>
+    <div class="card-body">
+        <div class="chart-container-wide" style="height:320px;">
+            <canvas id="accessChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function showStartReviewModal() {
-    openModal('Start Access Review Campaign', `
-        <div class="form-group">
-            <label>Campaign Name</label>
-            <input type="text" class="form-control" placeholder="e.g., Q3 2026 Access Review">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+{% if tab == 'chart' %}
+document.addEventListener('DOMContentLoaded', function() {
+    new Chart(document.getElementById('accessChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels|tojson }},
+            datasets: [{
+                label: 'Employees with Access',
+                data: {{ chart_data|tojson }},
+                backgroundColor: '#3b82f6',
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+            }
+        }
+    });
+});
+{% endif %}
+
+function showAddReviewModal() {
+    openModal('Add Access Review', `
+        <form id="addReviewForm" method="POST" action="{{ url_for('people.create_access_review') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Scope</label>
-                <select class="form-control">
-                    <option>All Users</option>
-                    <option>Admin Users Only</option>
-                    <option>High Risk Users</option>
-                    <option>Specific Department</option>
-                </select>
+                <label>Review Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g., Q3 2026 Access Review" required>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label>Owner</label>
+                    <input type="text" name="owner" class="form-control" placeholder="e.g. Compliance Team">
+                </div>
+                <div class="form-group">
+                    <label>Recurrence</label>
+                    <select name="recurrence" class="form-control">
+                        <option>Once</option>
+                        <option>Monthly</option>
+                        <option>Quarterly</option>
+                        <option>Semi-Annually</option>
+                        <option>Annually</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label>Review Period Start</label>
+                    <input type="date" name="review_period_start" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Review Period End</label>
+                    <input type="date" name="review_period_end" class="form-control">
+                </div>
             </div>
             <div class="form-group">
-                <label>Due Date</label>
-                <input type="date" class="form-control">
+                <label>Apps in Review</label>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                    {% for v in vendors %}
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;">
+                        <input type="checkbox" name="vendor_ids" value="{{ v.id }}"> {{ v.name }}
+                    </label>
+                    {% endfor %}
+                </div>
             </div>
-        </div>
-        <div class="form-group">
-            <label>Reviewers</label>
-            <input type="text" class="form-control" placeholder="Enter reviewer names...">
-        </div>
-        <div class="form-group">
-            <label>Notes</label>
-            <textarea class="form-control" placeholder="Additional instructions for reviewers..."></textarea>
-        </div>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Review campaign started\',\'success\')">Start Campaign</button>');
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'addReviewForm\').submit()">Create Review</button>');
 }
 </script>
 {% endblock %}

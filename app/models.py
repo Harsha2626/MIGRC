@@ -176,10 +176,40 @@ class Policy(db.Model):
     next_review = db.Column(db.String(20))
     review_cycle_days = db.Column(db.Integer, default=180)
     file_path = db.Column(db.String(500))
-    acknowledgements = db.Column(db.Integer, default=0)
-    total_employees = db.Column(db.Integer, default=50)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    acks = db.relationship('PolicyAcknowledgement', backref='policy', lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def acknowledgements(self):
+        return self.acks.count()
+
+    @property
+    def total_employees(self):
+        return Employee.query.count()
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'content': self.content,
+            'version': self.version,
+            'owner': self.owner,
+            'status': self.status,
+            'framework': self.framework,
+            'review_cycle_days': self.review_cycle_days,
+        }
+
+
+class PolicyAcknowledgement(db.Model):
+    __tablename__ = 'policy_acknowledgements'
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
+    acknowledged_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship('Employee')
 
 
 class Audit(db.Model):
@@ -192,10 +222,18 @@ class Audit(db.Model):
     start_date = db.Column(db.String(20))
     end_date = db.Column(db.String(20))
     findings = db.Column(db.Integer, default=0)
-    evidence_collected = db.Column(db.Integer, default=0)
-    evidence_total = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    evidence_items = db.relationship('AuditEvidence', backref='audit', lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def evidence_total(self):
+        return self.evidence_items.count()
+
+    @property
+    def evidence_collected(self):
+        return self.evidence_items.filter_by(status='Collected').count()
 
     def to_dict(self):
         return {
@@ -210,6 +248,17 @@ class Audit(db.Model):
             'evidence_collected': self.evidence_collected,
             'evidence_total': self.evidence_total,
         }
+
+
+class AuditEvidence(db.Model):
+    __tablename__ = 'audit_evidence'
+    id = db.Column(db.Integer, primary_key=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id'), nullable=False)
+    control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=False)
+    status = db.Column(db.String(30), default='Missing')
+    collected_at = db.Column(db.DateTime)
+
+    control = db.relationship('Control')
 
 
 class Vendor(db.Model):
@@ -228,6 +277,19 @@ class Vendor(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'category': self.category,
+            'risk_tier': self.risk_tier,
+            'risk_score': self.risk_score,
+            'status': self.status,
+            'contact_name': self.contact_name,
+            'contact_email': self.contact_email,
+            'compliance': self.compliance or [],
+        }
+
 
 class Asset(db.Model):
     __tablename__ = 'assets'
@@ -242,29 +304,134 @@ class Asset(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'type': self.type,
+            'environment': self.environment,
+            'owner': self.owner,
+            'classification': self.classification,
+            'status': self.status,
+            'cloud_provider': self.cloud_provider,
+        }
 
-class TrainingModule(db.Model):
-    __tablename__ = 'training_modules'
+
+class Employee(db.Model):
+    __tablename__ = 'employees'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    department = db.Column(db.String(50))
+    source = db.Column(db.String(50), default='Manual')
+    status = db.Column(db.String(30), default='Active')
+    monitoring_agent_installed = db.Column(db.Boolean, default=False)
+    device_security_compliant = db.Column(db.Boolean, default=False)
+    policy_acknowledged = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    offboarded_at = db.Column(db.DateTime)
+
+    enrollments = db.relationship('TrainingCampaignEnrollment', backref='employee', lazy='dynamic', cascade='all, delete-orphan')
+    access_grants = db.relationship('EmployeeAccess', backref='employee', lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def has_pending_tasks(self):
+        if not self.policy_acknowledged:
+            return True
+        return self.enrollments.filter_by(completed=False).count() > 0
+
+    @property
+    def campaign_names(self):
+        return [e.campaign.name for e in self.enrollments]
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'email': self.email,
+            'department': self.department,
+            'source': self.source,
+            'status': self.status,
+            'monitoring_agent_installed': self.monitoring_agent_installed,
+            'device_security_compliant': self.device_security_compliant,
+            'policy_acknowledged': self.policy_acknowledged,
+            'campaign_names': self.campaign_names,
+        }
+
+
+class TrainingCampaign(db.Model):
+    __tablename__ = 'training_campaigns'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
-    category = db.Column(db.String(50))
-    duration = db.Column(db.String(30))
-    assigned = db.Column(db.Integer, default=0)
-    completed = db.Column(db.Integer, default=0)
-    overdue = db.Column(db.Integer, default=0)
-    status = db.Column(db.String(30), default='Active')
-    due_date = db.Column(db.Date)
+    status = db.Column(db.String(30), default='Draft')
+    launch_date = db.Column(db.String(20))
+    end_date = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    enrollments = db.relationship('TrainingCampaignEnrollment', backref='campaign', lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def total_enrolled(self):
+        return self.enrollments.count()
+
+    @property
+    def completed_count(self):
+        return self.enrollments.filter_by(completed=True).count()
+
+    @property
+    def completion_rate(self):
+        total = self.total_enrolled
+        return round((self.completed_count / total) * 100) if total else 0
+
+
+class TrainingCampaignEnrollment(db.Model):
+    __tablename__ = 'training_campaign_enrollments'
+    id = db.Column(db.Integer, primary_key=True)
+    campaign_id = db.Column(db.Integer, db.ForeignKey('training_campaigns.id'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime)
+
+
+class EmployeeAccess(db.Model):
+    __tablename__ = 'employee_access'
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    access_level = db.Column(db.String(30), default='Standard')
+    granted_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    vendor = db.relationship('Vendor', backref='employee_access')
+
+
+access_review_applications = db.Table(
+    'access_review_applications',
+    db.Column('access_review_id', db.Integer, db.ForeignKey('access_reviews.id'), primary_key=True),
+    db.Column('vendor_id', db.Integer, db.ForeignKey('vendors.id'), primary_key=True),
+)
 
 
 class AccessReview(db.Model):
     __tablename__ = 'access_reviews'
     id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(100), nullable=False)
-    role = db.Column(db.String(50))
-    systems = db.Column(db.JSON, default=list)
-    last_review = db.Column(db.String(20))
-    next_review = db.Column(db.String(20))
-    status = db.Column(db.String(30), default='Active')
-    risk = db.Column(db.String(20))
+    name = db.Column(db.String(200), nullable=False)
+    owner = db.Column(db.String(100))
+    status = db.Column(db.String(30), default='Created')
+    review_period_start = db.Column(db.String(20))
+    review_period_end = db.Column(db.String(20))
+    recurrence = db.Column(db.String(20), default='Once')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    applications = db.relationship('Vendor', secondary=access_review_applications, backref='access_reviews')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'owner': self.owner,
+            'status': self.status,
+            'review_period_start': self.review_period_start,
+            'review_period_end': self.review_period_end,
+            'recurrence': self.recurrence,
+            'applications': [v.name for v in self.applications],
+        }

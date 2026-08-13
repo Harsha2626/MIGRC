@@ -117,7 +117,13 @@
                                 {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit"><i class="fas fa-pen"></i></button>
+                                <div class="flex gap-8">
+                                    <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditRiskModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                    <form method="POST" action="{{ url_for('risks.delete_risk', risk_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ r.title }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -203,61 +209,72 @@ function filterRisks() {
     });
 }
 
-function showAddRiskModal() {
-    openModal('Add New Risk', `
+const RISK_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];
+const RISK_CATEGORIES = ['Access Control', 'Data Protection', 'Vendor Risk', 'Cloud Security', 'Business Continuity', 'Social Engineering', 'Vulnerability Mgmt'];
+
+function levelOptions(selected) {
+    return RISK_LEVELS.map(l => `<option ${l === selected ? 'selected' : ''}>${l}</option>`).join('');
+}
+
+function categoryOptions(selected) {
+    return RISK_CATEGORIES.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`).join('');
+}
+
+function riskFormFields(r) {
+    r = r || {};
+    return `
         <div class="form-group">
             <label>Risk Title</label>
-            <input type="text" class="form-control" placeholder="Describe the risk...">
+            <input type="text" name="title" class="form-control" placeholder="Describe the risk..." value="${r.title || ''}" required>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="form-group">
                 <label>Category</label>
-                <select class="form-control">
-                    <option>Access Control</option>
-                    <option>Data Protection</option>
-                    <option>Vendor Risk</option>
-                    <option>Cloud Security</option>
-                    <option>Business Continuity</option>
-                    <option>Social Engineering</option>
-                    <option>Vulnerability Mgmt</option>
-                </select>
+                <select name="category" class="form-control">${categoryOptions(r.category)}</select>
             </div>
             <div class="form-group">
                 <label>Owner</label>
-                <input type="text" class="form-control" placeholder="Risk owner">
+                <input type="text" name="owner" class="form-control" placeholder="Risk owner" value="${r.owner || ''}">
             </div>
             <div class="form-group">
                 <label>Impact</label>
-                <select class="form-control">
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Critical</option>
-                </select>
+                <select name="impact" class="form-control">${levelOptions(r.impact || 'Medium')}</select>
             </div>
             <div class="form-group">
                 <label>Likelihood</label>
-                <select class="form-control">
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                </select>
+                <select name="likelihood" class="form-control">${levelOptions(r.likelihood || 'Medium')}</select>
             </div>
         </div>
         <div class="form-group">
             <label>Treatment Plan</label>
-            <select class="form-control">
-                <option>Mitigate</option>
-                <option>Transfer</option>
-                <option>Accept</option>
-                <option>Avoid</option>
+            <select name="treatment" class="form-control">
+                ${['Mitigate', 'Transfer', 'Accept', 'Avoid'].map(t => `<option ${t === r.treatment ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
         </div>
         <div class="form-group">
             <label>Description</label>
-            <textarea class="form-control" placeholder="Detailed description of the risk and its potential impact..."></textarea>
+            <textarea name="description" class="form-control" placeholder="Detailed description of the risk and its potential impact...">${r.description || ''}</textarea>
         </div>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Risk added successfully\',\'success\')">Add Risk</button>');
+    `;
+}
+
+function showAddRiskModal() {
+    openModal('Add New Risk', `
+        <form id="riskForm" method="POST" action="/risks/add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${riskFormFields()}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'riskForm\').submit()">Add Risk</button>');
+}
+
+function showEditRiskModal(idx) {
+    const r = risks[idx];
+    openModal('Edit Risk', `
+        <form id="riskForm" method="POST" action="/risks/${r.id}/edit">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${riskFormFields(r)}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'riskForm\').submit()">Save Changes</button>');
 }
 </script>
 {% endblock %}

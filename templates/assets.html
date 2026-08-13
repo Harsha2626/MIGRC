@@ -108,7 +108,13 @@
                         <td>{{ a.cloud_provider }}</td>
                         <td><span class="badge badge-success">{{ a.status }}</span></td>
                         <td>
-                            <button class="btn btn-sm btn-secondary btn-icon" title="View"><i class="fas fa-eye"></i></button>
+                            <div class="flex gap-8">
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditAssetModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                <form method="POST" action="{{ url_for('assets.delete_asset', asset_id=a.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ a.name }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -134,57 +140,69 @@ function filterAssets() {
     });
 }
 
-function showAddAssetModal() {
-    openModal('Add New Asset', `
+const ASSETS = {{ asset_dicts|tojson }};
+const ASSET_TYPES = ['Database', 'Compute', 'Storage', 'Network', 'Endpoint'];
+const ASSET_ENVIRONMENTS = ['Production', 'Staging', 'Development', 'DR', 'Corporate'];
+const ASSET_CLASSIFICATIONS = ['Restricted', 'Confidential', 'Internal', 'Public'];
+const ASSET_CLOUD_PROVIDERS = ['AWS', 'Azure', 'GCP', 'N/A'];
+
+function assetFormFields(a) {
+    a = a || {};
+    return `
         <div class="form-group">
             <label>Asset Name</label>
-            <input type="text" class="form-control" placeholder="Enter asset name">
+            <input type="text" name="name" class="form-control" placeholder="Enter asset name" value="${a.name || ''}" required>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="form-group">
                 <label>Type</label>
-                <select class="form-control">
-                    <option>Database</option>
-                    <option>Compute</option>
-                    <option>Storage</option>
-                    <option>Network</option>
-                    <option>Endpoint</option>
+                <select name="type" class="form-control">
+                    ${ASSET_TYPES.map(t => `<option ${t === a.type ? 'selected' : ''}>${t}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
                 <label>Environment</label>
-                <select class="form-control">
-                    <option>Production</option>
-                    <option>Staging</option>
-                    <option>Development</option>
-                    <option>DR</option>
-                    <option>Corporate</option>
+                <select name="environment" class="form-control">
+                    ${ASSET_ENVIRONMENTS.map(e => `<option ${e === a.environment ? 'selected' : ''}>${e}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
                 <label>Classification</label>
-                <select class="form-control">
-                    <option>Restricted</option>
-                    <option>Confidential</option>
-                    <option>Internal</option>
-                    <option>Public</option>
+                <select name="classification" class="form-control">
+                    ${ASSET_CLASSIFICATIONS.map(c => `<option ${c === a.classification ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
                 <label>Owner</label>
-                <input type="text" class="form-control" placeholder="Asset owner">
+                <input type="text" name="owner" class="form-control" placeholder="Asset owner" value="${a.owner || ''}">
             </div>
         </div>
         <div class="form-group">
             <label>Cloud Provider</label>
-            <select class="form-control">
-                <option>AWS</option>
-                <option>Azure</option>
-                <option>GCP</option>
-                <option>N/A</option>
+            <select name="cloud_provider" class="form-control">
+                ${ASSET_CLOUD_PROVIDERS.map(c => `<option ${c === a.cloud_provider ? 'selected' : ''}>${c}</option>`).join('')}
             </select>
         </div>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Asset added successfully\',\'success\')">Add Asset</button>');
+    `;
+}
+
+function showAddAssetModal() {
+    openModal('Add New Asset', `
+        <form id="assetForm" method="POST" action="/assets/add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${assetFormFields()}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Add Asset</button>');
+}
+
+function showEditAssetModal(idx) {
+    const a = ASSETS[idx];
+    openModal('Edit Asset', `
+        <form id="assetForm" method="POST" action="/assets/${a.id}/edit">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${assetFormFields(a)}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Save Changes</button>');
 }
 </script>
 {% endblock %}

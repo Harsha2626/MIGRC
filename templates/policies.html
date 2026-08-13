@@ -103,8 +103,12 @@
                         </td>
                         <td>
                             <div class="flex gap-8">
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit"><i class="fas fa-pen"></i></button>
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Reminder" onclick="showToast('Reminder sent to pending employees','info')"><i class="fas fa-paper-plane"></i></button>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditPolicyModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Record Acknowledgement" onclick="showAcknowledgeModal({{ p.id }}, {{ (unacked_by_policy.get(p.id) or [])|tojson }})"><i class="fas fa-paper-plane"></i></button>
+                                <form method="POST" action="{{ url_for('policies.delete_policy', policy_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ p.name }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -129,45 +133,90 @@ function filterPolicies() {
     });
 }
 
-function showAddPolicyModal() {
-    openModal('Create New Policy', `
+const POLICIES = {{ policy_dicts|tojson }};
+const POLICY_FRAMEWORKS = ['SOC 2', 'ISO 27001', 'GDPR', 'HIPAA', 'PCI DSS', 'General'];
+
+function frameworkOptions(selected) {
+    return POLICY_FRAMEWORKS.map(f => `<option ${f === selected ? 'selected' : ''}>${f}</option>`).join('');
+}
+
+function policyFormFields(p) {
+    p = p || {};
+    return `
         <div class="form-group">
             <label>Policy Name</label>
-            <input type="text" class="form-control" placeholder="Enter policy name">
+            <input type="text" name="name" class="form-control" placeholder="Enter policy name" value="${p.name || ''}" required>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="form-group">
                 <label>Owner</label>
-                <input type="text" class="form-control" placeholder="Policy owner">
+                <input type="text" name="owner" class="form-control" placeholder="Policy owner" value="${p.owner || ''}">
             </div>
             <div class="form-group">
                 <label>Framework</label>
-                <select class="form-control">
-                    <option>SOC 2</option>
-                    <option>ISO 27001</option>
-                    <option>GDPR</option>
-                    <option>HIPAA</option>
-                    <option>PCI DSS</option>
-                    <option>General</option>
-                </select>
+                <select name="framework" class="form-control">${frameworkOptions(p.framework)}</select>
             </div>
         </div>
         <div class="form-group">
-            <label>Use Template</label>
-            <select class="form-control">
-                <option>Start from scratch</option>
-                <option>Information Security Policy Template</option>
-                <option>Acceptable Use Policy Template</option>
-                <option>Data Classification Template</option>
-                <option>Incident Response Template</option>
-                <option>Access Control Template</option>
-            </select>
+            <label>Review Cycle (days)</label>
+            <input type="number" name="review_cycle_days" class="form-control" value="${p.review_cycle_days || 180}" min="1">
         </div>
         <div class="form-group">
             <label>Policy Content</label>
-            <textarea class="form-control" rows="6" placeholder="Enter policy content or use a template..."></textarea>
+            <textarea name="content" class="form-control" rows="6" placeholder="Enter policy content...">${p.content || ''}</textarea>
         </div>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-secondary" onclick="closeModal();showToast(\'Policy saved as draft\',\'info\')">Save as Draft</button><button class="btn btn-primary" onclick="closeModal();showToast(\'Policy published successfully\',\'success\')">Publish</button>');
+    `;
+}
+
+function showAddPolicyModal() {
+    openModal('Create New Policy', `
+        <form id="policyForm" method="POST" action="/policies/add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${policyFormFields()}
+        </form>
+    `, `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-secondary" onclick="submitPolicyForm('Draft')">Save as Draft</button>
+        <button class="btn btn-primary" onclick="submitPolicyForm('Published')">Publish</button>`);
+}
+
+function showEditPolicyModal(idx) {
+    const p = POLICIES[idx];
+    openModal('Edit Policy', `
+        <form id="policyForm" method="POST" action="/policies/${p.id}/edit">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${policyFormFields(p)}
+        </form>
+    `, `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitPolicyForm('${p.status}')">Save Changes</button>`);
+}
+
+function submitPolicyForm(status) {
+    const form = document.getElementById('policyForm');
+    const statusInput = document.createElement('input');
+    statusInput.type = 'hidden';
+    statusInput.name = 'status';
+    statusInput.value = status;
+    form.appendChild(statusInput);
+    form.submit();
+}
+
+function showAcknowledgeModal(policyId, unacked) {
+    if (!unacked.length) {
+        showToast('All employees have already acknowledged this policy.', 'info');
+        return;
+    }
+    const checkboxes = unacked.map(e => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;padding:6px 0;">
+            <input type="checkbox" name="employee_ids" value="${e.id}" checked> ${e.name}
+        </label>
+    `).join('');
+    openModal('Record Acknowledgement', `
+        <form id="acknowledgeForm" method="POST" action="/policies/${policyId}/acknowledge">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <p class="text-sm text-muted mb-16">Select which employees have acknowledged this policy.</p>
+            ${checkboxes}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'acknowledgeForm\').submit()">Record</button>');
 }
 </script>
 {% endblock %}
