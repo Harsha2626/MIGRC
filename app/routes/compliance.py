@@ -157,6 +157,17 @@ def upload_evidence(framework_id, control_id):
     # Auto-update control status for all mapped controls
     for cid in mapped_ids:
         _recalculate_control_status(cid)
+
+    # Take compliance snapshot for affected frameworks
+    affected_fw_ids = set()
+    affected_fw_ids.add(fw.id)
+    for cid in mapped_ids:
+        c = Control.query.get(cid)
+        if c:
+            affected_fw_ids.add(c.framework_id)
+    for fid in affected_fw_ids:
+        _take_compliance_snapshot(fid)
+
     db.session.commit()
 
     flash(f'Evidence "{title}" uploaded and mapped to {len(mapped_ids)} control(s).', 'success')
@@ -187,8 +198,17 @@ def review_evidence(evidence_id):
     db.session.commit()
 
     # Recalculate status for all controls mapped to this evidence
+    affected_fw_ids = set()
     for mapping in evidence.evidence_mappings:
         _recalculate_control_status(mapping.control_id)
+        ctrl = Control.query.get(mapping.control_id)
+        if ctrl:
+            affected_fw_ids.add(ctrl.framework_id)
+
+    # Take compliance snapshot for affected frameworks
+    for fid in affected_fw_ids:
+        _take_compliance_snapshot(fid)
+
     db.session.commit()
 
     return redirect(request.referrer or '/')
@@ -212,8 +232,17 @@ def delete_evidence(evidence_id):
     db.session.commit()
 
     # Recalculate status for affected controls
+    affected_fw_ids = set()
     for cid in affected_control_ids:
         _recalculate_control_status(cid)
+        ctrl = Control.query.get(cid)
+        if ctrl:
+            affected_fw_ids.add(ctrl.framework_id)
+
+    # Take compliance snapshot for affected frameworks
+    for fid in affected_fw_ids:
+        _take_compliance_snapshot(fid)
+
     db.session.commit()
 
     flash(f'Evidence "{title}" deleted.', 'success')
@@ -245,3 +274,28 @@ def _recalculate_control_status(control_id):
         ctrl.status = 'Passing'
     else:
         ctrl.status = 'Not Assessed'
+
+
+def _take_compliance_snapshot(framework_id):
+    """Create or update today's compliance snapshot for a framework."""
+    fw = Framework.query.get(framework_id)
+    if not fw:
+        return
+
+    today = date.today()
+
+    # Upsert: update today's snapshot if it exists, otherwise create new
+    snapshot = ComplianceSnapshot.query.filter_by(
+        framework_id=fw.id, snapshot_date=today
+    ).first()
+
+    if not snapshot:
+        snapshot = ComplianceSnapshot(framework_id=fw.id, snapshot_date=today)
+        db.session.add(snapshot)
+
+    snapshot.score = fw.compliance_score
+    snapshot.passing = fw.passing
+    snapshot.failing = fw.failing
+    snapshot.not_assessed = fw.not_assessed
+    snapshot.not_applicable = fw.not_applicable
+    snapshot.total_controls = fw.total_controls

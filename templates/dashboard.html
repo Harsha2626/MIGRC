@@ -21,15 +21,25 @@
         <div class="stat-info">
             <div class="stat-label">Compliance Score</div>
             <div class="stat-value">{{ compliance_score }}%</div>
-            <div class="stat-change up"><i class="fas fa-arrow-up"></i> 3% from last month</div>
+            {% if score_delta is not none %}
+                {% if score_delta > 0 %}
+                <div class="stat-change up"><i class="fas fa-arrow-up"></i> +{{ score_delta }}% from last month</div>
+                {% elif score_delta < 0 %}
+                <div class="stat-change down"><i class="fas fa-arrow-down"></i> {{ score_delta }}% from last month</div>
+                {% else %}
+                <div class="stat-change neutral"><i class="fas fa-minus"></i> No change from last month</div>
+                {% endif %}
+            {% else %}
+            <div class="stat-change neutral"><i class="fas fa-chart-line"></i> Tracking started</div>
+            {% endif %}
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
         <div class="stat-info">
             <div class="stat-label">Controls Passing</div>
-            <div class="stat-value">{{ passing_controls }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_controls }}</span></div>
-            <div class="stat-change up"><i class="fas fa-arrow-up"></i> 12 new this month</div>
+            <div class="stat-value">{{ passing_controls }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_controls - na_controls }}</span></div>
+            <div class="stat-change neutral"><i class="fas fa-ban"></i> {{ na_controls }} N/A excluded</div>
         </div>
     </div>
     <div class="stat-card">
@@ -67,8 +77,8 @@
             <div class="chart-container" style="width:220px;height:220px;">
                 <canvas id="controlsDonut"></canvas>
                 <div class="chart-center-label">
-                    <div class="value">{{ passing_controls }}</div>
-                    <div class="label">Passing</div>
+                    <div class="value">{{ compliance_score }}%</div>
+                    <div class="label">Score</div>
                 </div>
             </div>
             <div>
@@ -79,7 +89,10 @@
                     <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Failing ({{ failing_controls }})</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A ({{ total_controls - passing_controls - failing_controls }})</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Not Assessed ({{ total_controls - passing_controls - failing_controls - na_controls }})</div>
+                </div>
+                <div class="legend" style="margin-top:8px;">
+                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A ({{ na_controls }})</div>
                 </div>
             </div>
         </div>
@@ -96,16 +109,23 @@
             <div style="margin-bottom:18px;">
                 <div class="flex-between mb-8">
                     <span class="font-semibold" style="font-size:13px;">{{ fw.name }}</span>
-                    <span class="text-sm text-muted">{{ ((fw.passing / fw.total_controls) * 100)|round|int }}%</span>
+                    <span class="text-sm text-muted">
+                        {% if fw.compliance_score is defined %}{{ fw.compliance_score }}%{% else %}0%{% endif %}
+                    </span>
                 </div>
+                {% set applicable = fw.total_controls - fw.not_applicable %}
                 <div class="progress-stacked">
-                    <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round }}%;background:#10b981;"></div>
-                    <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round }}%;background:#ef4444;"></div>
-                    <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round }}%;background:#94a3b8;"></div>
+                    {% if applicable > 0 %}
+                    <div class="segment" style="width:{{ (fw.passing / applicable * 100)|round }}%;background:#10b981;"></div>
+                    <div class="segment" style="width:{{ (fw.failing / applicable * 100)|round }}%;background:#ef4444;"></div>
+                    {% set not_assessed = applicable - fw.passing - fw.failing %}
+                    <div class="segment" style="width:{{ (not_assessed / applicable * 100)|round }}%;background:#f59e0b;"></div>
+                    {% endif %}
                 </div>
                 <div class="progress-label">
                     <span>{{ fw.passing }} passing</span>
                     <span>{{ fw.failing }} failing</span>
+                    {% if fw.not_applicable > 0 %}<span>{{ fw.not_applicable }} N/A</span>{% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -113,16 +133,16 @@
     </div>
 </div>
 
-<!-- Row: Risk Trend + Audits -->
+<!-- Row: Compliance Trend + Audits -->
 <div class="grid-2">
-    <!-- Risk Trend -->
+    <!-- Compliance Trend -->
     <div class="card">
         <div class="card-header">
-            <h3>Risk Trend (6 Months)</h3>
+            <h3>Compliance Trend (6 Months)</h3>
         </div>
         <div class="card-body">
             <div class="chart-container-wide" style="height:260px;">
-                <canvas id="riskTrendChart"></canvas>
+                <canvas id="complianceTrendChart"></canvas>
             </div>
         </div>
     </div>
@@ -163,7 +183,11 @@
                             <td>{{ a.evidence_collected }}/{{ a.evidence_total }}</td>
                             <td style="width:120px;">
                                 <div class="progress-bar">
+                                    {% if a.evidence_total > 0 %}
                                     <div class="progress-fill blue" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round }}%"></div>
+                                    {% else %}
+                                    <div class="progress-fill blue" style="width:0%"></div>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -230,10 +254,15 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(donutCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Passing', 'Failing', 'N/A'],
+            labels: ['Passing', 'Failing', 'Not Assessed', 'N/A'],
             datasets: [{
-                data: [{{ passing_controls }}, {{ failing_controls }}, {{ total_controls - passing_controls - failing_controls }}],
-                backgroundColor: ['#10b981', '#ef4444', '#94a3b8'],
+                data: [
+                    {{ passing_controls }},
+                    {{ failing_controls }},
+                    {{ total_controls - passing_controls - failing_controls - na_controls }},
+                    {{ na_controls }}
+                ],
+                backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#94a3b8'],
                 borderWidth: 0,
                 cutout: '75%'
             }]
@@ -245,44 +274,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Risk Trend Chart
-    const trendCtx = document.getElementById('riskTrendChart').getContext('2d');
+    // Compliance Trend Chart (real snapshot data)
+    const trendLabels = {{ trend_labels | tojson }};
+    const trendScores = {{ trend_scores | tojson }};
+
+    const trendCtx = document.getElementById('complianceTrendChart').getContext('2d');
     new Chart(trendCtx, {
         type: 'line',
         data: {
-            labels: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-            datasets: [
-                {
-                    label: 'Critical',
-                    data: [4, 3, 5, 3, 2, {{ critical_risks }}],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239,68,68,0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 3
-                },
-                {
-                    label: 'High',
-                    data: [6, 8, 7, 5, 6, {{ open_risks }}],
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245,158,11,0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 3
-                },
-                {
-                    label: 'Medium',
-                    data: [10, 12, 9, 11, 8, 7],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59,130,246,0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 3
-                }
-            ]
+            labels: trendLabels,
+            datasets: [{
+                label: 'Compliance Score %',
+                data: trendScores,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 4,
+                pointBackgroundColor: '#6366f1',
+                spanGaps: true
+            }]
         },
         options: {
             responsive: true,
@@ -291,7 +303,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 11 } } }
             },
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 } } },
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { font: { size: 11 }, callback: function(v) { return v + '%'; } }
+                },
                 x: { grid: { display: false }, ticks: { font: { size: 11 } } }
             }
         }
