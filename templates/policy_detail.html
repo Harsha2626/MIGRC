@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}{{ policy.name }}{% endblock %}
+{% block breadcrumb %}
+<a href="/policies" style="color:var(--text-secondary);text-decoration:none;">Policy Management</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<span>{{ policy.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ policy.name }} <span class="text-sm text-muted">v{{ policy.version }}</span></h1>
+        <p>{{ policy.owner }} &middot; {{ policy.framework }} &middot; Next review {{ policy.next_review }}</p>
+    </div>
+    <div class="page-actions">
+        {% if policy.status == 'Published' %}<span class="badge badge-success" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
+        {% elif policy.status == 'Retired' %}<span class="badge badge-neutral" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
+        {% elif policy.status == 'Approved' %}<span class="badge badge-info" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
+        {% elif policy.status == 'In Review' %}<span class="badge badge-warning" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
+        {% else %}<span class="badge badge-neutral" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>{% endif %}
+        <a href="/policies" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<!-- Workflow actions -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        {% if policy.status == 'Draft' %}
+        <form method="POST" action="{{ url_for('policies.submit_for_review', policy_id=policy.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="flex gap-8" style="align-items:end;">
+                <div class="form-group" style="margin-bottom:0;flex:1;">
+                    <label>Assign Reviewer</label>
+                    <select name="reviewer_id" class="form-control" required>
+                        <option value="">Select a reviewer...</option>
+                        {% for u in users %}<option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>{% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit for Review</button>
+            </div>
+        </form>
+        {% elif policy.status == 'In Review' %}
+        <p class="text-sm mb-16">Awaiting review by <strong>{{ policy.assigned_reviewer.name if policy.assigned_reviewer else 'unassigned' }}</strong>.</p>
+        <form method="POST" action="{{ url_for('policies.review_policy', policy_id=policy.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Comments</label>
+                <textarea name="comments" class="form-control" placeholder="Review notes (optional)..."></textarea>
+            </div>
+            <div class="flex gap-8">
+                <button type="submit" name="decision" value="approve" class="btn btn-primary"><i class="fas fa-check"></i> Approve</button>
+                <button type="submit" name="decision" value="reject" class="btn btn-danger"><i class="fas fa-xmark"></i> Reject (back to Draft)</button>
+            </div>
+        </form>
+        {% elif policy.next_status %}
+        <form method="POST" action="{{ url_for('policies.advance_status', policy_id=policy.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="{{ policy.next_status }}">
+            <button type="submit" class="btn btn-primary">
+                {% if policy.next_status == 'Published' %}<i class="fas fa-globe"></i> Publish Policy
+                {% else %}<i class="fas fa-box-archive"></i> Retire Policy{% endif %}
+            </button>
+        </form>
+        {% else %}
+        <p class="text-sm text-muted">This policy is Retired &mdash; no further transitions.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Content + Edit -->
+    <div class="card">
+        <div class="card-header"><h3>Content</h3></div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>Policy Name</label>
+                    <input type="text" name="name" class="form-control" value="{{ policy.name }}" required>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div class="form-group">
+                        <label>Owner</label>
+                        <input type="text" name="owner" class="form-control" value="{{ policy.owner or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Framework</label>
+                        <input type="text" name="framework" class="form-control" value="{{ policy.framework or '' }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Review Cycle (days)</label>
+                    <input type="number" name="review_cycle_days" class="form-control" value="{{ policy.review_cycle_days }}" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Content</label>
+                    <textarea name="content" class="form-control" rows="8">{{ policy.content or '' }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Save (bumps version if content changed)</button>
+            </form>
+        </div>
+    </div>
+
+    <div>
+        <!-- Version History -->
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-header"><h3>Version History</h3></div>
+            <div class="card-body no-padding">
+                {% if versions %}
+                <table>
+                    <thead><tr><th>Version</th><th>Saved</th><th>By</th><th></th></tr></thead>
+                    <tbody>
+                        {% for v in versions %}
+                        <tr>
+                            <td>v{{ v.version }}</td>
+                            <td class="text-sm">{{ v.created_at.strftime('%d %b %Y') if v.created_at else '-' }}</td>
+                            <td class="text-sm">{{ v.created_by or '-' }}</td>
+                            <td><a href="{{ url_for('policies.policy_diff', policy_id=policy.id, version_id=v.id) }}" class="btn btn-sm btn-secondary">Diff vs current</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div style="padding:20px;color:var(--text-muted);font-size:13px;">No prior versions yet &mdash; edits that change content will appear here.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Review History -->
+        <div class="card">
+            <div class="card-header"><h3>Review History</h3></div>
+            <div class="card-body no-padding">
+                {% if reviews %}
+                <table>
+                    <thead><tr><th>Reviewer</th><th>Decision</th><th>When</th></tr></thead>
+                    <tbody>
+                        {% for r in reviews %}
+                        <tr>
+                            <td class="text-sm">{{ r.reviewer.name if r.reviewer else '-' }}</td>
+                            <td><span class="badge {{ 'badge-success' if r.status == 'Approved' else 'badge-danger' }}">{{ r.status }}</span></td>
+                            <td class="text-sm">{{ r.reviewed_at.strftime('%d %b %Y') if r.reviewed_at else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div style="padding:20px;color:var(--text-muted);font-size:13px;">No reviews yet.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Acknowledgements -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">
+        <h3>Acknowledgements ({{ policy.acknowledgements }}/{{ policy.total_employees }})</h3>
+        {% if policy.status == 'Published' and unacked %}
+        <button class="btn btn-sm btn-primary" onclick="document.getElementById('ackForm').style.display='block'"><i class="fas fa-paper-plane"></i> Record Acknowledgement</button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if policy.status != 'Published' %}
+        <p class="text-sm text-muted">Acknowledgements open once this policy is Published.</p>
+        {% endif %}
+        <div id="ackForm" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg-tertiary);border-radius:8px;">
+            <form method="POST" action="{{ url_for('policies.acknowledge_policy', policy_id=policy.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+                    {% for e in unacked %}
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;">
+                        <input type="checkbox" name="employee_ids" value="{{ e.id }}" checked> {{ e.name }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary">Record</button>
+            </form>
+        </div>
+        <div class="tag-list">
+            {% for a in acked %}<span class="tag">{{ a.employee.name }}</span>{% endfor %}
+            {% if not acked %}<span class="text-sm text-muted">No acknowledgements yet.</span>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

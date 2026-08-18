@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app.models import db, Asset
+from app.services.activity import log_activity
 
 assets_bp = Blueprint('assets', __name__)
 
@@ -31,6 +32,7 @@ def add_asset():
         cloud_provider=request.form.get('cloud_provider', ''),
     )
     db.session.add(asset)
+    log_activity('created', 'Asset', name)
     db.session.commit()
 
     flash(f'Asset "{name}" added.', 'success')
@@ -54,6 +56,7 @@ def edit_asset(asset_id):
     asset.status = request.form.get('status', asset.status)
     asset.cloud_provider = request.form.get('cloud_provider', asset.cloud_provider)
 
+    log_activity('updated', 'Asset', name)
     db.session.commit()
     flash(f'Asset "{name}" updated.', 'success')
     return redirect(url_for('assets.assets'))
@@ -65,6 +68,7 @@ def delete_asset(asset_id):
     asset = Asset.query.get_or_404(asset_id)
     name = asset.name
     db.session.delete(asset)
+    log_activity('deleted', 'Asset', name)
     db.session.commit()
     flash(f'Asset "{name}" deleted.', 'info')
     return redirect(url_for('assets.assets'))

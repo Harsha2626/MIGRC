@@ -4,6 +4,7 @@ from flask_migrate import Migrate
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
 from app.models import db, User
+from app.utils import timesince
 
 migrate = Migrate()
 login_manager = LoginManager()
@@ -16,6 +17,7 @@ def create_app():
                 static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 
     app.config.from_object('config.Config')
+    app.jinja_env.filters['timesince'] = timesince
 
     # Ensure upload folder exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)

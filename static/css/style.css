@@ -757,6 +757,7 @@ tbody tr:last-child td { border-bottom: none; }
 .risk-cell.high { background: #f97316; }
 .risk-cell.medium { background: #eab308; }
 .risk-cell.low { background: #22c55e; }
+.risk-cell.negligible { background: #16a34a; }
 
 /* ============================================================
    DONUT / CHART CONTAINERS

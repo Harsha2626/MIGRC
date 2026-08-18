@@ -82,7 +82,7 @@
                     {% for v in vendors %}
                     <tr data-tier="{{ v.risk_tier }}">
                         <td>
-                            <div class="font-semibold">{{ v.name }}</div>
+                            <a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="font-semibold" style="text-decoration:none;">{{ v.name }}</a>
                         </td>
                         <td class="text-muted">{{ v.category }}</td>
                         <td>
@@ -115,8 +115,8 @@
                         </td>
                         <td>
                             <div class="flex gap-8">
+                                <a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Assessments & Documents"><i class="fas fa-diagram-project"></i></a>
                                 <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditVendorModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Questionnaire" onclick="showToast('Questionnaire sent to {{ v.name }}','info')"><i class="fas fa-paper-plane"></i></button>
                                 <form method="POST" action="{{ url_for('vendors.delete_vendor', vendor_id=v.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ v.name }}?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>

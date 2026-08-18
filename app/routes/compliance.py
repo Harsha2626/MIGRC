@@ -4,13 +4,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import db, Framework, Control, Evidence, EvidenceMapping, ComplianceSnapshot
+from app.services.activity import log_activity
+from app.utils import allowed_file
 
 compliance_bp = Blueprint('compliance', __name__)
-
-
-def allowed_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in current_app.config.get('ALLOWED_EXTENSIONS', set())
 
 
 @compliance_bp.route('/compliance')
@@ -157,6 +154,8 @@ def upload_evidence(framework_id, control_id):
     # Auto-update control status for all mapped controls
     for cid in mapped_ids:
         _recalculate_control_status(cid)
+    log_activity('uploaded', 'Evidence', title,
+        f'{current_user.name} uploaded evidence "{title}" and mapped it to {len(mapped_ids)} control(s)')
     db.session.commit()
 
     flash(f'Evidence "{title}" uploaded and mapped to {len(mapped_ids)} control(s).', 'success')
@@ -184,11 +183,11 @@ def review_evidence(evidence_id):
     evidence.review_notes = review_notes
     evidence.reviewed_by = current_user.name
     evidence.reviewed_at = datetime.utcnow()
-    db.session.commit()
 
     # Recalculate status for all controls mapped to this evidence
     for mapping in evidence.evidence_mappings:
         _recalculate_control_status(mapping.control_id)
+    log_activity('approved' if action == 'approve' else 'rejected', 'Evidence', evidence.title)
     db.session.commit()
 
     return redirect(request.referrer or '/')
@@ -209,6 +208,7 @@ def delete_evidence(evidence_id):
 
     title = evidence.title
     db.session.delete(evidence)
+    log_activity('deleted', 'Evidence', title)
     db.session.commit()
 
     # Recalculate status for affected controls

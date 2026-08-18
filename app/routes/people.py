@@ -1,10 +1,11 @@
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.models import (
     db, Employee, TrainingCampaign, TrainingCampaignEnrollment,
     EmployeeAccess, AccessReview, Vendor,
 )
+from app.services.activity import log_activity
 
 people_bp = Blueprint('people', __name__)
 
@@ -130,6 +131,7 @@ def create_employee():
 
     employee = Employee(name=name, email=email, department=department, source=source, status=status)
     db.session.add(employee)
+    log_activity('created', 'Employee', name)
     db.session.commit()
 
     flash(f'Employee {name} added successfully.', 'success')
@@ -150,6 +152,7 @@ def edit_employee(employee_id):
     elif status != 'Offboarded':
         employee.offboarded_at = None
 
+    log_activity('updated', 'Employee', employee.name)
     db.session.commit()
     flash(f'{employee.name} updated.', 'success')
     return redirect(url_for('people.employees', tab='all'))
@@ -161,6 +164,7 @@ def delete_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
     name = employee.name
     db.session.delete(employee)
+    log_activity('deleted', 'Employee', name)
     db.session.commit()
     flash(f'{name} removed.', 'info')
     return redirect(url_for('people.employees', tab='all'))
@@ -212,6 +216,7 @@ def create_training_campaign():
         for employee in Employee.query.all():
             db.session.add(TrainingCampaignEnrollment(campaign_id=campaign.id, employee_id=employee.id))
 
+    log_activity('created', 'TrainingCampaign', name)
     db.session.commit()
     flash(f'Campaign "{name}" created.', 'success')
     return redirect(url_for('people.training_campaigns'))
@@ -223,6 +228,7 @@ def delete_training_campaign(campaign_id):
     campaign = TrainingCampaign.query.get_or_404(campaign_id)
     name = campaign.name
     db.session.delete(campaign)
+    log_activity('deleted', 'TrainingCampaign', name)
     db.session.commit()
     flash(f'Campaign "{name}" deleted.', 'info')
     return redirect(url_for('people.training_campaigns'))
@@ -289,6 +295,7 @@ def create_access_review():
         review.applications = Vendor.query.filter(Vendor.id.in_(vendor_ids)).all()
 
     db.session.add(review)
+    log_activity('created', 'AccessReview', name)
     db.session.commit()
 
     flash(f'Access review "{name}" created.', 'success')
@@ -300,6 +307,8 @@ def create_access_review():
 def update_access_review_status(review_id):
     review = AccessReview.query.get_or_404(review_id)
     review.status = request.form.get('status', review.status)
+    log_activity('status_changed', 'AccessReview', review.name,
+        f'{current_user.name} marked access review "{review.name}" as {review.status}')
     db.session.commit()
     flash(f'"{review.name}" marked as {review.status}.', 'success')
     return redirect(url_for('people.access_reviews'))
@@ -311,6 +320,7 @@ def delete_access_review(review_id):
     review = AccessReview.query.get_or_404(review_id)
     name = review.name
     db.session.delete(review)
+    log_activity('deleted', 'AccessReview', name)
     db.session.commit()
     flash(f'Access review "{name}" deleted.', 'info')
     return redirect(url_for('people.access_reviews'))

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}{{ risk.title }}{% endblock %}
+{% block breadcrumb %}
+<a href="/risks" style="color:var(--text-secondary);text-decoration:none;">Risk Management</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<span>{{ risk.title }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ risk.title }}</h1>
+        <p>{{ risk.category }} &middot; Owner: {{ risk.owner }} &middot; <a href="/risks">Edit core fields on Risk Register</a></p>
+    </div>
+    <div class="page-actions">
+        {% if risk.status == 'Open' %}<span class="badge badge-danger" style="font-size:13px;padding:8px 16px;">{{ risk.status }}</span>
+        {% elif risk.status == 'In Treatment' %}<span class="badge badge-warning" style="font-size:13px;padding:8px 16px;">{{ risk.status }}</span>
+        {% else %}<span class="badge badge-success" style="font-size:13px;padding:8px 16px;">{{ risk.status }}</span>{% endif %}
+        <a href="/risks" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<!-- Inherent vs Residual -->
+<div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+        <div class="card-header"><h3>Inherent Risk</h3></div>
+        <div class="card-body" style="display:flex;gap:24px;align-items:center;">
+            <div style="text-align:center;">
+                <div style="font-size:36px;font-weight:700;{% if risk.score >= 20 %}color:var(--accent-danger){% elif risk.score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ risk.score }}</div>
+                <div class="text-sm text-muted">Score</div>
+            </div>
+            <div>
+                <div class="text-sm"><strong>Likelihood:</strong> {{ risk.likelihood }}</div>
+                <div class="text-sm"><strong>Impact:</strong> {{ risk.impact }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>Residual Risk</h3></div>
+        <div class="card-body" style="display:flex;gap:24px;align-items:center;">
+            {% if risk.residual_score is not none %}
+            <div style="text-align:center;">
+                <div style="font-size:36px;font-weight:700;{% if risk.residual_score >= 20 %}color:var(--accent-danger){% elif risk.residual_score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ risk.residual_score }}</div>
+                <div class="text-sm text-muted">Score</div>
+            </div>
+            <div>
+                <div class="text-sm"><strong>Likelihood:</strong> {{ risk.residual_likelihood }}</div>
+                <div class="text-sm"><strong>Impact:</strong> {{ risk.residual_impact }}</div>
+            </div>
+            {% else %}
+            <p class="text-sm text-muted">Not yet assessed &mdash; complete a treatment plan below to record residual risk.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Mitigating Controls -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h3>Mitigating Controls</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('risks.update_risk_controls', risk_id=risk.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+                {% set linked_ids = risk.mitigating_controls|map(attribute='id')|list %}
+                {% for c in all_controls %}
+                <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:400;padding:3px 0;">
+                    <input type="checkbox" name="control_ids" value="{{ c.id }}" {% if c.id in linked_ids %}checked{% endif %}> {{ c.code }} &ndash; {{ c.title }}
+                </label>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">Save Controls</button>
+        </form>
+    </div>
+</div>
+
+<!-- Treatment Plans -->
+<div class="card">
+    <div class="card-header">
+        <h3>Treatment Plans</h3>
+        <button class="btn btn-sm btn-primary" onclick="toggleEl('addTreatment')"><i class="fas fa-plus"></i> Add Treatment</button>
+    </div>
+    <div class="card-body">
+        <div id="addTreatment" style="display:none;margin-bottom:20px;padding:16px;background:var(--bg-tertiary);border-radius:8px;">
+            <form method="POST" action="{{ url_for('risks.add_treatment', risk_id=risk.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>Action</label>
+                    <textarea name="action" class="form-control" placeholder="Describe the treatment action..." required></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div class="form-group">
+                        <label>Owner</label>
+                        <input type="text" name="owner" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Deadline</label>
+                        <input type="date" name="deadline" class="form-control">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Treatment</button>
+            </form>
+        </div>
+
+        {% if treatments %}
+        {% for t in treatments %}
+        <div style="border:1px solid var(--border-color);border-radius:8px;padding:16px;margin-bottom:14px;">
+            <div class="flex-between mb-8">
+                <p style="font-size:13px;margin:0;">{{ t.action }}</p>
+                <span class="badge {% if t.status == 'Completed' %}badge-success{% elif t.status == 'In Progress' %}badge-warning{% else %}badge-neutral{% endif %}">{{ t.status }}</span>
+            </div>
+            <div class="text-sm text-muted mb-16">Owner: {{ t.owner or '-' }} &middot; Deadline: {{ t.deadline or '-' }}</div>
+
+            <!-- Milestones -->
+            <div style="margin-bottom:14px;">
+                <div class="flex-between mb-8">
+                    <span class="text-sm font-semibold">Milestones</span>
+                    <span class="text-sm text-muted">{{ t.milestone_progress }}% complete</span>
+                </div>
+                <div class="progress-bar mb-8"><div class="progress-fill blue" style="width:{{ t.milestone_progress }}%"></div></div>
+                {% for m in t.milestones %}
+                <form method="POST" action="{{ url_for('risks.toggle_milestone', risk_id=risk.id, milestone_id=m.id) }}" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" style="width:24px;height:24px;padding:0;">
+                        <i class="fas {{ 'fa-check-square' if m.completed else 'fa-square' }}"></i>
+                    </button>
+                    <span class="text-sm" style="{% if m.completed %}text-decoration:line-through;color:var(--text-muted);{% endif %}">{{ m.title }}</span>
+                    {% if m.due_date %}<span class="text-sm text-muted">({{ m.due_date }})</span>{% endif %}
+                </form>
+                {% endfor %}
+                <form method="POST" action="{{ url_for('risks.add_milestone', risk_id=risk.id, treatment_id=t.id) }}" style="display:flex;gap:8px;margin-top:8px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="title" class="form-control" placeholder="New milestone..." style="font-size:12px;">
+                    <input type="date" name="due_date" class="form-control" style="font-size:12px;width:150px;">
+                    <button type="submit" class="btn btn-sm btn-secondary">Add</button>
+                </form>
+            </div>
+
+            {% if t.status != 'Completed' %}
+            <form method="POST" action="{{ url_for('risks.update_treatment_status', risk_id=risk.id, treatment_id=t.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;background:var(--bg-tertiary);padding:12px;border-radius:8px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="text-sm">Status</label>
+                        <select name="status" class="form-control" style="font-size:12px;">
+                            <option {% if t.status == 'Planned' %}selected{% endif %}>Planned</option>
+                            <option {% if t.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                            <option>Completed</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="text-sm">Residual Likelihood (if Completed)</label>
+                        <select name="residual_likelihood" class="form-control" style="font-size:12px;">
+                            {% for l in risk_levels %}<option {% if l == risk.likelihood %}selected{% endif %}>{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="text-sm">Residual Impact (if Completed)</label>
+                        <select name="residual_impact" class="form-control" style="font-size:12px;">
+                            {% for l in risk_levels %}<option {% if l == risk.impact %}selected{% endif %}>{{ l }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-list-check"></i>
+            <h3>No treatment plans yet</h3>
+            <p>Add an action to mitigate, transfer, or accept this risk.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEl(id) {
+    const el = document.getElementById(id);
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+</script>
+{% endblock %}

@@ -8,10 +8,13 @@ start empty - data should be added by the user through the application.
 
 Run: python -m app.seed
 """
+import random
+from datetime import date, datetime, timedelta
 from app import create_app
 from app.models import (
     db, User, Framework, Control, Vendor, Employee, TrainingCampaign,
     TrainingCampaignEnrollment, EmployeeAccess, AccessReview,
+    ComplianceSnapshot, DashboardSnapshot, ActivityLog,
 )
 
 
@@ -244,6 +247,53 @@ def seed_database():
 
         db.session.commit()
 
+        # ---- HISTORICAL SNAPSHOTS (last 14 days, for the dashboard trend/deltas) ----
+        # Today's real snapshot is captured lazily on first dashboard load, so this
+        # backfill only covers days -14..-1, ending just before the real (currently
+        # all-zero, freshly-seeded) state.
+        rng = random.Random(42)
+        for days_ago in range(14, 0, -1):
+            snap_date = date.today() - timedelta(days=days_ago)
+            score = min(38, 18 + (14 - days_ago) * 1.5 + rng.uniform(-2, 2))
+            passing = round(93 * score / 100)
+            db.session.add(ComplianceSnapshot(
+                framework_id=iso27001.id,
+                score=round(score, 1),
+                passing=passing,
+                failing=rng.randint(2, 6),
+                not_assessed=93 - passing - rng.randint(2, 6),
+                not_applicable=0,
+                total_controls=93,
+                snapshot_date=snap_date,
+            ))
+            db.session.add(DashboardSnapshot(
+                snapshot_date=snap_date,
+                open_risks=rng.randint(3, 8),
+                active_policies=rng.randint(1, 4),
+                pending_evidence=rng.randint(0, 3),
+            ))
+
+        # ---- RECENT ACTIVITY (for the dashboard feed) ----
+        activity_events = [
+            ('created', 'Framework', 'ISO 27001:2022', 'Harsha S created the ISO 27001:2022 framework', 13),
+            ('created', 'Vendor', 'AWS', 'Harsha S added vendor "AWS"', 12),
+            ('created', 'Vendor', 'GitHub', 'Harsha S added vendor "GitHub"', 12),
+            ('created', 'Employee', 'Aditi Rao', 'Harsha S added employee "Aditi Rao"', 10),
+            ('created', 'TrainingCampaign', 'ISMS Training', 'Harsha S created campaign "ISMS Training"', 9),
+            ('created', 'AccessReview', 'Q3 2026 Access Review', 'Harsha S created access review "Q3 2026 Access Review"', 5),
+            ('updated', 'Vendor', 'AWS', 'Harsha S updated vendor "AWS"', 3),
+            ('acknowledged', 'Policy', 'ISMS Training', 'Harsha S recorded 8 acknowledgement(s) for policy "ISMS Training"', 2),
+            ('created', 'Employee', 'Vikram Chawla', 'Harsha S added employee "Vikram Chawla"', 1),
+        ]
+        for action, entity_type, entity_name, description, days_ago in activity_events:
+            db.session.add(ActivityLog(
+                user_id=admin.id, action=action, entity_type=entity_type,
+                entity_name=entity_name, description=description,
+                created_at=datetime.utcnow() - timedelta(days=days_ago, hours=rng.randint(0, 20)),
+            ))
+
+        db.session.commit()
+
         print("Database seeded successfully!")
         print(f"  Users: {User.query.count()}")
         print(f"  Frameworks: {Framework.query.count()}")
@@ -256,6 +306,9 @@ def seed_database():
         print(f"  Employees: {Employee.query.count()}")
         print(f"  Training Campaigns: {TrainingCampaign.query.count()}")
         print(f"  Access Reviews: {AccessReview.query.count()}")
+        print(f"  Compliance Snapshots: {ComplianceSnapshot.query.count()} (14-day backfill)")
+        print(f"  Dashboard Snapshots: {DashboardSnapshot.query.count()} (14-day backfill)")
+        print(f"  Activity Log: {ActivityLog.query.count()} (seeded history)")
 
 
 if __name__ == '__main__':

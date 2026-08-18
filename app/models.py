@@ -119,6 +119,7 @@ class Evidence(db.Model):
     file_size = db.Column(db.Integer)
     source_type = db.Column(db.String(50))
     uploaded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=True)
     audit_period_start = db.Column(db.Date)
     audit_period_end = db.Column(db.Date)
     status = db.Column(db.String(30), default='Pending Review')
@@ -142,6 +143,13 @@ class EvidenceMapping(db.Model):
     validated_at = db.Column(db.DateTime)
 
 
+risk_controls = db.Table(
+    'risk_controls',
+    db.Column('risk_id', db.Integer, db.ForeignKey('risks.id'), primary_key=True),
+    db.Column('control_id', db.Integer, db.ForeignKey('controls.id'), primary_key=True),
+)
+
+
 class Risk(db.Model):
     __tablename__ = 'risks'
     id = db.Column(db.Integer, primary_key=True)
@@ -156,11 +164,16 @@ class Risk(db.Model):
     treatment = db.Column(db.String(30))
     treatment_plan = db.Column(db.Text)
     linked_control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=True)
+    residual_likelihood = db.Column(db.String(20), nullable=True)
+    residual_impact = db.Column(db.String(20), nullable=True)
+    residual_score = db.Column(db.Integer, nullable=True)
     created = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    linked_control = db.relationship('Control', backref='risks')
+    linked_control = db.relationship('Control', foreign_keys=[linked_control_id], backref='risks')
+    mitigating_controls = db.relationship('Control', secondary=risk_controls, backref='mitigated_risks')
+    treatments = db.relationship('RiskTreatment', backref='risk', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
@@ -174,7 +187,40 @@ class Risk(db.Model):
             'status': self.status,
             'treatment': self.treatment,
             'created': self.created,
+            'residual_likelihood': self.residual_likelihood,
+            'residual_impact': self.residual_impact,
+            'residual_score': self.residual_score,
         }
+
+
+class RiskTreatment(db.Model):
+    __tablename__ = 'risk_treatments'
+    id = db.Column(db.Integer, primary_key=True)
+    risk_id = db.Column(db.Integer, db.ForeignKey('risks.id'), nullable=False)
+    action = db.Column(db.Text, nullable=False)
+    owner = db.Column(db.String(100))
+    deadline = db.Column(db.String(20))
+    status = db.Column(db.String(20), default='Planned')  # Planned, In Progress, Completed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+
+    milestones = db.relationship('TreatmentMilestone', backref='treatment', lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def milestone_progress(self):
+        total = self.milestones.count()
+        if not total:
+            return 0
+        return round((self.milestones.filter_by(completed=True).count() / total) * 100)
+
+
+class TreatmentMilestone(db.Model):
+    __tablename__ = 'treatment_milestones'
+    id = db.Column(db.Integer, primary_key=True)
+    treatment_id = db.Column(db.Integer, db.ForeignKey('risk_treatments.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    due_date = db.Column(db.String(20))
+    completed = db.Column(db.Boolean, default=False)
 
 
 class Policy(db.Model):
@@ -190,10 +236,16 @@ class Policy(db.Model):
     next_review = db.Column(db.String(20))
     review_cycle_days = db.Column(db.Integer, default=180)
     file_path = db.Column(db.String(500))
+    assigned_reviewer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     acks = db.relationship('PolicyAcknowledgement', backref='policy', lazy='dynamic', cascade='all, delete-orphan')
+    versions = db.relationship('PolicyVersion', backref='policy', lazy='dynamic', cascade='all, delete-orphan', order_by='PolicyVersion.created_at.desc()')
+    reviews = db.relationship('PolicyReview', backref='policy', lazy='dynamic', cascade='all, delete-orphan', order_by='PolicyReview.reviewed_at.desc()')
+    assigned_reviewer = db.relationship('User', foreign_keys=[assigned_reviewer_id])
+
+    STATUS_FLOW = ['Draft', 'In Review', 'Approved', 'Published', 'Retired']
 
     @property
     def acknowledgements(self):
@@ -202,6 +254,14 @@ class Policy(db.Model):
     @property
     def total_employees(self):
         return Employee.query.count()
+
+    @property
+    def next_status(self):
+        try:
+            idx = self.STATUS_FLOW.index(self.status)
+        except ValueError:
+            return None
+        return self.STATUS_FLOW[idx + 1] if idx + 1 < len(self.STATUS_FLOW) else None
 
     def to_dict(self):
         return {
@@ -226,6 +286,28 @@ class PolicyAcknowledgement(db.Model):
     employee = db.relationship('Employee')
 
 
+class PolicyVersion(db.Model):
+    __tablename__ = 'policy_versions'
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
+    version = db.Column(db.String(20))
+    content = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.String(100))
+
+
+class PolicyReview(db.Model):
+    __tablename__ = 'policy_reviews'
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
+    reviewer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    status = db.Column(db.String(20), default='Pending')  # Pending, Approved, Rejected
+    comments = db.Column(db.Text)
+    reviewed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    reviewer = db.relationship('User')
+
+
 class Audit(db.Model):
     __tablename__ = 'audits'
     id = db.Column(db.Integer, primary_key=True)
@@ -235,11 +317,13 @@ class Audit(db.Model):
     status = db.Column(db.String(30), default='Scheduled')
     start_date = db.Column(db.String(20))
     end_date = db.Column(db.String(20))
-    findings = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     evidence_items = db.relationship('AuditEvidence', backref='audit', lazy='dynamic', cascade='all, delete-orphan')
+    finding_items = db.relationship('AuditFinding', backref='audit', lazy='dynamic', cascade='all, delete-orphan')
+
+    STATUS_FLOW = ['Scheduled', 'In Progress', 'Under Review', 'Completed']
 
     @property
     def evidence_total(self):
@@ -248,6 +332,22 @@ class Audit(db.Model):
     @property
     def evidence_collected(self):
         return self.evidence_items.filter_by(status='Collected').count()
+
+    @property
+    def findings(self):
+        return self.finding_items.count()
+
+    @property
+    def open_findings(self):
+        return self.finding_items.filter_by(status='Open').count()
+
+    @property
+    def next_status(self):
+        try:
+            idx = self.STATUS_FLOW.index(self.status)
+        except ValueError:
+            return None
+        return self.STATUS_FLOW[idx + 1] if idx + 1 < len(self.STATUS_FLOW) else None
 
     def to_dict(self):
         return {
@@ -265,14 +365,47 @@ class Audit(db.Model):
 
 
 class AuditEvidence(db.Model):
+    """One row per control in an audit's scope; doubles as the scope list and the evidence checklist."""
     __tablename__ = 'audit_evidence'
     id = db.Column(db.Integer, primary_key=True)
     audit_id = db.Column(db.Integer, db.ForeignKey('audits.id'), nullable=False)
     control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=False)
+    evidence_id = db.Column(db.Integer, db.ForeignKey('evidence.id'), nullable=True)
     status = db.Column(db.String(30), default='Missing')
     collected_at = db.Column(db.DateTime)
 
     control = db.relationship('Control')
+    evidence = db.relationship('Evidence')
+
+
+class AuditFinding(db.Model):
+    __tablename__ = 'audit_findings'
+    id = db.Column(db.Integer, primary_key=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id'), nullable=False)
+    control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=True)
+    type = db.Column(db.String(30), default='Observation')  # Observation, Non-Conformity, Recommendation
+    severity = db.Column(db.String(20), default='Medium')   # Low, Medium, High, Critical
+    description = db.Column(db.Text)
+    status = db.Column(db.String(20), default='Open')       # Open, Remediated
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    control = db.relationship('Control')
+    remediation = db.relationship('Remediation', backref='finding', uselist=False, cascade='all, delete-orphan')
+
+
+class Remediation(db.Model):
+    __tablename__ = 'remediations'
+    id = db.Column(db.Integer, primary_key=True)
+    finding_id = db.Column(db.Integer, db.ForeignKey('audit_findings.id'), nullable=False, unique=True)
+    owner = db.Column(db.String(100))
+    deadline = db.Column(db.String(20))
+    status = db.Column(db.String(20), default='Planned')  # Planned, In Progress, Completed
+    notes = db.Column(db.Text)
+    completed_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+VENDOR_REASSESSMENT_DAYS = {'Critical': 90, 'High': 180, 'Medium': 270, 'Low': 365}
 
 
 class Vendor(db.Model):
@@ -291,6 +424,10 @@ class Vendor(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    assessments = db.relationship('VendorAssessment', backref='vendor', lazy='dynamic', cascade='all, delete-orphan')
+    documents = db.relationship('Evidence', backref='vendor', lazy='dynamic', foreign_keys='Evidence.vendor_id')
+    risk_snapshots = db.relationship('VendorRiskSnapshot', backref='vendor', lazy='dynamic', cascade='all, delete-orphan')
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -303,6 +440,57 @@ class Vendor(db.Model):
             'contact_email': self.contact_email,
             'compliance': self.compliance or [],
         }
+
+
+class QuestionnaireTemplate(db.Model):
+    __tablename__ = 'questionnaire_templates'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    questions = db.relationship('QuestionnaireQuestion', backref='template', lazy='dynamic', cascade='all, delete-orphan', order_by='QuestionnaireQuestion.order')
+
+
+class QuestionnaireQuestion(db.Model):
+    __tablename__ = 'questionnaire_questions'
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey('questionnaire_templates.id'), nullable=False)
+    question_text = db.Column(db.Text, nullable=False)
+    order = db.Column(db.Integer, default=0)
+
+
+class VendorAssessment(db.Model):
+    __tablename__ = 'vendor_assessments'
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    template_id = db.Column(db.Integer, db.ForeignKey('questionnaire_templates.id'), nullable=False)
+    status = db.Column(db.String(20), default='Sent')  # Sent, In Progress, Completed
+    verdict = db.Column(db.String(20), nullable=True)  # Pass, Fail, Needs Follow-up
+    reviewer_notes = db.Column(db.Text)
+    sent_date = db.Column(db.String(20))
+    completed_date = db.Column(db.String(20))
+
+    template = db.relationship('QuestionnaireTemplate')
+    responses = db.relationship('VendorAssessmentResponse', backref='assessment', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class VendorAssessmentResponse(db.Model):
+    __tablename__ = 'vendor_assessment_responses'
+    id = db.Column(db.Integer, primary_key=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('vendor_assessments.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('questionnaire_questions.id'), nullable=False)
+    answer_text = db.Column(db.Text)
+
+    question = db.relationship('QuestionnaireQuestion')
+
+
+class VendorRiskSnapshot(db.Model):
+    __tablename__ = 'vendor_risk_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    risk_score = db.Column(db.Integer)
+    snapshot_date = db.Column(db.Date, default=date.today)
 
 
 class Asset(db.Model):
@@ -465,3 +653,26 @@ class ComplianceSnapshot(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     framework = db.relationship('Framework', backref='snapshots')
+
+
+class DashboardSnapshot(db.Model):
+    __tablename__ = 'dashboard_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    snapshot_date = db.Column(db.Date, default=date.today, unique=True)
+    open_risks = db.Column(db.Integer, default=0)
+    active_policies = db.Column(db.Integer, default=0)
+    pending_evidence = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ActivityLog(db.Model):
+    __tablename__ = 'activity_log'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    action = db.Column(db.String(30), nullable=False)
+    entity_type = db.Column(db.String(30), nullable=False)
+    entity_name = db.Column(db.String(200))
+    description = db.Column(db.String(300))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User')

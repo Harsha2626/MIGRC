@@ -95,7 +95,7 @@
                         {% for r in risks %}
                         <tr data-status="{{ r.status }}" data-impact="{{ r.impact }}">
                             <td>
-                                <div class="font-semibold">{{ r.title }}</div>
+                                <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="font-semibold" style="text-decoration:none;">{{ r.title }}</a>
                                 <div class="text-sm text-muted">Created {{ r.created }}</div>
                             </td>
                             <td><span class="badge badge-neutral">{{ r.category }}</span></td>
@@ -118,6 +118,7 @@
                             </td>
                             <td>
                                 <div class="flex gap-8">
+                                    <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Treatment & Controls"><i class="fas fa-diagram-project"></i></a>
                                     <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditRiskModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
                                     <form method="POST" action="{{ url_for('risks.delete_risk', risk_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ r.title }}?');">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -143,36 +144,10 @@
         <div class="card-body" style="display:flex;justify-content:center;">
             <div>
                 <div style="text-align:center;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--text-secondary);">IMPACT &rarr;</div>
-                <div style="display:grid;grid-template-columns:60px repeat(4,90px);grid-template-rows:30px repeat(3,70px);gap:4px;align-items:center;">
-                    <!-- Header row -->
-                    <div></div>
-                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">Low</div>
-                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">Medium</div>
-                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">High</div>
-                    <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);">Critical</div>
-
-                    <!-- High Likelihood -->
-                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">High</div>
-                    <div class="risk-cell medium" id="rm-high-low">0</div>
-                    <div class="risk-cell high" id="rm-high-medium">0</div>
-                    <div class="risk-cell critical" id="rm-high-high">0</div>
-                    <div class="risk-cell critical" id="rm-high-critical">0</div>
-
-                    <!-- Medium Likelihood -->
-                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">Medium</div>
-                    <div class="risk-cell low" id="rm-medium-low">0</div>
-                    <div class="risk-cell medium" id="rm-medium-medium">0</div>
-                    <div class="risk-cell high" id="rm-medium-high">0</div>
-                    <div class="risk-cell critical" id="rm-medium-critical">0</div>
-
-                    <!-- Low Likelihood -->
-                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">Low</div>
-                    <div class="risk-cell low" id="rm-low-low">0</div>
-                    <div class="risk-cell low" id="rm-low-medium">0</div>
-                    <div class="risk-cell medium" id="rm-low-high">0</div>
-                    <div class="risk-cell high" id="rm-low-critical">0</div>
+                <div id="riskMatrixGrid" style="display:grid;grid-template-columns:70px repeat(5,80px);grid-template-rows:30px repeat(5,60px);gap:4px;align-items:center;">
+                    <!-- populated by JS -->
                 </div>
-                <div style="text-align:left;margin-top:12px;margin-left:60px;font-size:12px;font-weight:600;color:var(--text-secondary);">&uarr; LIKELIHOOD</div>
+                <div style="text-align:left;margin-top:12px;margin-left:70px;font-size:12px;font-weight:600;color:var(--text-secondary);">&uarr; LIKELIHOOD</div>
             </div>
         </div>
     </div>
@@ -181,13 +156,36 @@
 
 {% block scripts %}
 <script>
-// Populate risk matrix
+// Populate 5x5 risk matrix
 const risks = {{ risks|tojson }};
-risks.forEach(r => {
-    const cellId = `rm-${r.likelihood.toLowerCase()}-${r.impact.toLowerCase()}`;
-    const cell = document.getElementById(cellId);
-    if (cell) cell.textContent = parseInt(cell.textContent) + 1;
-});
+const MATRIX_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];
+const MATRIX_SCORES = { Negligible: 1, Low: 2, Medium: 3, High: 4, Critical: 5 };
+
+function buildRiskMatrix() {
+    const counts = {};
+    MATRIX_LEVELS.forEach(l => { counts[l] = {}; MATRIX_LEVELS.forEach(i => counts[l][i] = 0); });
+    risks.forEach(r => {
+        if (counts[r.likelihood] && counts[r.likelihood][r.impact] !== undefined) {
+            counts[r.likelihood][r.impact]++;
+        }
+    });
+
+    const grid = document.getElementById('riskMatrixGrid');
+    let html = '<div></div>';
+    MATRIX_LEVELS.forEach(impact => {
+        html += `<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-secondary);">${impact}</div>`;
+    });
+    [...MATRIX_LEVELS].reverse().forEach(likelihood => {
+        html += `<div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">${likelihood}</div>`;
+        MATRIX_LEVELS.forEach(impact => {
+            const severity = MATRIX_SCORES[likelihood] * MATRIX_SCORES[impact];
+            const cls = severity >= 20 ? 'critical' : severity >= 12 ? 'high' : severity >= 6 ? 'medium' : severity >= 3 ? 'low' : 'negligible';
+            html += `<div class="risk-cell ${cls}">${counts[likelihood][impact]}</div>`;
+        });
+    });
+    grid.innerHTML = html;
+}
+buildRiskMatrix();
 
 function switchRiskView(el, view) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

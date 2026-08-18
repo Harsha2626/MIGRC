@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ assessment.vendor.name }} Assessment{% endblock %}
+{% block breadcrumb %}
+<a href="/vendors" style="color:var(--text-secondary);text-decoration:none;">Vendor Management</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<a href="{{ url_for('vendors.vendor_detail', vendor_id=assessment.vendor.id) }}" style="color:var(--text-secondary);text-decoration:none;">{{ assessment.vendor.name }}</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<span>{{ assessment.template.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ assessment.template.name }}</h1>
+        <p>{{ assessment.vendor.name }} &middot; Sent {{ assessment.sent_date }}</p>
+    </div>
+    <div class="page-actions">
+        <span class="badge {% if assessment.status == 'Completed' %}badge-success{% elif assessment.status == 'In Progress' %}badge-warning{% else %}badge-neutral{% endif %}" style="font-size:13px;padding:8px 16px;">{{ assessment.status }}</span>
+        <a href="{{ url_for('vendors.vendor_detail', vendor_id=assessment.vendor.id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('vendors.respond_assessment', vendor_id=assessment.vendor.id, assessment_id=assessment.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% for q in assessment.template.questions %}
+            <div class="form-group">
+                <label>{{ loop.index }}. {{ q.question_text }}</label>
+                <textarea name="question_{{ q.id }}" class="form-control" rows="2" {% if assessment.status == 'Completed' %}readonly{% endif %}>{{ existing.get(q.id, '') }}</textarea>
+            </div>
+            {% endfor %}
+
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;">
+                <div class="form-group">
+                    <label>Verdict</label>
+                    <select name="verdict" class="form-control" {% if assessment.status == 'Completed' %}disabled{% endif %}>
+                        <option value="Pass" {% if assessment.verdict == 'Pass' %}selected{% endif %}>Pass</option>
+                        <option value="Needs Follow-up" {% if assessment.verdict == 'Needs Follow-up' %}selected{% endif %}>Needs Follow-up</option>
+                        <option value="Fail" {% if assessment.verdict == 'Fail' %}selected{% endif %}>Fail</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Reviewer Notes</label>
+                    <input type="text" name="reviewer_notes" class="form-control" value="{{ assessment.reviewer_notes or '' }}" {% if assessment.status == 'Completed' %}readonly{% endif %}>
+                </div>
+            </div>
+
+            {% if assessment.status != 'Completed' %}
+            <div class="flex gap-8">
+                <button type="submit" name="complete" value="0" class="btn btn-secondary">Save Progress</button>
+                <button type="submit" name="complete" value="1" class="btn btn-primary">Mark Completed</button>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -3,6 +3,10 @@
 {% block breadcrumb %}<span>Dashboard</span>{% endblock %}
 
 {% block content %}
+{% set entity_icons = {'Risk': 'fa-triangle-exclamation', 'Policy': 'fa-file-shield', 'Vendor': 'fa-building',
+    'Asset': 'fa-server', 'Audit': 'fa-magnifying-glass-chart', 'Evidence': 'fa-file-lines',
+    'Employee': 'fa-user', 'TrainingCampaign': 'fa-graduation-cap', 'AccessReview': 'fa-user-lock'} %}
+
 <div class="page-header">
     <div>
         <h1>Compliance Dashboard</h1>
@@ -16,38 +20,28 @@
 
 <!-- KPI Stats -->
 <div class="stats-grid">
+    {% for kpi in kpis %}
     <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-icon {{ kpi.color }}"><i class="fas {{ kpi.icon }}"></i></div>
         <div class="stat-info">
-            <div class="stat-label">Compliance Score</div>
-            <div class="stat-value">{{ compliance_score }}%</div>
-            <div class="stat-change up"><i class="fas fa-arrow-up"></i> 3% from last month</div>
+            <div class="stat-label">{{ kpi.label }}</div>
+            <div class="stat-value">{{ kpi.value }}</div>
+            {% if kpi.direction == 'up' %}
+            <div class="stat-change {{ 'up' if kpi.is_good else 'down' }}">
+                <i class="fas fa-arrow-up"></i> +{{ kpi.delta }}{{ '%' if kpi.label == 'Compliance Score' else '' }} vs last week
+            </div>
+            {% elif kpi.direction == 'down' %}
+            <div class="stat-change {{ 'up' if kpi.is_good else 'down' }}">
+                <i class="fas fa-arrow-down"></i> {{ kpi.delta }}{{ '%' if kpi.label == 'Compliance Score' else '' }} vs last week
+            </div>
+            {% elif kpi.direction == 'flat' %}
+            <div class="stat-change" style="color:var(--text-muted);"><i class="fas fa-minus"></i> No change vs last week</div>
+            {% else %}
+            <div class="stat-change" style="color:var(--text-muted);">No prior data yet</div>
+            {% endif %}
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Controls Passing</div>
-            <div class="stat-value">{{ passing_controls }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_controls }}</span></div>
-            <div class="stat-change up"><i class="fas fa-arrow-up"></i> 12 new this month</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-triangle-exclamation"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Open Risks</div>
-            <div class="stat-value">{{ open_risks }}</div>
-            <div class="stat-change down"><i class="fas fa-arrow-up"></i> {{ critical_risks }} critical</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon purple"><i class="fas fa-file-shield"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Active Policies</div>
-            <div class="stat-value">{{ policy_count }}</div>
-            <div class="stat-change up"><i class="fas fa-check"></i> All reviewed</div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 
 <!-- Row: Compliance Donut + Framework Progress -->
@@ -113,21 +107,51 @@
     </div>
 </div>
 
-<!-- Row: Risk Trend + Audits -->
+<!-- Row: Compliance Trend + Risk Heatmap -->
 <div class="grid-2">
-    <!-- Risk Trend -->
     <div class="card">
         <div class="card-header">
-            <h3>Risk Trend (6 Months)</h3>
+            <h3>Compliance Trend (30 Days)</h3>
         </div>
         <div class="card-body">
             <div class="chart-container-wide" style="height:260px;">
-                <canvas id="riskTrendChart"></canvas>
+                <canvas id="complianceTrendChart"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- Active Audits -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Risk Heatmap</h3>
+            <a href="/risks" class="btn btn-sm btn-secondary">View All</a>
+        </div>
+        <div class="card-body" style="display:flex;justify-content:center;">
+            <div>
+                <div style="text-align:center;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--text-secondary);">IMPACT &rarr;</div>
+                <div style="display:grid;grid-template-columns:70px repeat(5,52px);grid-template-rows:26px repeat(5,42px);gap:3px;align-items:center;">
+                    <div></div>
+                    {% for impact in risk_levels %}
+                    <div style="text-align:center;font-size:9px;font-weight:600;color:var(--text-secondary);">{{ impact }}</div>
+                    {% endfor %}
+
+                    {% for likelihood in risk_levels|reverse %}
+                    <div style="font-size:10px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:8px;">{{ likelihood }}</div>
+                    {% for impact in risk_levels %}
+                    {% set severity = risk_level_scores[likelihood] * risk_level_scores[impact] %}
+                    <div class="risk-cell {% if severity >= 20 %}critical{% elif severity >= 12 %}high{% elif severity >= 6 %}medium{% elif severity >= 3 %}low{% else %}negligible{% endif %}" style="font-size:13px;">
+                        {{ risk_matrix[likelihood][impact] }}
+                    </div>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+                <div style="text-align:left;margin-top:10px;margin-left:70px;font-size:11px;font-weight:600;color:var(--text-secondary);">&uarr; LIKELIHOOD</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row: Active Audits + Upcoming Deadlines -->
+<div class="grid-2">
     <div class="card">
         <div class="card-header">
             <h3>Active Audits</h3>
@@ -163,7 +187,7 @@
                             <td>{{ a.evidence_collected }}/{{ a.evidence_total }}</td>
                             <td style="width:120px;">
                                 <div class="progress-bar">
-                                    <div class="progress-fill blue" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round }}%"></div>
+                                    <div class="progress-fill blue" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round if a.evidence_total else 0 }}%"></div>
                                 </div>
                             </td>
                         </tr>
@@ -173,50 +197,107 @@
             </div>
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Upcoming Deadlines</h3>
+        </div>
+        <div class="card-body no-padding">
+            {% if deadlines %}
+            <div style="display:flex;flex-direction:column;">
+                {% for dl in deadlines %}
+                <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border-light);">
+                    <div class="stat-icon {% if dl.urgency == 'red' %}red{% elif dl.urgency == 'orange' %}orange{% else %}blue{% endif %}" style="width:32px;height:32px;font-size:13px;flex-shrink:0;">
+                        <i class="fas {{ dl.icon }}"></i>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div class="font-semibold" style="font-size:13px;">{{ dl.name }}</div>
+                        <div class="text-sm text-muted">{{ dl.type }} &middot; {{ dl.date.strftime('%d %b %Y') }}</div>
+                    </div>
+                    <span class="badge {% if dl.urgency == 'red' %}badge-danger{% elif dl.urgency == 'orange' %}badge-warning{% else %}badge-neutral{% endif %}">
+                        {{ dl.days_until }}d
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-calendar-check"></i>
+                <h3>Nothing due soon</h3>
+                <p>No policy reviews, vendor assessments, audits, or training campaigns are due in the next 30 days.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
-<!-- Row: Top Risks Table -->
-<div class="card">
-    <div class="card-header">
-        <h3>Top Risks</h3>
-        <a href="/risks" class="btn btn-sm btn-secondary">View All Risks</a>
+<!-- Row: Top Risks + Recent Activity -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Top Risks</h3>
+            <a href="/risks" class="btn btn-sm btn-secondary">View All Risks</a>
+        </div>
+        <div class="card-body no-padding">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Risk</th>
+                            <th>Impact</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in risks %}
+                        <tr>
+                            <td class="font-semibold">{{ r.title }}</td>
+                            <td>
+                                {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
+                                {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
+                                {% else %}<span class="badge badge-info">{{ r.impact }}</span>{% endif %}
+                            </td>
+                            <td><strong>{{ r.score }}</strong></td>
+                            <td>
+                                {% if r.status == 'Open' %}<span class="badge badge-danger">{{ r.status }}</span>
+                                {% elif r.status == 'In Treatment' %}<span class="badge badge-warning">{{ r.status }}</span>
+                                {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-    <div class="card-body no-padding">
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Risk</th>
-                        <th>Category</th>
-                        <th>Impact</th>
-                        <th>Likelihood</th>
-                        <th>Score</th>
-                        <th>Owner</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in risks %}
-                    <tr>
-                        <td class="font-semibold">{{ r.title }}</td>
-                        <td><span class="badge badge-neutral">{{ r.category }}</span></td>
-                        <td>
-                            {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
-                            {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
-                            {% else %}<span class="badge badge-info">{{ r.impact }}</span>{% endif %}
-                        </td>
-                        <td>{{ r.likelihood }}</td>
-                        <td><strong>{{ r.score }}</strong></td>
-                        <td>{{ r.owner }}</td>
-                        <td>
-                            {% if r.status == 'Open' %}<span class="badge badge-danger">{{ r.status }}</span>
-                            {% elif r.status == 'In Treatment' %}<span class="badge badge-warning">{{ r.status }}</span>
-                            {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Recent Activity</h3>
+        </div>
+        <div class="card-body no-padding">
+            {% if recent_activity %}
+            <div style="display:flex;flex-direction:column;max-height:420px;overflow-y:auto;">
+                {% for item in recent_activity %}
+                <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border-light);">
+                    <div class="stat-icon blue" style="width:30px;height:30px;font-size:12px;flex-shrink:0;">
+                        <i class="fas {{ entity_icons.get(item.entity_type, 'fa-circle-dot') }}"></i>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;">{{ item.description }}</div>
+                        <div class="text-sm text-muted">{{ item.created_at|timesince }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-clock-rotate-left"></i>
+                <h3>No activity yet</h3>
+                <p>Actions like adding risks, uploading evidence, or publishing policies will show up here.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -245,53 +326,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Risk Trend Chart
-    const trendCtx = document.getElementById('riskTrendChart').getContext('2d');
+    // Compliance Trend Chart
+    const trendCtx = document.getElementById('complianceTrendChart').getContext('2d');
     new Chart(trendCtx, {
         type: 'line',
         data: {
-            labels: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-            datasets: [
-                {
-                    label: 'Critical',
-                    data: [4, 3, 5, 3, 2, {{ critical_risks }}],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239,68,68,0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 3
-                },
-                {
-                    label: 'High',
-                    data: [6, 8, 7, 5, 6, {{ open_risks }}],
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245,158,11,0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 3
-                },
-                {
-                    label: 'Medium',
-                    data: [10, 12, 9, 11, 8, 7],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59,130,246,0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 3
-                }
-            ]
+            labels: {{ trend_labels|tojson }},
+            datasets: [{
+                label: 'Compliance Score',
+                data: {{ trend_data|tojson }},
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 3
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 11 } } }
-            },
+            plugins: { legend: { display: false } },
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 } } },
+                y: { beginAtZero: true, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, callback: v => v + '%' } },
                 x: { grid: { display: false }, ticks: { font: { size: 11 } } }
             }
         }

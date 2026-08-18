@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ policy.name }} - Diff{% endblock %}
+{% block breadcrumb %}
+<a href="/policies" style="color:var(--text-secondary);text-decoration:none;">Policy Management</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<a href="{{ url_for('policies.policy_detail', policy_id=policy.id) }}" style="color:var(--text-secondary);text-decoration:none;">{{ policy.name }}</a>
+<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
+<span>Diff</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ policy.name }}: v{{ old_version.version }} &rarr; v{{ policy.version }}</h1>
+        <p>Comparing the saved v{{ old_version.version }} snapshot against the current content</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('policies.policy_detail', policy_id=policy.id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Policy</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" style="overflow-x:auto;">
+        <style>
+            table.diff { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; border-collapse: collapse; width: 100%; }
+            table.diff td { padding: 2px 8px; white-space: pre-wrap; word-break: break-word; }
+            table.diff .diff_header { background: var(--bg-tertiary); color: var(--text-muted); text-align: right; }
+            table.diff .diff_next { background: var(--bg-tertiary); }
+            table.diff .diff_add { background: var(--accent-success-light); }
+            table.diff .diff_chg { background: var(--accent-warning-light); }
+            table.diff .diff_sub { background: var(--accent-danger-light); }
+        </style>
+        {{ diff|safe }}
+    </div>
+</div>
+{% endblock %}
