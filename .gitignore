@@ -6,3 +6,7 @@ __pycache__/
 .flask_session/
 instance/
 .DS_Store
+migrc.db
+migrc.db-shm
+migrc.db-wal
+uploads/

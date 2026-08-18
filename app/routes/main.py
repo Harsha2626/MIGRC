@@ -14,6 +14,19 @@ main_bp = Blueprint('main', __name__)
 RISK_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical']
 
 
+def _weighted_compliance_score(frameworks):
+    """Overall score = Passing / (Total - N/A) x 100, weighted across frameworks by applicable controls."""
+    total_applicable = 0
+    weighted_sum = 0.0
+    for fw in frameworks:
+        applicable = fw.total_controls - fw.not_applicable
+        total_applicable += applicable
+        weighted_sum += fw.compliance_score * applicable
+    if total_applicable == 0:
+        return 0
+    return round(weighted_sum / total_applicable)
+
+
 @main_bp.route('/')
 @login_required
 def dashboard():
@@ -25,7 +38,8 @@ def dashboard():
     total_controls = sum(fw.total_controls for fw in frameworks)
     passing_controls = sum(fw.passing for fw in frameworks)
     failing_controls = sum(fw.failing for fw in frameworks)
-    compliance_score = round((passing_controls / total_controls) * 100) if total_controls > 0 else 0
+    na_controls = sum(fw.not_applicable for fw in frameworks)
+    compliance_score = _weighted_compliance_score(frameworks)
 
     risks = Risk.query.all()
     open_risks = len([r for r in risks if r.status == 'Open'])
@@ -48,6 +62,7 @@ def dashboard():
         total_controls=total_controls,
         passing_controls=passing_controls,
         failing_controls=failing_controls,
+        na_controls=na_controls,
         open_risks=open_risks,
         critical_risks=critical_risks,
         policy_count=policy_count,
@@ -86,9 +101,9 @@ def _build_kpis(compliance_score, open_risks, policy_count, pending_evidence):
     old_compliance_score = None
     if old_compliance_row:
         peers = ComplianceSnapshot.query.filter_by(snapshot_date=old_compliance_row.snapshot_date).all()
-        old_total = sum(s.total_controls for s in peers)
+        old_applicable = sum(s.total_controls - s.not_applicable for s in peers)
         old_passing = sum(s.passing for s in peers)
-        old_compliance_score = round((old_passing / old_total) * 100) if old_total else 0
+        old_compliance_score = round((old_passing / old_applicable) * 100) if old_applicable else 0
 
     kpis = [
         dict(label='Compliance Score', value=f'{compliance_score}%', icon='fa-shield-halved', color='blue',
@@ -141,10 +156,10 @@ def _build_compliance_trend():
     labels, data = [], []
     for d in sorted(by_date.keys()):
         peers = by_date[d]
-        total = sum(s.total_controls for s in peers)
+        applicable = sum(s.total_controls - s.not_applicable for s in peers)
         passing = sum(s.passing for s in peers)
         labels.append(d.strftime('%d %b'))
-        data.append(round((passing / total) * 100) if total else 0)
+        data.append(round((passing / applicable) * 100) if applicable else 0)
 
     return labels, data
 
@@ -212,7 +227,7 @@ def api_dashboard_stats():
     passing = sum(fw.passing for fw in frameworks)
     failing = sum(fw.failing for fw in frameworks)
     return jsonify({
-        'compliance_score': round((passing / total_controls) * 100) if total_controls > 0 else 0,
+        'compliance_score': _weighted_compliance_score(frameworks),
         'total_controls': total_controls,
         'passing': passing,
         'failing': failing,

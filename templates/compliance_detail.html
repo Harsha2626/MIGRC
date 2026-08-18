@@ -14,41 +14,34 @@
 </div>
 
 <!-- Framework Summary -->
-<div class="grid-4" style="margin-bottom:24px;">
+<div class="stats-grid" style="margin-bottom:24px;">
     <div class="stat-card">
-        <div class="stat-card-content">
-            <div>
-                <span class="stat-label">Total Controls</span>
-                <div class="stat-value">{{ controls|length }}</div>
-            </div>
-            <div class="stat-icon blue"><i class="fas fa-list-check"></i></div>
+        <div class="stat-icon blue"><i class="fas fa-shield-halved"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Compliance Score</div>
+            <div class="stat-value">{{ framework.compliance_score }}%</div>
+            <div class="stat-change neutral">Passing / (Total - N/A)</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-card-content">
-            <div>
-                <span class="stat-label">Passing</span>
-                <div class="stat-value" style="color:var(--accent-success);">{{ controls|selectattr('status','equalto','Passing')|list|length }}</div>
-            </div>
-            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Passing</div>
+            <div class="stat-value" style="color:var(--accent-success);">{{ controls|selectattr('status','equalto','Passing')|list|length }}</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-card-content">
-            <div>
-                <span class="stat-label">Failing</span>
-                <div class="stat-value" style="color:var(--accent-danger);">{{ controls|selectattr('status','equalto','Failing')|list|length }}</div>
-            </div>
-            <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+        <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Failing</div>
+            <div class="stat-value" style="color:var(--accent-danger);">{{ controls|selectattr('status','equalto','Failing')|list|length }}</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-card-content">
-            <div>
-                <span class="stat-label">Not Assessed</span>
-                <div class="stat-value" style="color:var(--text-secondary);">{{ controls|selectattr('status','equalto','Not Assessed')|list|length }}</div>
-            </div>
-            <div class="stat-icon gray"><i class="fas fa-question-circle"></i></div>
+        <div class="stat-icon gray"><i class="fas fa-question-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Not Assessed</div>
+            <div class="stat-value" style="color:var(--text-secondary);">{{ controls|selectattr('status','equalto','Not Assessed')|list|length }}</div>
         </div>
     </div>
 </div>

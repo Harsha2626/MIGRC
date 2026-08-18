@@ -61,8 +61,8 @@
             <div class="chart-container" style="width:220px;height:220px;">
                 <canvas id="controlsDonut"></canvas>
                 <div class="chart-center-label">
-                    <div class="value">{{ passing_controls }}</div>
-                    <div class="label">Passing</div>
+                    <div class="value">{{ compliance_score }}%</div>
+                    <div class="label">Score</div>
                 </div>
             </div>
             <div>
@@ -73,7 +73,10 @@
                     <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Failing ({{ failing_controls }})</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A ({{ total_controls - passing_controls - failing_controls }})</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Not Assessed ({{ total_controls - passing_controls - failing_controls - na_controls }})</div>
+                </div>
+                <div class="legend" style="margin-top:8px;">
+                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A ({{ na_controls }})</div>
                 </div>
             </div>
         </div>
@@ -90,16 +93,21 @@
             <div style="margin-bottom:18px;">
                 <div class="flex-between mb-8">
                     <span class="font-semibold" style="font-size:13px;">{{ fw.name }}</span>
-                    <span class="text-sm text-muted">{{ ((fw.passing / fw.total_controls) * 100)|round|int }}%</span>
+                    <span class="text-sm text-muted">{{ fw.compliance_score }}%</span>
                 </div>
+                {% set applicable = fw.total_controls - fw.not_applicable %}
                 <div class="progress-stacked">
-                    <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round }}%;background:#10b981;"></div>
-                    <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round }}%;background:#ef4444;"></div>
-                    <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round }}%;background:#94a3b8;"></div>
+                    {% if applicable > 0 %}
+                    <div class="segment" style="width:{{ (fw.passing / applicable * 100)|round }}%;background:#10b981;"></div>
+                    <div class="segment" style="width:{{ (fw.failing / applicable * 100)|round }}%;background:#ef4444;"></div>
+                    {% set not_assessed = applicable - fw.passing - fw.failing %}
+                    <div class="segment" style="width:{{ (not_assessed / applicable * 100)|round }}%;background:#f59e0b;"></div>
+                    {% endif %}
                 </div>
                 <div class="progress-label">
                     <span>{{ fw.passing }} passing</span>
                     <span>{{ fw.failing }} failing</span>
+                    {% if fw.not_applicable > 0 %}<span>{{ fw.not_applicable }} N/A</span>{% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -311,10 +319,15 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(donutCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Passing', 'Failing', 'N/A'],
+            labels: ['Passing', 'Failing', 'Not Assessed', 'N/A'],
             datasets: [{
-                data: [{{ passing_controls }}, {{ failing_controls }}, {{ total_controls - passing_controls - failing_controls }}],
-                backgroundColor: ['#10b981', '#ef4444', '#94a3b8'],
+                data: [
+                    {{ passing_controls }},
+                    {{ failing_controls }},
+                    {{ total_controls - passing_controls - failing_controls - na_controls }},
+                    {{ na_controls }}
+                ],
+                backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#94a3b8'],
                 borderWidth: 0,
                 cutout: '75%'
             }]
