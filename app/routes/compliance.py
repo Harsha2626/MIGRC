@@ -1,10 +1,12 @@
 import os
 from datetime import datetime, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import db, Framework, Control, Evidence, EvidenceMapping, ComplianceSnapshot
 from app.services.activity import log_activity
+from app.services.notifications import notify_evidence_rejected
+from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
 from app.utils import allowed_file
 
 compliance_bp = Blueprint('compliance', __name__)
@@ -210,6 +212,9 @@ def review_evidence(evidence_id):
     log_activity('approved' if action == 'approve' else 'rejected', 'Evidence', evidence.title)
     db.session.commit()
 
+    if action == 'reject':
+        notify_evidence_rejected(evidence)
+
     return redirect(request.referrer or '/')
 
 
@@ -299,3 +304,13 @@ def _take_compliance_snapshot(framework_id):
     snapshot.not_assessed = fw.not_assessed
     snapshot.not_applicable = fw.not_applicable
     snapshot.total_controls = fw.total_controls
+
+
+@compliance_bp.route('/compliance/<int:framework_id>/report.pdf')
+@login_required
+def framework_report_pdf(framework_id):
+    fw = Framework.query.get_or_404(framework_id)
+    pdf_bytes = build_compliance_report_pdf(fw)
+    filename = f"{fw.name.replace(' ', '_')}_compliance_report.pdf"
+    return Response(pdf_bytes, mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'})

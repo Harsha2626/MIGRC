@@ -91,6 +91,10 @@
                     <i class="fas fa-certificate"></i>
                     <span>Trust Center</span>
                 </a>
+                <a href="/reports" class="nav-item {% if page == 'reports' %}active{% endif %}">
+                    <i class="fas fa-file-export"></i>
+                    <span>Reports</span>
+                </a>
             </div>
         </nav>
 
@@ -127,10 +131,42 @@
                 <button class="topbar-btn" id="themeToggle" title="Toggle theme">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="topbar-btn" title="Notifications">
-                    <i class="fas fa-bell"></i>
-                    <span class="notification-badge">3</span>
-                </button>
+                <div class="notification-bell-wrapper">
+                    <button class="topbar-btn" id="notifBellBtn" title="Notifications">
+                        <i class="fas fa-bell"></i>
+                        {% if unread_notification_count %}
+                        <span class="notification-badge">{{ unread_notification_count if unread_notification_count < 10 else '9+' }}</span>
+                        {% endif %}
+                    </button>
+                    <div class="notification-dropdown" id="notifDropdown">
+                        <div class="notification-dropdown-header">
+                            <span>Notifications</span>
+                            {% if unread_notification_count %}
+                            <form method="POST" action="/notifications/mark-all-read">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="notification-markall-btn">Mark all read</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div class="notification-dropdown-list">
+                            {% if recent_notifications %}
+                                {% for n in recent_notifications %}
+                                <form method="POST" action="/notifications/{{ n.id }}/read">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="notification-dropdown-item">
+                                        <div class="notification-item-title">{{ n.title }}</div>
+                                        {% if n.message %}<div class="notification-item-message">{{ n.message }}</div>{% endif %}
+                                        <div class="notification-item-time">{{ n.created_at|timesince }}</div>
+                                    </button>
+                                </form>
+                                {% endfor %}
+                            {% else %}
+                                <div class="notification-dropdown-empty">You're all caught up.</div>
+                            {% endif %}
+                        </div>
+                        <a href="/notifications" class="notification-dropdown-footer">View all notifications</a>
+                    </div>
+                </div>
                 <button class="topbar-btn" title="Help">
                     <i class="fas fa-question-circle"></i>
                 </button>
@@ -174,6 +210,22 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+    (function() {
+        var btn = document.getElementById('notifBellBtn');
+        var dropdown = document.getElementById('notifDropdown');
+        if (!btn || !dropdown) return;
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', function(e) {
+            if (!dropdown.contains(e.target) && e.target !== btn) {
+                dropdown.classList.remove('open');
+            }
+        });
+    })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

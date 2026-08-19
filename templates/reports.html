@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block breadcrumb %}<span>Reports</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Reports</h1>
+        <p>Download compliance, executive, and audit-readiness reports</p>
+    </div>
+</div>
+
+<div class="card mb-16">
+    <div class="card-header"><h3>Executive Summary</h3></div>
+    <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
+            <div class="flex-center gap-12">
+                <div class="stat-icon blue" style="width:40px;height:40px;"><i class="fas fa-chart-pie"></i></div>
+                <div>
+                    <div class="font-semibold">Dashboard Snapshot</div>
+                    <div class="text-sm text-muted">Current compliance score, risk posture, and KPIs in one PDF</div>
+                </div>
+            </div>
+            <a href="/reports/dashboard.pdf" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-16">
+    <div class="card-header"><h3>Framework Compliance Reports</h3></div>
+    <div class="card-body no-padding">
+        {% if frameworks %}
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr><th>Framework</th><th>Compliance Score</th><th>Controls</th><th></th></tr>
+                </thead>
+                <tbody>
+                    {% for fw in frameworks %}
+                    <tr>
+                        <td class="font-semibold">{{ fw.name }}</td>
+                        <td><span class="badge badge-info">{{ fw.compliance_score }}%</span></td>
+                        <td class="text-sm text-muted">{{ fw.total_controls }} controls</td>
+                        <td><a href="/compliance/{{ fw.id }}/report.pdf" class="btn btn-sm btn-secondary"><i class="fas fa-file-pdf"></i> Download</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-clipboard-check"></i>
+            <h3>No frameworks yet</h3>
+            <p>Add a compliance framework to generate reports.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Audit Readiness</h3></div>
+    <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
+            <div class="flex-center gap-12">
+                <div class="stat-icon purple" style="width:40px;height:40px;"><i class="fas fa-shield-halved"></i></div>
+                <div>
+                    <div class="font-semibold">SOC 2 Readiness Report</div>
+                    <div class="text-sm text-muted">Trust Service Criteria coverage summary for auditor handoff</div>
+                </div>
+            </div>
+            {% if soc2 %}
+            <a href="/reports/soc2-readiness.pdf" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
+            {% else %}
+            <span class="badge badge-neutral">SOC 2 not configured</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

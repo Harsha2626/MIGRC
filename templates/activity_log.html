@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Audit Trail{% endblock %}
+{% block breadcrumb %}<span>Settings</span> / <span>Audit Trail</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Audit Trail</h1>
+        <p>Complete activity log across the platform for compliance and audit evidence</p>
+    </div>
+    <div class="page-actions">
+        <a href="/settings/activity-log/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export CSV</a>
+        <a href="/settings" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Settings</a>
+    </div>
+</div>
+
+<div class="toolbar">
+    <form method="GET" action="/settings/activity-log" style="display:flex;gap:12px;flex-wrap:wrap;width:100%;">
+        <select class="filter-select" name="entity_type" onchange="this.form.submit()">
+            <option value="">All Entity Types</option>
+            {% for et in entity_types %}
+            <option value="{{ et }}" {% if et == selected_entity_type %}selected{% endif %}>{{ et }}</option>
+            {% endfor %}
+        </select>
+        <select class="filter-select" name="action" onchange="this.form.submit()">
+            <option value="">All Actions</option>
+            {% for a in actions %}
+            <option value="{{ a }}" {% if a == selected_action %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+        <select class="filter-select" name="user_id" onchange="this.form.submit()">
+            <option value="">All Users</option>
+            {% for u in users %}
+            <option value="{{ u.id }}" {% if selected_user_id|string == u.id|string %}selected{% endif %}>{{ u.name }}</option>
+            {% endfor %}
+        </select>
+        {% if selected_entity_type or selected_action or selected_user_id %}
+        <a href="/settings/activity-log" class="btn btn-secondary">Clear Filters</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr><th>When</th><th>User</th><th>Action</th><th>Entity Type</th><th>Entity Name</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    {% for e in entries %}
+                    <tr>
+                        <td class="text-sm text-muted" style="white-space:nowrap;">{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
+                        <td>{{ e.user.name if e.user else '-' }}</td>
+                        <td><span class="badge badge-info">{{ e.action }}</span></td>
+                        <td>{{ e.entity_type }}</td>
+                        <td>{{ e.entity_name or '-' }}</td>
+                        <td class="text-sm text-muted">{{ e.description or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-muted" style="padding:24px;text-align:center;">No activity recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% set total_pages = ((total - 1) // per_page) + 1 if total > 0 else 1 %}
+{% if total_pages > 1 %}
+<div class="flex-between mt-16">
+    <span class="text-sm text-muted">Showing page {{ current_page }} of {{ total_pages }} ({{ total }} entries)</span>
+    <div style="display:flex;gap:8px;">
+        {% set qs = '&entity_type=' + selected_entity_type + '&action=' + selected_action + '&user_id=' + (selected_user_id|string) %}
+        {% if current_page > 1 %}
+        <a class="btn btn-sm btn-secondary" href="?page={{ current_page - 1 }}{{ qs }}">Previous</a>
+        {% endif %}
+        {% if current_page < total_pages %}
+        <a class="btn btn-sm btn-secondary" href="?page={{ current_page + 1 }}{{ qs }}">Next</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

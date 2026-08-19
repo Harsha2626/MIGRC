@@ -351,6 +351,106 @@ a:hover { text-decoration: underline; }
 }
 
 /* ============================================================
+   NOTIFICATION DROPDOWN
+   ============================================================ */
+.notification-bell-wrapper { position: relative; }
+
+.notification-dropdown {
+    display: none;
+    position: absolute;
+    top: 46px;
+    right: 0;
+    width: 340px;
+    max-height: 420px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    flex-direction: column;
+    overflow: hidden;
+}
+.notification-dropdown.open { display: flex; }
+
+.notification-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notification-markall-btn {
+    background: none;
+    border: none;
+    color: var(--accent-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+}
+
+.notification-dropdown-list {
+    overflow-y: auto;
+    max-height: 320px;
+}
+
+.notification-dropdown-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.notification-dropdown-item:hover { background: var(--bg-tertiary); }
+.notification-dropdown-item:last-child { border-bottom: none; }
+
+.notification-item-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.notification-item-message {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    white-space: normal;
+}
+
+.notification-item-time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.notification-dropdown-empty {
+    padding: 24px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.notification-dropdown-footer {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent-primary);
+    text-decoration: none;
+    border-top: 1px solid var(--border-color);
+}
+.notification-dropdown-footer:hover { background: var(--bg-tertiary); }
+
+/* ============================================================
    PAGE HEADER
    ============================================================ */
 .page-header {

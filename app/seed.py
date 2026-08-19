@@ -150,6 +150,56 @@ def seed_database():
                 status='Not Assessed', framework_id=iso27001.id
             ))
 
+        # ---- SOC 2 TRUST SERVICE CRITERIA FRAMEWORK ----
+        soc2 = Framework(
+            name='SOC 2',
+            description='AICPA Trust Service Criteria for Security, Availability, Processing Integrity, Confidentiality, and Privacy',
+            category='Security',
+            icon='shield-halved',
+            status='Not Started',
+            owner='Harsha P',
+            controls_detail='Common Criteria (CC1-CC9) - Security Trust Service Category',
+        )
+        db.session.add(soc2)
+        db.session.flush()
+
+        soc2_controls = [
+            ("CC1.1", "Board oversight of internal control", "Control Environment"),
+            ("CC1.2", "Management philosophy and operating style", "Control Environment"),
+            ("CC1.3", "Organizational structure and reporting lines", "Control Environment"),
+            ("CC1.4", "Commitment to competence", "Control Environment"),
+            ("CC2.1", "Internal communication of information security objectives", "Communication and Information"),
+            ("CC2.2", "Communication with external parties", "Communication and Information"),
+            ("CC2.3", "Quality of information used for control decisions", "Communication and Information"),
+            ("CC3.1", "Risk identification and assessment process", "Risk Assessment"),
+            ("CC3.2", "Fraud risk consideration", "Risk Assessment"),
+            ("CC3.3", "Assessment of significant change impact", "Risk Assessment"),
+            ("CC4.1", "Ongoing monitoring of control effectiveness", "Monitoring Activities"),
+            ("CC4.2", "Evaluation and communication of control deficiencies", "Monitoring Activities"),
+            ("CC5.1", "Selection and development of control activities", "Control Activities"),
+            ("CC5.2", "Technology general controls", "Control Activities"),
+            ("CC5.3", "Policies and procedures deployment", "Control Activities"),
+            ("CC6.1", "Logical access security controls", "Logical and Physical Access"),
+            ("CC6.2", "Registration and authorization of new users", "Logical and Physical Access"),
+            ("CC6.3", "Access removal on termination or role change", "Logical and Physical Access"),
+            ("CC6.6", "Protection against external threats", "Logical and Physical Access"),
+            ("CC6.7", "Restriction of data transmission and movement", "Logical and Physical Access"),
+            ("CC6.8", "Prevention and detection of unauthorized software", "Logical and Physical Access"),
+            ("CC7.1", "Detection of security events and vulnerabilities", "System Operations"),
+            ("CC7.2", "Monitoring of system components for anomalies", "System Operations"),
+            ("CC7.3", "Evaluation of security incidents", "System Operations"),
+            ("CC7.4", "Incident response and recovery procedures", "System Operations"),
+            ("CC8.1", "Change management process for infrastructure and software", "Change Management"),
+            ("CC9.1", "Risk mitigation for business disruptions", "Risk Mitigation"),
+            ("CC9.2", "Vendor and business partner risk management", "Risk Mitigation"),
+        ]
+
+        for code, title, category in soc2_controls:
+            db.session.add(Control(
+                code=code, title=title, category=category,
+                status='Not Assessed', framework_id=soc2.id
+            ))
+
         db.session.commit()
 
         # ---- INTEGRATED PLATFORMS (VENDORS) ----

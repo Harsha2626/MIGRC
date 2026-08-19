@@ -26,6 +26,7 @@
         </form>
         {% endif %}
         <a href="{{ url_for('audits.audit_report', audit_id=audit.id) }}" class="btn btn-secondary" target="_blank"><i class="fas fa-file-lines"></i> View Report</a>
+        <a href="{{ url_for('audits.audit_report_pdf', audit_id=audit.id) }}" class="btn btn-secondary"><i class="fas fa-file-pdf"></i> Download PDF</a>
         <a href="/audits" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>

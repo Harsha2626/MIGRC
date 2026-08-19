@@ -1,10 +1,13 @@
 import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import db, Audit, AuditEvidence, AuditFinding, Remediation, Framework, Control, Evidence, EvidenceMapping
 from app.services.activity import log_activity
+from app.services.notifications import notify_finding_assigned
+from app.services.pdf_reports import build_audit_report_pdf
+from app.services.csv_export import csv_response
 from app.utils import allowed_file
 
 audits_bp = Blueprint('audits', __name__)
@@ -211,6 +214,7 @@ def add_finding(audit_id):
     db.session.add(finding)
     log_activity('created', 'Audit', audit.name, f'{current_user.name} logged a finding on audit "{audit.name}": {description[:80]}')
     db.session.commit()
+    notify_finding_assigned(finding)
     flash('Finding logged.', 'success')
     return redirect(url_for('audits.audit_detail', audit_id=audit_id))
 
@@ -251,6 +255,25 @@ def audit_report(audit_id):
     evidence_items = audit.evidence_items.order_by(AuditEvidence.id).all()
     findings = audit.finding_items.order_by(AuditFinding.created_at).all()
     return render_template('audit_report.html', audit=audit, evidence_items=evidence_items, findings=findings)
+
+
+@audits_bp.route('/audits/<int:audit_id>/report.pdf')
+@login_required
+def audit_report_pdf(audit_id):
+    audit = Audit.query.get_or_404(audit_id)
+    evidence_items = audit.evidence_items.order_by(AuditEvidence.id).all()
+    findings = audit.finding_items.order_by(AuditFinding.created_at).all()
+    pdf_bytes = build_audit_report_pdf(audit, evidence_items, findings)
+    filename = f"{audit.name.replace(' ', '_')}_report.pdf"
+    return Response(pdf_bytes, mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'})
+
+
+@audits_bp.route('/audits/export')
+@login_required
+def export_audits():
+    rows = [(a.name, a.framework, a.auditor, a.status, a.start_date, a.end_date, a.evidence_collected, a.evidence_total, a.findings) for a in Audit.query.all()]
+    return csv_response('audits.csv', ['Name', 'Framework', 'Auditor', 'Status', 'Start Date', 'End Date', 'Evidence Collected', 'Evidence Total', 'Findings'], rows)
 
 
 @audits_bp.route('/audits/<int:audit_id>/delete', methods=['POST'])

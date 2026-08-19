@@ -1,14 +1,16 @@
 import os
 from flask import Flask
 from flask_migrate import Migrate
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 from flask_wtf import CSRFProtect
+from flask_mail import Mail
 from app.models import db, User
 from app.utils import timesince
 
 migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+mail = Mail()
 
 
 def create_app():
@@ -26,6 +28,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
+    mail.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message_category = 'info'
@@ -33,6 +36,17 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    @app.context_processor
+    def inject_notifications():
+        if not current_user.is_authenticated:
+            return {}
+        from app.models import Notification
+        unread = Notification.query.filter_by(user_id=current_user.id, is_read=False)
+        return {
+            'unread_notification_count': unread.count(),
+            'recent_notifications': unread.order_by(Notification.created_at.desc()).limit(8).all(),
+        }
 
     # Register blueprints
     from app.routes.auth import auth_bp
@@ -44,6 +58,8 @@ def create_app():
     from app.routes.vendors import vendors_bp
     from app.routes.assets import assets_bp
     from app.routes.people import people_bp
+    from app.routes.notifications import notifications_bp
+    from app.routes.reports import reports_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -54,5 +70,7 @@ def create_app():
     app.register_blueprint(vendors_bp)
     app.register_blueprint(assets_bp)
     app.register_blueprint(people_bp)
+    app.register_blueprint(notifications_bp)
+    app.register_blueprint(reports_bp)
 
     return app

@@ -3,6 +3,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from app.models import db, Risk, RiskTreatment, TreatmentMilestone, Control
 from app.services.activity import log_activity
+from app.services.notifications import notify_risk_escalated
+from app.services.csv_export import csv_response
 
 risks_bp = Blueprint('risks', __name__)
 
@@ -48,6 +50,7 @@ def add_risk():
     db.session.add(risk)
     log_activity('created', 'Risk', title)
     db.session.commit()
+    notify_risk_escalated(risk)
 
     flash(f'Risk "{title}" added.', 'success')
     return redirect(url_for('risks.risks'))
@@ -81,6 +84,7 @@ def edit_risk(risk_id):
 
     log_activity('updated', 'Risk', title)
     db.session.commit()
+    notify_risk_escalated(risk)
     flash(f'Risk "{title}" updated.', 'success')
     return redirect(url_for('risks.risks'))
 
@@ -176,6 +180,7 @@ def add_milestone(risk_id, treatment_id):
         return redirect(url_for('risks.risk_detail', risk_id=risk_id))
 
     db.session.add(TreatmentMilestone(treatment_id=treatment.id, title=title, due_date=request.form.get('due_date', '')))
+    log_activity('created', 'Risk', treatment.risk.title, f'{current_user.name} added milestone "{title}" to a treatment plan for risk "{treatment.risk.title}"')
     db.session.commit()
     flash('Milestone added.', 'success')
     return redirect(url_for('risks.risk_detail', risk_id=risk_id))
@@ -186,8 +191,17 @@ def add_milestone(risk_id, treatment_id):
 def toggle_milestone(risk_id, milestone_id):
     milestone = TreatmentMilestone.query.get_or_404(milestone_id)
     milestone.completed = not milestone.completed
+    log_activity('status_changed', 'Risk', milestone.treatment.risk.title,
+        f'{current_user.name} marked milestone "{milestone.title}" as {"completed" if milestone.completed else "incomplete"}')
     db.session.commit()
     return redirect(url_for('risks.risk_detail', risk_id=risk_id))
+
+
+@risks_bp.route('/risks/export')
+@login_required
+def export_risks():
+    rows = [(r.title, r.category, r.likelihood, r.impact, r.score, r.owner, r.status, r.treatment, r.created) for r in Risk.query.all()]
+    return csv_response('risks.csv', ['Title', 'Category', 'Likelihood', 'Impact', 'Score', 'Owner', 'Status', 'Treatment', 'Created'], rows)
 
 
 @risks_bp.route('/api/risks/matrix')

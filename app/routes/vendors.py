@@ -8,6 +8,7 @@ from app.models import (
     VendorAssessment, VendorAssessmentResponse, VendorRiskSnapshot, Evidence,
 )
 from app.services.activity import log_activity
+from app.services.csv_export import csv_response
 from app.utils import allowed_file, parse_date_safe
 
 vendors_bp = Blueprint('vendors', __name__)
@@ -126,6 +127,13 @@ def delete_vendor(vendor_id):
     return redirect(url_for('vendors.vendors'))
 
 
+@vendors_bp.route('/vendors/export')
+@login_required
+def export_vendors():
+    rows = [(v.name, v.category, v.risk_tier, v.risk_score, v.status, v.contact_name, v.contact_email, v.last_assessment, v.next_assessment) for v in Vendor.query.all()]
+    return csv_response('vendors.csv', ['Name', 'Category', 'Risk Tier', 'Risk Score', 'Status', 'Contact Name', 'Contact Email', 'Last Assessment', 'Next Assessment'], rows)
+
+
 # ---- QUESTIONNAIRE TEMPLATES ----
 
 @vendors_bp.route('/vendors/questionnaires')
@@ -163,6 +171,7 @@ def delete_questionnaire(template_id):
     template = QuestionnaireTemplate.query.get_or_404(template_id)
     name = template.name
     db.session.delete(template)
+    log_activity('deleted', 'Vendor', name, f'{current_user.name} deleted questionnaire template "{name}"')
     db.session.commit()
     flash(f'Questionnaire "{name}" deleted.', 'info')
     return redirect(url_for('vendors.questionnaires'))
@@ -285,7 +294,9 @@ def delete_vendor_document(vendor_id, evidence_id):
     if file_path and os.path.exists(file_path):
         os.remove(file_path)
     title = doc.title
+    vendor = doc.vendor
     db.session.delete(doc)
+    log_activity('deleted', 'Vendor', vendor.name if vendor else '', f'{current_user.name} deleted document "{title}"')
     db.session.commit()
     flash(f'Document "{title}" deleted.', 'info')
     return redirect(url_for('vendors.vendor_detail', vendor_id=vendor_id))

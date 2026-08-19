@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app.models import db, Policy, PolicyAcknowledgement, PolicyVersion, PolicyReview, Employee, User
 from app.services.activity import log_activity
+from app.services.csv_export import csv_response
 from app.utils import parse_date_safe
 
 policies_bp = Blueprint('policies', __name__)
@@ -221,6 +222,13 @@ def acknowledge_policy(policy_id):
     db.session.commit()
     flash(f'{added} employee(s) recorded as acknowledging "{policy.name}".', 'success')
     return redirect(request.referrer or url_for('policies.policy_detail', policy_id=policy_id))
+
+
+@policies_bp.route('/policies/export')
+@login_required
+def export_policies():
+    rows = [(p.name, p.version, p.owner, p.status, p.framework, p.last_reviewed, p.next_review, p.acknowledgements, p.total_employees) for p in Policy.query.all()]
+    return csv_response('policies.csv', ['Name', 'Version', 'Owner', 'Status', 'Framework', 'Last Reviewed', 'Next Review', 'Acknowledgements', 'Total Employees'], rows)
 
 
 @policies_bp.route('/policies/<int:policy_id>/delete', methods=['POST'])

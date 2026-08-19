@@ -1,11 +1,14 @@
 from datetime import date, timedelta
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template, jsonify, request, Response
 from flask_login import login_required
 from app.models import (
     db, Framework, Risk, Policy, Audit, Vendor, Asset, Control, User,
     Evidence, ComplianceSnapshot, DashboardSnapshot, ActivityLog, TrainingCampaign,
 )
 from app.services.snapshots import ensure_snapshots_for_today
+from app.services.notifications import ensure_notifications_for_today
+from app.services.pdf_reports import build_dashboard_snapshot_pdf
+from app.services.csv_export import csv_response
 from app.utils import parse_date_safe
 from app.routes.risks import RISK_LEVEL_SCORES
 
@@ -27,11 +30,7 @@ def _weighted_compliance_score(frameworks):
     return round(weighted_sum / total_applicable)
 
 
-@main_bp.route('/')
-@login_required
-def dashboard():
-    ensure_snapshots_for_today()
-
+def _dashboard_context():
     frameworks = Framework.query.all()
     framework_dicts = [fw.to_dict() for fw in frameworks]
 
@@ -50,14 +49,7 @@ def dashboard():
     pending_audits = len([a for a in audits if a.status in ['In Progress', 'Scheduled']])
     pending_evidence = Evidence.query.filter_by(status='Pending Review').count()
 
-    kpis = _build_kpis(compliance_score, open_risks, policy_count, pending_evidence)
-    risk_matrix = _build_risk_matrix(risks)
-    trend_labels, trend_data = _build_compliance_trend()
-    deadlines = _build_upcoming_deadlines()
-    recent_activity = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(20).all()
-
-    return render_template('dashboard.html',
-        page='dashboard',
+    return dict(
         compliance_score=compliance_score,
         total_controls=total_controls,
         passing_controls=passing_controls,
@@ -73,14 +65,30 @@ def dashboard():
         audits=audits,
         vendors_count=Vendor.query.count(),
         assets_count=Asset.query.count(),
-        kpis=kpis,
+        kpis=_build_kpis(compliance_score, open_risks, policy_count, pending_evidence),
         risk_levels=RISK_LEVELS,
         risk_level_scores=RISK_LEVEL_SCORES,
-        risk_matrix=risk_matrix,
+        risk_matrix=_build_risk_matrix(risks),
+        deadlines=_build_upcoming_deadlines(),
+    )
+
+
+@main_bp.route('/')
+@login_required
+def dashboard():
+    ensure_snapshots_for_today()
+    ensure_notifications_for_today()
+
+    context = _dashboard_context()
+    trend_labels, trend_data = _build_compliance_trend()
+    recent_activity = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(20).all()
+
+    return render_template('dashboard.html',
+        page='dashboard',
         trend_labels=trend_labels,
         trend_data=trend_data,
         recent_activity=recent_activity,
-        deadlines=deadlines,
+        **context,
     )
 
 
@@ -215,6 +223,45 @@ def trust_center():
 def settings():
     users = User.query.all()
     return render_template('settings.html', page='settings', users=users)
+
+
+@main_bp.route('/settings/activity-log')
+@login_required
+def activity_log():
+    entity_type = request.args.get('entity_type', '')
+    action = request.args.get('action', '')
+    user_id = request.args.get('user_id', '')
+    page = max(int(request.args.get('page', 1)), 1)
+    per_page = 50
+
+    query = ActivityLog.query
+    if entity_type:
+        query = query.filter_by(entity_type=entity_type)
+    if action:
+        query = query.filter_by(action=action)
+    if user_id:
+        query = query.filter_by(user_id=int(user_id))
+    query = query.order_by(ActivityLog.created_at.desc())
+
+    total = query.count()
+    entries = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    entity_types = [row[0] for row in db.session.query(ActivityLog.entity_type).distinct().order_by(ActivityLog.entity_type).all()]
+    actions = [row[0] for row in db.session.query(ActivityLog.action).distinct().order_by(ActivityLog.action).all()]
+    users = User.query.order_by(User.name).all()
+
+    return render_template('activity_log.html', page='settings',
+        entries=entries, total=total, current_page=page, per_page=per_page,
+        entity_types=entity_types, actions=actions, users=users,
+        selected_entity_type=entity_type, selected_action=action, selected_user_id=user_id)
+
+
+@main_bp.route('/settings/activity-log/export')
+@login_required
+def export_activity_log():
+    rows = [(e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '', e.user.name if e.user else '-', e.action, e.entity_type, e.entity_name or '', e.description or '')
+            for e in ActivityLog.query.order_by(ActivityLog.created_at.desc()).all()]
+    return csv_response('activity_log.csv', ['When', 'User', 'Action', 'Entity Type', 'Entity Name', 'Description'], rows)
 
 
 # ---- API Endpoints ----

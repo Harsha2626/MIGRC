@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app.models import db, Asset
 from app.services.activity import log_activity
+from app.services.csv_export import csv_response
 
 assets_bp = Blueprint('assets', __name__)
 
@@ -60,6 +61,13 @@ def edit_asset(asset_id):
     db.session.commit()
     flash(f'Asset "{name}" updated.', 'success')
     return redirect(url_for('assets.assets'))
+
+
+@assets_bp.route('/assets/export')
+@login_required
+def export_assets():
+    rows = [(a.name, a.type, a.environment, a.owner, a.classification, a.status, a.cloud_provider) for a in Asset.query.all()]
+    return csv_response('assets.csv', ['Name', 'Type', 'Environment', 'Owner', 'Classification', 'Status', 'Cloud Provider'], rows)
 
 
 @assets_bp.route('/assets/<int:asset_id>/delete', methods=['POST'])

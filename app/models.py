@@ -676,3 +676,19 @@ class ActivityLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User')
+
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    type = db.Column(db.String(30), nullable=False)
+    # deadline_approaching, evidence_rejected, risk_escalated, policy_review_due, finding_assigned
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.String(400))
+    link = db.Column(db.String(300))
+    is_read = db.Column(db.Boolean, default=False)
+    dedupe_key = db.Column(db.String(200), index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User')

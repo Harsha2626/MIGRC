@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block breadcrumb %}<span>Notifications</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Notifications</h1>
+        <p>Deadlines, escalations, and review activity that need your attention</p>
+    </div>
+    <div class="page-actions">
+        <form method="POST" action="/notifications/mark-all-read">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-check-double"></i> Mark all read</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body no-padding">
+        {% if notifications %}
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr><th></th><th>Notification</th><th>When</th><th></th></tr>
+                </thead>
+                <tbody>
+                    {% for n in notifications %}
+                    <tr style="{% if not n.is_read %}background: var(--accent-primary-light);{% endif %}">
+                        <td style="width:36px;"><i class="fas {{ {'deadline_approaching':'fa-clock','evidence_rejected':'fa-file-circle-xmark','risk_escalated':'fa-triangle-exclamation','policy_review_due':'fa-file-shield','finding_assigned':'fa-magnifying-glass-chart'}.get(n.type, 'fa-bell') }}" style="color: var(--accent-primary);"></i></td>
+                        <td>
+                            <div class="font-semibold" style="font-size:13px;">{{ n.title }}</div>
+                            {% if n.message %}<div class="text-sm text-muted">{{ n.message }}</div>{% endif %}
+                        </td>
+                        <td class="text-sm text-muted" style="white-space:nowrap;">{{ n.created_at|timesince }}</td>
+                        <td style="white-space:nowrap;">
+                            <form method="POST" action="/notifications/{{ n.id }}/read" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                {% if n.link %}
+                                <button type="submit" class="btn btn-sm btn-secondary">Open</button>
+                                {% elif not n.is_read %}
+                                <button type="submit" class="btn btn-sm btn-secondary" title="Mark read"><i class="fas fa-check"></i></button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-bell-slash"></i>
+            <h3>No notifications</h3>
+            <p>You're all caught up. New deadlines and alerts will show up here.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
