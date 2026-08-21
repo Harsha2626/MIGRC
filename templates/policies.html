@@ -10,7 +10,9 @@
     </div>
     <div class="page-actions">
         <a href="/policies/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        {% if current_user.can_write %}
         <button class="btn btn-primary" onclick="showAddPolicyModal()"><i class="fas fa-plus"></i> Create Policy</button>
+        {% endif %}
     </div>
 </div>
 
@@ -107,10 +109,12 @@
                         <td>
                             <div class="flex gap-8">
                                 <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Open"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                                {% if current_user.can_delete %}
                                 <form method="POST" action="{{ url_for('policies.delete_policy', policy_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ p.name }}?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                                 </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

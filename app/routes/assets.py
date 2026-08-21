@@ -3,6 +3,7 @@ from flask_login import login_required
 from app.models import db, Asset
 from app.services.activity import log_activity
 from app.services.csv_export import csv_response
+from app.utils import require_permission
 
 assets_bp = Blueprint('assets', __name__)
 
@@ -17,6 +18,7 @@ def assets():
 
 @assets_bp.route('/assets/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_asset():
     name = request.form.get('name', '').strip()
     if not name:
@@ -42,6 +44,7 @@ def add_asset():
 
 @assets_bp.route('/assets/<int:asset_id>/edit', methods=['POST'])
 @login_required
+@require_permission('write')
 def edit_asset(asset_id):
     asset = Asset.query.get_or_404(asset_id)
     name = request.form.get('name', '').strip()
@@ -72,6 +75,7 @@ def export_assets():
 
 @assets_bp.route('/assets/<int:asset_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_asset(asset_id):
     asset = Asset.query.get_or_404(asset_id)
     name = asset.name

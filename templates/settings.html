@@ -209,7 +209,9 @@
             <div class="card">
                 <div class="card-header">
                     <h3>Users & Roles</h3>
+                    {% if current_user.can_manage_users %}
                     <button class="btn btn-sm btn-primary" onclick="openInviteUser()"><i class="fas fa-user-plus"></i> Invite User</button>
+                    {% endif %}
                 </div>
                 <div class="card-body no-padding">
                     <table>
@@ -223,7 +225,7 @@
                                 <td>{{ u.email }}</td>
                                 <td><span class="badge {% if u.role == 'Admin' %}badge-primary{% elif u.role == 'Auditor' %}badge-neutral{% else %}badge-info{% endif %}">{{ u.role }}</span></td>
                                 <td><span class="badge {% if u.is_active_user %}badge-success{% else %}badge-neutral{% endif %}">{{ 'Active' if u.is_active_user else 'Inactive' }}</span></td>
-                                <td><button class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-pen"></i></button></td>
+                                <td>{% if current_user.can_manage_users %}<button class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-pen"></i></button>{% endif %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

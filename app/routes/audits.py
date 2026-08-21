@@ -8,7 +8,7 @@ from app.services.activity import log_activity
 from app.services.notifications import notify_finding_assigned
 from app.services.pdf_reports import build_audit_report_pdf
 from app.services.csv_export import csv_response
-from app.utils import allowed_file
+from app.utils import allowed_file, require_permission
 
 audits_bp = Blueprint('audits', __name__)
 
@@ -28,6 +28,7 @@ def audits():
 
 @audits_bp.route('/audits/add', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def add_audit():
     name = request.form.get('name', '').strip()
     framework_id = request.form.get('framework_id')
@@ -91,6 +92,7 @@ def audit_detail(audit_id):
 
 @audits_bp.route('/audits/<int:audit_id>/status', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def update_audit_status(audit_id):
     audit = Audit.query.get_or_404(audit_id)
     target = request.form.get('status')
@@ -108,6 +110,7 @@ def update_audit_status(audit_id):
 
 @audits_bp.route('/audits/<int:audit_id>/evidence/<int:evidence_id>/toggle', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def toggle_evidence(audit_id, evidence_id):
     evidence = AuditEvidence.query.filter_by(id=evidence_id, audit_id=audit_id).first_or_404()
     if evidence.status == 'Collected':
@@ -127,6 +130,7 @@ def toggle_evidence(audit_id, evidence_id):
 
 @audits_bp.route('/audits/<int:audit_id>/evidence/<int:evidence_id>/link', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def link_evidence(audit_id, evidence_id):
     audit_evidence = AuditEvidence.query.filter_by(id=evidence_id, audit_id=audit_id).first_or_404()
     source_evidence_id = request.form.get('evidence_id')
@@ -149,6 +153,7 @@ def link_evidence(audit_id, evidence_id):
 
 @audits_bp.route('/audits/<int:audit_id>/evidence/<int:evidence_id>/upload', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def upload_audit_evidence(audit_id, evidence_id):
     audit_evidence = AuditEvidence.query.filter_by(id=evidence_id, audit_id=audit_id).first_or_404()
     file = request.files.get('file')
@@ -195,6 +200,7 @@ def upload_audit_evidence(audit_id, evidence_id):
 
 @audits_bp.route('/audits/<int:audit_id>/findings/add', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def add_finding(audit_id):
     audit = Audit.query.get_or_404(audit_id)
     description = request.form.get('description', '').strip()
@@ -221,6 +227,7 @@ def add_finding(audit_id):
 
 @audits_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/remediation', methods=['POST'])
 @login_required
+@require_permission('audit_write')
 def save_remediation(audit_id, finding_id):
     finding = AuditFinding.query.filter_by(id=finding_id, audit_id=audit_id).first_or_404()
     status = request.form.get('status', 'Planned')
@@ -278,6 +285,7 @@ def export_audits():
 
 @audits_bp.route('/audits/<int:audit_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_audit(audit_id):
     audit = Audit.query.get_or_404(audit_id)
     name = audit.name

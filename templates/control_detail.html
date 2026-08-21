@@ -86,9 +86,11 @@
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
         <h3><i class="fas fa-folder-open" style="margin-right:8px;"></i> Uploaded Evidence</h3>
+        {% if current_user.can_write %}
         <button class="btn btn-sm btn-primary" onclick="document.getElementById('uploadSection').style.display = document.getElementById('uploadSection').style.display === 'none' ? '' : 'none'">
             <i class="fas fa-cloud-upload-alt"></i> Upload Evidence
         </button>
+        {% endif %}
     </div>
     <div class="card-body no-padding">
         {% if evidence_list %}
@@ -125,6 +127,7 @@
                     <td>
                         {% if ev.status == 'Pending Review' %}
                         <div style="display:flex;gap:4px;">
+                            {% if current_user.can_review_evidence %}
                             <form action="/evidence/{{ ev.id }}/review" method="POST" style="display:inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="action" value="approve">
@@ -135,20 +138,25 @@
                                 <input type="hidden" name="action" value="reject">
                                 <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Reject" style="color:var(--accent-danger);"><i class="fas fa-times"></i></button>
                             </form>
+                            {% endif %}
+                            {% if current_user.can_delete %}
                             <form action="/evidence/{{ ev.id }}/delete" method="POST" style="display:inline;" onsubmit="return confirm('Delete this evidence?')">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                             </form>
+                            {% endif %}
                         </div>
                         {% else %}
                         <div style="display:flex;gap:4px;">
                             {% if ev.review_notes %}
                             <span title="{{ ev.review_notes }}" style="font-size:11px;color:var(--text-muted);cursor:help;"><i class="fas fa-comment"></i> Notes</span>
                             {% endif %}
+                            {% if current_user.can_delete %}
                             <form action="/evidence/{{ ev.id }}/delete" method="POST" style="display:inline;margin-left:auto;" onsubmit="return confirm('Delete this evidence?')">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                             </form>
+                            {% endif %}
                         </div>
                         {% endif %}
                     </td>
@@ -165,6 +173,7 @@
     </div>
 </div>
 
+{% if current_user.can_write %}
 <!-- Upload Form (hidden by default) -->
 <div id="uploadSection" class="card" style="display:none;margin-bottom:20px;">
     <div class="card-header">
@@ -230,4 +239,5 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endblock %}

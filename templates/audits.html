@@ -10,7 +10,9 @@
     </div>
     <div class="page-actions">
         <a href="/audits/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        {% if current_user.can_audit_write %}
         <button class="btn btn-primary" onclick="showCreateAuditModal()"><i class="fas fa-plus"></i> Create Audit</button>
+        {% endif %}
     </div>
 </div>
 
@@ -60,10 +62,12 @@
                 {% elif a.status == 'Under Review' %}<span class="badge badge-warning">{{ a.status }}</span>
                 {% elif a.status == 'In Progress' %}<span class="badge badge-primary">{{ a.status }}</span>
                 {% else %}<span class="badge badge-neutral">{{ a.status }}</span>{% endif %}
+                {% if current_user.can_delete %}
                 <form method="POST" action="{{ url_for('audits.delete_audit', audit_id=a.id) }}" style="display:inline;" onclick="event.stopPropagation()" onsubmit="return confirm('Delete {{ a.name }}?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                 </form>
+                {% endif %}
             </div>
         </div>
         <div class="card-body">

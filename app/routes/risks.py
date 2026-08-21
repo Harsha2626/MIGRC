@@ -5,6 +5,7 @@ from app.models import db, Risk, RiskTreatment, TreatmentMilestone, Control
 from app.services.activity import log_activity
 from app.services.notifications import notify_risk_escalated
 from app.services.csv_export import csv_response
+from app.utils import require_permission
 
 risks_bp = Blueprint('risks', __name__)
 
@@ -22,6 +23,7 @@ def risks():
 
 @risks_bp.route('/risks/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_risk():
     title = request.form.get('title', '').strip()
     likelihood = request.form.get('likelihood', 'Medium')
@@ -58,6 +60,7 @@ def add_risk():
 
 @risks_bp.route('/risks/<int:risk_id>/edit', methods=['POST'])
 @login_required
+@require_permission('write')
 def edit_risk(risk_id):
     risk = Risk.query.get_or_404(risk_id)
     title = request.form.get('title', '').strip()
@@ -91,6 +94,7 @@ def edit_risk(risk_id):
 
 @risks_bp.route('/risks/<int:risk_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_risk(risk_id):
     risk = Risk.query.get_or_404(risk_id)
     title = risk.title
@@ -114,6 +118,7 @@ def risk_detail(risk_id):
 
 @risks_bp.route('/risks/<int:risk_id>/controls', methods=['POST'])
 @login_required
+@require_permission('write')
 def update_risk_controls(risk_id):
     risk = Risk.query.get_or_404(risk_id)
     control_ids = request.form.getlist('control_ids')
@@ -127,6 +132,7 @@ def update_risk_controls(risk_id):
 
 @risks_bp.route('/risks/<int:risk_id>/treatments/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_treatment(risk_id):
     risk = Risk.query.get_or_404(risk_id)
     action = request.form.get('action', '').strip()
@@ -149,6 +155,7 @@ def add_treatment(risk_id):
 
 @risks_bp.route('/risks/<int:risk_id>/treatments/<int:treatment_id>/status', methods=['POST'])
 @login_required
+@require_permission('write')
 def update_treatment_status(risk_id, treatment_id):
     treatment = RiskTreatment.query.filter_by(id=treatment_id, risk_id=risk_id).first_or_404()
     risk = treatment.risk
@@ -172,6 +179,7 @@ def update_treatment_status(risk_id, treatment_id):
 
 @risks_bp.route('/risks/<int:risk_id>/treatments/<int:treatment_id>/milestones/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_milestone(risk_id, treatment_id):
     treatment = RiskTreatment.query.filter_by(id=treatment_id, risk_id=risk_id).first_or_404()
     title = request.form.get('title', '').strip()
@@ -188,6 +196,7 @@ def add_milestone(risk_id, treatment_id):
 
 @risks_bp.route('/risks/<int:risk_id>/milestones/<int:milestone_id>/toggle', methods=['POST'])
 @login_required
+@require_permission('write')
 def toggle_milestone(risk_id, milestone_id):
     milestone = TreatmentMilestone.query.get_or_404(milestone_id)
     milestone.completed = not milestone.completed

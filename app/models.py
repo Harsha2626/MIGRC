@@ -17,6 +17,43 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
 
+    # Role -> permission set.
+    #   write            create/edit across compliance modules (risks, policies, vendors, assets,
+    #                    people, evidence upload)
+    #   delete           delete across all modules
+    #   manage_users     create/invite users (Settings)
+    #   audit_write      create/edit within the Audits module (Auditor's "manage audits")
+    #   review_evidence  approve/reject evidence (Auditor's "review evidence")
+    ROLE_PERMISSIONS = {
+        'Admin':              {'write', 'delete', 'manage_users', 'audit_write', 'review_evidence'},
+        'Compliance Manager': {'write', 'delete', 'audit_write', 'review_evidence'},
+        'Auditor':            {'audit_write', 'review_evidence'},
+        'Viewer':             set(),
+    }
+
+    def has_permission(self, perm):
+        return perm in self.ROLE_PERMISSIONS.get(self.role, set())
+
+    @property
+    def can_write(self):
+        return self.has_permission('write')
+
+    @property
+    def can_delete(self):
+        return self.has_permission('delete')
+
+    @property
+    def can_manage_users(self):
+        return self.has_permission('manage_users')
+
+    @property
+    def can_audit_write(self):
+        return self.has_permission('audit_write')
+
+    @property
+    def can_review_evidence(self):
+        return self.has_permission('review_evidence')
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -676,6 +713,17 @@ class ActivityLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User')
+
+
+class NDAAcceptance(db.Model):
+    """A Trust Center visitor's NDA acceptance — unlocks gated document downloads for their session."""
+    __tablename__ = 'nda_acceptances'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    name = db.Column(db.String(100))
+    company = db.Column(db.String(150))
+    ip_address = db.Column(db.String(45))
+    accepted_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Notification(db.Model):

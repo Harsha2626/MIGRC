@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from app.models import db, Policy, PolicyAcknowledgement, PolicyVersion, PolicyReview, Employee, User
 from app.services.activity import log_activity
 from app.services.csv_export import csv_response
-from app.utils import parse_date_safe
+from app.utils import parse_date_safe, require_permission
 
 policies_bp = Blueprint('policies', __name__)
 
@@ -35,6 +35,7 @@ def policies():
 
 @policies_bp.route('/policies/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_policy():
     name = request.form.get('name', '').strip()
     if not name:
@@ -81,6 +82,7 @@ def policy_detail(policy_id):
 
 @policies_bp.route('/policies/<int:policy_id>/edit', methods=['POST'])
 @login_required
+@require_permission('write')
 def edit_policy(policy_id):
     policy = Policy.query.get_or_404(policy_id)
     name = request.form.get('name', '').strip()
@@ -119,6 +121,7 @@ def edit_policy(policy_id):
 
 @policies_bp.route('/policies/<int:policy_id>/submit-review', methods=['POST'])
 @login_required
+@require_permission('write')
 def submit_for_review(policy_id):
     policy = Policy.query.get_or_404(policy_id)
     if policy.status != 'Draft':
@@ -143,6 +146,7 @@ def submit_for_review(policy_id):
 
 @policies_bp.route('/policies/<int:policy_id>/review', methods=['POST'])
 @login_required
+@require_permission('write')
 def review_policy(policy_id):
     policy = Policy.query.get_or_404(policy_id)
     if policy.status != 'In Review':
@@ -168,6 +172,7 @@ def review_policy(policy_id):
 
 @policies_bp.route('/policies/<int:policy_id>/status', methods=['POST'])
 @login_required
+@require_permission('write')
 def advance_status(policy_id):
     policy = Policy.query.get_or_404(policy_id)
     target = request.form.get('status')
@@ -200,6 +205,7 @@ def policy_diff(policy_id, version_id):
 
 @policies_bp.route('/policies/<int:policy_id>/acknowledge', methods=['POST'])
 @login_required
+@require_permission('write')
 def acknowledge_policy(policy_id):
     policy = Policy.query.get_or_404(policy_id)
     if policy.status != 'Published':
@@ -233,6 +239,7 @@ def export_policies():
 
 @policies_bp.route('/policies/<int:policy_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_policy(policy_id):
     policy = Policy.query.get_or_404(policy_id)
     name = policy.name

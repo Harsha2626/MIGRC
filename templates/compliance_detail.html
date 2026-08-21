@@ -50,7 +50,7 @@
 <!-- Controls by Category -->
 {% for category, cat_controls in categories.items() %}
 <div class="card" style="margin-bottom:20px;">
-    <div class="card-header">
+    <div class="card-header" style="cursor:pointer;" onclick="toggleControlCategory(this)">
         <h3>
             {% if category == 'Organizational' %}<i class="fas fa-sitemap" style="margin-right:8px;color:var(--accent-primary);"></i>
             {% elif category == 'People' %}<i class="fas fa-users" style="margin-right:8px;color:var(--accent-warning);"></i>
@@ -59,8 +59,9 @@
             {% endif %}
             {{ category }} Controls ({{ cat_controls|length }})
         </h3>
+        <i class="fas fa-chevron-down category-toggle-chevron" style="transition:transform 0.2s;color:var(--text-secondary);"></i>
     </div>
-    <div class="card-body no-padding">
+    <div class="card-body no-padding" style="display:none;">
         <table>
             <thead>
                 <tr>
@@ -99,4 +100,16 @@
     </div>
 </div>
 {% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleControlCategory(header) {
+    const body = header.nextElementSibling;
+    const chevron = header.querySelector('.category-toggle-chevron');
+    const collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? '' : 'none';
+    chevron.style.transform = collapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+</script>
 {% endblock %}

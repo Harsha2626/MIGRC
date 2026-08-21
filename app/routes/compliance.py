@@ -7,7 +7,7 @@ from app.models import db, Framework, Control, Evidence, EvidenceMapping, Compli
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
-from app.utils import allowed_file
+from app.utils import allowed_file, require_permission
 
 compliance_bp = Blueprint('compliance', __name__)
 
@@ -18,6 +18,42 @@ def compliance():
     frameworks = Framework.query.all()
     return render_template('compliance.html', page='compliance',
         frameworks=[fw.to_dict() for fw in frameworks])
+
+
+@compliance_bp.route('/compliance/add', methods=['POST'])
+@login_required
+@require_permission('write')
+def add_framework():
+    name = request.form.get('name', '').strip()
+    if name == '__custom__':
+        name = request.form.get('custom_name', '').strip()
+
+    if not name:
+        flash('Please select or name a framework.', 'error')
+        return redirect(url_for('compliance.compliance'))
+
+    if Framework.query.filter_by(name=name).first():
+        flash(f'A framework named "{name}" already exists.', 'error')
+        return redirect(url_for('compliance.compliance'))
+
+    category = request.form.get('category', 'Security')
+    owner = request.form.get('owner', '').strip()
+    target_date = request.form.get('target_date')
+
+    fw = Framework(
+        name=name,
+        category=category,
+        owner=owner,
+        status='Not Started',
+        icon='shield-halved',
+        target_date=datetime.strptime(target_date, '%Y-%m-%d').date() if target_date else None,
+    )
+    db.session.add(fw)
+    log_activity('created', 'Framework', name)
+    db.session.commit()
+
+    flash(f'Framework "{name}" added. It has no controls yet — controls are currently seeded, not added from the UI.', 'success')
+    return redirect(url_for('compliance.compliance'))
 
 
 @compliance_bp.route('/compliance/<int:framework_id>')
@@ -83,6 +119,7 @@ def control_detail(framework_id, control_id):
 # ---- EVIDENCE UPLOAD ----
 @compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>/upload', methods=['POST'])
 @login_required
+@require_permission('write')
 def upload_evidence(framework_id, control_id):
     fw = Framework.query.get_or_404(framework_id)
     ctrl = Control.query.get_or_404(control_id)
@@ -178,6 +215,7 @@ def upload_evidence(framework_id, control_id):
 # ---- EVIDENCE REVIEW (Approve / Reject) ----
 @compliance_bp.route('/evidence/<int:evidence_id>/review', methods=['POST'])
 @login_required
+@require_permission('review_evidence')
 def review_evidence(evidence_id):
     evidence = Evidence.query.get_or_404(evidence_id)
     action = request.form.get('action')
@@ -221,6 +259,7 @@ def review_evidence(evidence_id):
 # ---- EVIDENCE DELETE ----
 @compliance_bp.route('/evidence/<int:evidence_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_evidence(evidence_id):
     evidence = Evidence.query.get_or_404(evidence_id)
     affected_control_ids = [m.control_id for m in evidence.evidence_mappings]

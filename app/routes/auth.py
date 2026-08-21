@@ -2,6 +2,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import db, User
+from app.utils import require_permission
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -39,11 +40,8 @@ def logout():
 
 @auth_bp.route('/register', methods=['POST'])
 @login_required
+@require_permission('manage_users')
 def register():
-    if current_user.role != 'Admin':
-        flash('Only admins can create users.', 'error')
-        return redirect(url_for('main.settings'))
-
     name = request.form.get('name', '').strip()
     email = request.form.get('email', '').strip().lower()
     password = request.form.get('password', '')

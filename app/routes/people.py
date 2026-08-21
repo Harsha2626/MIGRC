@@ -6,6 +6,7 @@ from app.models import (
     EmployeeAccess, AccessReview, Vendor,
 )
 from app.services.activity import log_activity
+from app.utils import require_permission
 
 people_bp = Blueprint('people', __name__)
 
@@ -114,6 +115,7 @@ def employees():
 
 @people_bp.route('/people/employees', methods=['POST'])
 @login_required
+@require_permission('write')
 def create_employee():
     name = request.form.get('name', '').strip()
     email = request.form.get('email', '').strip().lower()
@@ -140,6 +142,7 @@ def create_employee():
 
 @people_bp.route('/people/employees/<int:employee_id>/edit', methods=['POST'])
 @login_required
+@require_permission('write')
 def edit_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
     status = request.form.get('status', employee.status)
@@ -160,6 +163,7 @@ def edit_employee(employee_id):
 
 @people_bp.route('/people/employees/<int:employee_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
     name = employee.name
@@ -197,6 +201,7 @@ def training_campaigns():
 
 @people_bp.route('/people/training-campaigns', methods=['POST'])
 @login_required
+@require_permission('write')
 def create_training_campaign():
     name = request.form.get('name', '').strip()
     status = request.form.get('status', 'Draft')
@@ -224,6 +229,7 @@ def create_training_campaign():
 
 @people_bp.route('/people/training-campaigns/<int:campaign_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_training_campaign(campaign_id):
     campaign = TrainingCampaign.query.get_or_404(campaign_id)
     name = campaign.name
@@ -273,6 +279,7 @@ def access_reviews():
 
 @people_bp.route('/people/access-reviews', methods=['POST'])
 @login_required
+@require_permission('write')
 def create_access_review():
     name = request.form.get('name', '').strip()
     owner = request.form.get('owner', '').strip()
@@ -304,6 +311,7 @@ def create_access_review():
 
 @people_bp.route('/people/access-reviews/<int:review_id>/status', methods=['POST'])
 @login_required
+@require_permission('write')
 def update_access_review_status(review_id):
     review = AccessReview.query.get_or_404(review_id)
     review.status = request.form.get('status', review.status)
@@ -316,6 +324,7 @@ def update_access_review_status(review_id):
 
 @people_bp.route('/people/access-reviews/<int:review_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_access_review(review_id):
     review = AccessReview.query.get_or_404(review_id)
     name = review.name

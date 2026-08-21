@@ -1,7 +1,29 @@
+from functools import wraps
 from datetime import datetime, date
-from flask import current_app
+from flask import current_app, flash, redirect, request, url_for
+from flask_login import current_user
 
 DATE_FORMATS = ['%Y-%m-%d', '%d %b %Y', '%d %B %Y']
+
+
+def require_permission(perm):
+    """Route decorator: 403-redirects unless current_user's role grants `perm`.
+
+    Stack directly beneath @login_required, e.g.:
+        @risks_bp.route('/risks/add', methods=['POST'])
+        @login_required
+        @require_permission('write')
+        def add_risk(): ...
+    """
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            if not current_user.is_authenticated or not current_user.has_permission(perm):
+                flash("You don't have permission to do that.", 'error')
+                return redirect(request.referrer or url_for('main.dashboard'))
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
 
 
 def allowed_file(filename):

@@ -9,7 +9,7 @@ from app.models import (
 )
 from app.services.activity import log_activity
 from app.services.csv_export import csv_response
-from app.utils import allowed_file, parse_date_safe
+from app.utils import allowed_file, parse_date_safe, require_permission
 
 vendors_bp = Blueprint('vendors', __name__)
 
@@ -32,6 +32,7 @@ def vendors():
 
 @vendors_bp.route('/vendors/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_vendor():
     name = request.form.get('name', '').strip()
     risk_tier = request.form.get('risk_tier', 'Medium')
@@ -83,6 +84,7 @@ def vendor_detail(vendor_id):
 
 @vendors_bp.route('/vendors/<int:vendor_id>/edit', methods=['POST'])
 @login_required
+@require_permission('write')
 def edit_vendor(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
     name = request.form.get('name', '').strip()
@@ -117,6 +119,7 @@ def edit_vendor(vendor_id):
 
 @vendors_bp.route('/vendors/<int:vendor_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_vendor(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
     name = vendor.name
@@ -145,6 +148,7 @@ def questionnaires():
 
 @vendors_bp.route('/vendors/questionnaires/add', methods=['POST'])
 @login_required
+@require_permission('write')
 def add_questionnaire():
     name = request.form.get('name', '').strip()
     if not name:
@@ -167,6 +171,7 @@ def add_questionnaire():
 
 @vendors_bp.route('/vendors/questionnaires/<int:template_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_questionnaire(template_id):
     template = QuestionnaireTemplate.query.get_or_404(template_id)
     name = template.name
@@ -181,6 +186,7 @@ def delete_questionnaire(template_id):
 
 @vendors_bp.route('/vendors/<int:vendor_id>/assessments/send', methods=['POST'])
 @login_required
+@require_permission('write')
 def send_assessment(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
     template_id = request.form.get('template_id')
@@ -212,6 +218,7 @@ def assessment_detail(vendor_id, assessment_id):
 
 @vendors_bp.route('/vendors/<int:vendor_id>/assessments/<int:assessment_id>/respond', methods=['POST'])
 @login_required
+@require_permission('write')
 def respond_assessment(vendor_id, assessment_id):
     assessment = VendorAssessment.query.filter_by(id=assessment_id, vendor_id=vendor_id).first_or_404()
     vendor = assessment.vendor
@@ -249,6 +256,7 @@ def respond_assessment(vendor_id, assessment_id):
 
 @vendors_bp.route('/vendors/<int:vendor_id>/documents/upload', methods=['POST'])
 @login_required
+@require_permission('write')
 def upload_vendor_document(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
     file = request.files.get('file')
@@ -288,6 +296,7 @@ def upload_vendor_document(vendor_id):
 
 @vendors_bp.route('/vendors/<int:vendor_id>/documents/<int:evidence_id>/delete', methods=['POST'])
 @login_required
+@require_permission('delete')
 def delete_vendor_document(vendor_id, evidence_id):
     doc = Evidence.query.filter_by(id=evidence_id, vendor_id=vendor_id).first_or_404()
     file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], doc.file_path) if doc.file_path else None

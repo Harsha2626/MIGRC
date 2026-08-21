@@ -29,6 +29,7 @@
         </div>
 
         <nav class="sidebar-nav">
+            {% if current_user.is_authenticated %}
             <div class="nav-section">
                 <span class="nav-section-title">Overview</span>
                 <a href="/" class="nav-item {% if page == 'dashboard' %}active{% endif %}">
@@ -84,6 +85,7 @@
                     <span>Access Reviews</span>
                 </a>
             </div>
+            {% endif %}
 
             <div class="nav-section">
                 <span class="nav-section-title">External</span>
@@ -91,18 +93,23 @@
                     <i class="fas fa-certificate"></i>
                     <span>Trust Center</span>
                 </a>
+                {% if current_user.is_authenticated %}
                 <a href="/reports" class="nav-item {% if page == 'reports' %}active{% endif %}">
                     <i class="fas fa-file-export"></i>
                     <span>Reports</span>
                 </a>
+                {% endif %}
             </div>
         </nav>
 
         <div class="sidebar-footer">
+            {% if current_user.is_authenticated %}
             <a href="/settings" class="nav-item {% if page == 'settings' %}active{% endif %}">
                 <i class="fas fa-gear"></i>
                 <span>Settings</span>
             </a>
+            {% endif %}
+            {% if current_user.is_authenticated %}
             <div class="user-profile">
                 <div class="avatar">{{ current_user.name.split()[0][0] }}{{ current_user.name.split()[-1][0] if ' ' in current_user.name else '' }}</div>
                 <div class="user-info">
@@ -110,6 +117,7 @@
                     <span class="user-role">{{ current_user.role }}</span>
                 </div>
             </div>
+            {% endif %}
         </div>
     </aside>
 
@@ -131,6 +139,7 @@
                 <button class="topbar-btn" id="themeToggle" title="Toggle theme">
                     <i class="fas fa-moon"></i>
                 </button>
+                {% if current_user.is_authenticated %}
                 <div class="notification-bell-wrapper">
                     <button class="topbar-btn" id="notifBellBtn" title="Notifications">
                         <i class="fas fa-bell"></i>
@@ -173,6 +182,9 @@
                 <a href="/logout" class="topbar-btn" title="Logout" style="text-decoration:none;color:inherit;">
                     <i class="fas fa-right-from-bracket"></i>
                 </a>
+                {% else %}
+                <a href="/login" class="btn btn-sm btn-primary" style="text-decoration:none;"><i class="fas fa-right-to-bracket"></i> Login</a>
+                {% endif %}
             </div>
         </header>
 

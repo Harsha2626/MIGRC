@@ -10,7 +10,9 @@
     </div>
     <div class="page-actions">
         <a href="/risks/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        {% if current_user.can_write %}
         <button class="btn btn-primary" onclick="showAddRiskModal()"><i class="fas fa-plus"></i> Add Risk</button>
+        {% endif %}
     </div>
 </div>
 
@@ -119,11 +121,15 @@
                             <td>
                                 <div class="flex gap-8">
                                     <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Treatment & Controls"><i class="fas fa-diagram-project"></i></a>
+                                    {% if current_user.can_write %}
                                     <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditRiskModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                    {% endif %}
+                                    {% if current_user.can_delete %}
                                     <form method="POST" action="{{ url_for('risks.delete_risk', risk_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ r.title }}?');">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                                     </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

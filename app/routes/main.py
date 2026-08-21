@@ -1,14 +1,15 @@
 from datetime import date, timedelta
-from flask import Blueprint, render_template, jsonify, request, Response
+from flask import Blueprint, render_template, jsonify, request, Response, session, redirect, url_for, flash
 from flask_login import login_required
 from app.models import (
     db, Framework, Risk, Policy, Audit, Vendor, Asset, Control, User,
-    Evidence, ComplianceSnapshot, DashboardSnapshot, ActivityLog, TrainingCampaign,
+    Evidence, ComplianceSnapshot, DashboardSnapshot, ActivityLog, TrainingCampaign, NDAAcceptance,
 )
 from app.services.snapshots import ensure_snapshots_for_today
 from app.services.notifications import ensure_notifications_for_today
-from app.services.pdf_reports import build_dashboard_snapshot_pdf
+from app.services.pdf_reports import build_dashboard_snapshot_pdf, build_policy_document_pdf, build_trust_certificate_pdf
 from app.services.csv_export import csv_response
+from app.services.badge import build_badge_svg
 from app.utils import parse_date_safe
 from app.routes.risks import RISK_LEVEL_SCORES
 
@@ -210,12 +211,71 @@ def _build_upcoming_deadlines():
 
 
 @main_bp.route('/trust-center')
-@login_required
 def trust_center():
     published_policies = Policy.query.filter_by(status='Published').all()
     active_frameworks = Framework.query.all()
+    overall_score = _weighted_compliance_score(active_frameworks)
     return render_template('trust_center.html', page='trust_center',
-        policies=published_policies, frameworks=[fw.to_dict() for fw in active_frameworks])
+        policies=published_policies, frameworks=[fw.to_dict() for fw in active_frameworks],
+        overall_score=overall_score, nda_accepted=session.get('nda_accepted', False))
+
+
+@main_bp.route('/trust-center/nda-accept', methods=['POST'])
+def trust_center_nda_accept():
+    email = request.form.get('email', '').strip().lower()
+    name = request.form.get('name', '').strip()
+    company = request.form.get('company', '').strip()
+    policy_id = request.form.get('policy_id', type=int)
+
+    if not email:
+        flash('Email is required to accept the NDA.', 'error')
+        return redirect(url_for('main.trust_center'))
+
+    db.session.add(NDAAcceptance(email=email, name=name, company=company, ip_address=request.remote_addr))
+    db.session.commit()
+    session['nda_accepted'] = True
+
+    if policy_id:
+        return redirect(url_for('main.trust_center_download', policy_id=policy_id))
+    return redirect(url_for('main.trust_center'))
+
+
+@main_bp.route('/trust-center/download/<int:policy_id>')
+def trust_center_download(policy_id):
+    if not session.get('nda_accepted'):
+        flash('Please accept the NDA to download this document.', 'error')
+        return redirect(url_for('main.trust_center'))
+
+    policy = Policy.query.filter_by(id=policy_id, status='Published').first_or_404()
+    pdf_bytes = build_policy_document_pdf(policy)
+    return Response(pdf_bytes, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="{policy.name.replace(" ", "_")}.pdf"'
+    })
+
+
+@main_bp.route('/trust-center/certificate/<int:framework_id>')
+def trust_center_certificate(framework_id):
+    framework = Framework.query.get_or_404(framework_id)
+    pdf_bytes = build_trust_certificate_pdf(framework)
+    return Response(pdf_bytes, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="{framework.name.replace(" ", "_")}_Attestation.pdf"'
+    })
+
+
+@main_bp.route('/trust-center/badge.svg')
+def trust_center_badge():
+    framework_id = request.args.get('framework', type=int)
+    if framework_id:
+        fw = Framework.query.get_or_404(framework_id)
+        applicable = fw.total_controls - fw.not_applicable
+        score = round((fw.passing / applicable) * 100) if applicable else 0
+        label = fw.name
+    else:
+        label = 'Compliance'
+        score = _weighted_compliance_score(Framework.query.all())
+
+    svg = build_badge_svg(label, f'{score}%')
+    return Response(svg, mimetype='image/svg+xml', headers={'Cache-Control': 'public, max-age=3600'})
 
 
 @main_bp.route('/settings')

@@ -13,6 +13,8 @@
 <h3 style="margin-bottom:16px;font-size:16px;">Compliance Certifications</h3>
 <div class="trust-badge-grid">
     {% for fw in frameworks %}
+    {% set applicable = fw.total_controls - fw.not_applicable %}
+    {% set pct = ((fw.passing / applicable * 100)|round|int) if applicable else 0 %}
     <div class="trust-badge-card">
         <div class="trust-badge-icon stat-icon {% if fw.category == 'Security' %}blue{% elif fw.category == 'Privacy' %}purple{% elif fw.category == 'Healthcare' %}green{% else %}orange{% endif %}">
             <i class="fas fa-{{ fw.icon }}"></i>
@@ -21,10 +23,13 @@
         <span class="badge {% if fw.status == 'Active' %}badge-success{% else %}badge-primary{% endif %}">{{ fw.status }}</span>
         <div style="margin-top:12px;">
             <div class="progress-bar">
-                <div class="progress-fill green" style="width:{{ (fw.passing / fw.total_controls * 100)|round }}%"></div>
+                <div class="progress-fill green" style="width:{{ pct }}%"></div>
             </div>
-            <div class="text-sm text-muted" style="margin-top:4px;">{{ (fw.passing / fw.total_controls * 100)|round|int }}% compliant</div>
+            <div class="text-sm text-muted" style="margin-top:4px;">{{ pct }}% compliant</div>
         </div>
+        <a href="{{ url_for('main.trust_center_certificate', framework_id=fw.id) }}" class="btn btn-sm btn-secondary" style="margin-top:12px;width:100%;">
+            <i class="fas fa-certificate"></i> Download Attestation
+        </a>
     </div>
     {% endfor %}
 </div>
@@ -89,9 +94,16 @@
                         <i class="fas fa-file-lines" style="color:var(--accent-primary);"></i>
                         <span class="font-semibold" style="font-size:13px;">{{ p.name }}</span>
                     </div>
-                    <button class="btn btn-sm btn-secondary" onclick="showToast('Document download started','info')"><i class="fas fa-download"></i> Download</button>
+                    {% if nda_accepted %}
+                    <a href="{{ url_for('main.trust_center_download', policy_id=p.id) }}" class="btn btn-sm btn-secondary"><i class="fas fa-download"></i> Download</a>
+                    {% else %}
+                    <button class="btn btn-sm btn-secondary" onclick="showNdaModal({{ p.id }})"><i class="fas fa-lock"></i> Download</button>
+                    {% endif %}
                 </div>
                 {% endfor %}
+                {% if not policies %}
+                <p class="text-sm text-muted">No published policies are available for public download yet.</p>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -119,4 +131,56 @@
         </div>
     </div>
 </div>
+
+<!-- Embeddable Badge -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">
+        <h3>Embeddable Compliance Badge</h3>
+    </div>
+    <div class="card-body">
+        <p class="text-sm text-muted" style="margin-bottom:12px;">Show your live compliance score on your own website. Paste this snippet anywhere HTML is allowed.</p>
+        <div class="flex-center gap-12" style="margin-bottom:12px;">
+            <img src="{{ url_for('main.trust_center_badge') }}" alt="Compliance badge" style="height:20px;">
+            <span class="text-sm text-muted">Overall: {{ overall_score }}%</span>
+        </div>
+        <div style="position:relative;">
+            <pre id="badgeEmbedCode" style="background:var(--bg-tertiary);border-radius:8px;padding:12px 14px;font-size:12px;overflow-x:auto;margin:0;"><code>&lt;a href="{{ request.url_root.rstrip('/') }}{{ url_for('main.trust_center') }}"&gt;&lt;img src="{{ request.url_root.rstrip('/') }}{{ url_for('main.trust_center_badge') }}" alt="Compliance badge"&gt;&lt;/a&gt;</code></pre>
+            <button class="btn btn-sm btn-secondary" style="position:absolute;top:8px;right:8px;" onclick="copyBadgeEmbed()"><i class="fas fa-copy"></i> Copy</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showNdaModal(policyId) {
+    openModal('Accept NDA to Download', `
+        <form id="ndaForm" method="POST" action="{{ url_for('main.trust_center_nda_accept') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="policy_id" value="${policyId}">
+            <p class="text-sm text-muted" style="margin-bottom:16px;">This document contains sensitive compliance information. Please provide your details and accept our Non-Disclosure terms to unlock downloads.</p>
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="name" class="form-control" placeholder="Your name" required>
+            </div>
+            <div class="form-group">
+                <label>Work Email</label>
+                <input type="email" name="email" class="form-control" placeholder="you@company.com" required>
+            </div>
+            <div class="form-group">
+                <label>Company</label>
+                <input type="text" name="company" class="form-control" placeholder="Your organization">
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;">
+                <input type="checkbox" required> I agree to keep any downloaded documents confidential and not redistribute them without permission.
+            </label>
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'ndaForm\').submit()">Accept & Download</button>');
+}
+
+function copyBadgeEmbed() {
+    const text = document.getElementById('badgeEmbedCode').textContent;
+    navigator.clipboard.writeText(text).then(() => showToast('Embed code copied to clipboard', 'success'));
+}
+</script>
 {% endblock %}
