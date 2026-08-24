@@ -104,7 +104,7 @@
                 </thead>
                 <tbody>
                     {% for r in risks %}
-                    <tr>
+                    <tr onclick="window.location='/risks/{{ r.id }}'" style="cursor:pointer;">
                         <td class="font-semibold">{{ r.title }}</td>
                         <td>
                             {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
