@@ -1,20 +1,21 @@
 """
 Seed database with:
 - Default admin user
-- ISO 27001:2022 framework + 93 Annex A controls (all set to 'Not Assessed')
+- ISO 27001:2022 framework: 30 main-clause requirements (4-10) + 93 Annex A controls (all set to 'Not Assessed')
 
 All other modules (risks, policies, audits, vendors, assets, training, access reviews)
 start empty - data should be added by the user through the application.
 
 Run: python -m app.seed
 """
+import sys
 import random
 from datetime import date, datetime, timedelta
 from app import create_app
 from app.models import (
     db, User, Framework, Control, Vendor, Employee, TrainingCampaign,
     TrainingCampaignEnrollment, EmployeeAccess, AccessReview,
-    ComplianceSnapshot, DashboardSnapshot, ActivityLog,
+    ComplianceSnapshot, DashboardSnapshot, ActivityLog, Asset,
 )
 
 
@@ -32,15 +33,64 @@ def seed_database():
         # ---- ISO 27001:2022 FRAMEWORK ----
         iso27001 = Framework(
             name='ISO 27001:2022',
-            description='International standard for Information Security Management Systems (ISMS) with 93 Annex A controls',
+            description='International standard for Information Security Management Systems (ISMS) - 30 main-clause requirements (Clauses 4-10) and 93 Annex A controls',
             category='Security',
             icon='globe',
             status='Not Started',
             owner='Harsha P',
-            controls_detail='Organizational (37) + People (8) + Physical (14) + Technological (34)',
+            controls_detail='Clauses 4-10 (30) + Annex A: Organizational (37) + People (8) + Physical (14) + Technological (34)',
         )
         db.session.add(iso27001)
         db.session.flush()
+
+        # ---- ISO 27001:2022 MAIN CLAUSES (30 total) ----
+        # ISMS management-system requirements, Clauses 4-10. Not audited as pass/fail
+        # "controls" in the Annex A sense, but tracked the same way for evidence/status.
+        iso_clauses = [
+            # Clause 4 Context of the organization (4)
+            ("4.1", "Understanding the organization and its context", "Context of the organization"),
+            ("4.2", "Understanding the needs and expectations of interested parties", "Context of the organization"),
+            ("4.3", "Determining the scope of the information security management system", "Context of the organization"),
+            ("4.4", "Information security management system", "Context of the organization"),
+            # Clause 5 Leadership (3)
+            ("5.1", "Leadership and commitment", "Leadership"),
+            ("5.2", "Policy", "Leadership"),
+            ("5.3", "Organizational roles, responsibilities and authorities", "Leadership"),
+            # Clause 6 Planning (5)
+            ("6.1.1", "Actions to address risks and opportunities - General", "Planning"),
+            ("6.1.2", "Information security risk assessment", "Planning"),
+            ("6.1.3", "Information security risk treatment", "Planning"),
+            ("6.2", "Information security objectives and planning to achieve them", "Planning"),
+            ("6.3", "Planning of changes", "Planning"),
+            # Clause 7 Support (7)
+            ("7.1", "Resources", "Support"),
+            ("7.2", "Competence", "Support"),
+            ("7.3", "Awareness", "Support"),
+            ("7.4", "Communication", "Support"),
+            ("7.5.1", "Documented information - General", "Support"),
+            ("7.5.2", "Creating and updating documented information", "Support"),
+            ("7.5.3", "Control of documented information", "Support"),
+            # Clause 8 Operation (3)
+            ("8.1", "Operational planning and control", "Operation"),
+            ("8.2", "Information security risk assessment", "Operation"),
+            ("8.3", "Information security risk treatment", "Operation"),
+            # Clause 9 Performance evaluation (6)
+            ("9.1", "Monitoring, measurement, analysis and evaluation", "Performance evaluation"),
+            ("9.2.1", "Internal audit - General", "Performance evaluation"),
+            ("9.2.2", "Internal audit programme", "Performance evaluation"),
+            ("9.3.1", "Management review - General", "Performance evaluation"),
+            ("9.3.2", "Management review inputs", "Performance evaluation"),
+            ("9.3.3", "Management review results", "Performance evaluation"),
+            # Clause 10 Improvement (2)
+            ("10.1", "Continual improvement", "Improvement"),
+            ("10.2", "Nonconformity and corrective action", "Improvement"),
+        ]
+
+        for code, title, category in iso_clauses:
+            db.session.add(Control(
+                code=code, title=title, category=category,
+                status='Not Assessed', framework_id=iso27001.id
+            ))
 
         # ---- ISO 27001:2022 ANNEX A CONTROLS (93 total) ----
         # All controls start as 'Not Assessed' - status changes when evidence is uploaded
@@ -302,18 +352,19 @@ def seed_database():
         # backfill only covers days -14..-1, ending just before the real (currently
         # all-zero, freshly-seeded) state.
         rng = random.Random(42)
+        iso_total = len(iso_clauses) + len(iso_controls)
         for days_ago in range(14, 0, -1):
             snap_date = date.today() - timedelta(days=days_ago)
             score = min(38, 18 + (14 - days_ago) * 1.5 + rng.uniform(-2, 2))
-            passing = round(93 * score / 100)
+            passing = round(iso_total * score / 100)
             db.session.add(ComplianceSnapshot(
                 framework_id=iso27001.id,
                 score=round(score, 1),
                 passing=passing,
                 failing=rng.randint(2, 6),
-                not_assessed=93 - passing - rng.randint(2, 6),
+                not_assessed=iso_total - passing - rng.randint(2, 6),
                 not_applicable=0,
-                total_controls=93,
+                total_controls=iso_total,
                 snapshot_date=snap_date,
             ))
             db.session.add(DashboardSnapshot(
@@ -347,7 +398,7 @@ def seed_database():
         print("Database seeded successfully!")
         print(f"  Users: {User.query.count()}")
         print(f"  Frameworks: {Framework.query.count()}")
-        print(f"  Controls: {Control.query.count()} (ISO 27001 Annex A)")
+        print(f"  Controls: {Control.query.count()} (ISO 27001: {iso_total} + SOC 2: {len(soc2_controls)})")
         print(f"  Risks: 0 (add your own)")
         print(f"  Policies: 0 (add your own)")
         print(f"  Audits: 0 (add your own)")
@@ -361,5 +412,60 @@ def seed_database():
         print(f"  Activity Log: {ActivityLog.query.count()} (seeded history)")
 
 
+def seed_demo_assets():
+    """
+    Add a handful of demo assets across every Asset Management category.
+    Additive only (checks Asset.query.count() first) - safe to run against a
+    database that already has real data, unlike seed_database() which wipes everything.
+
+    Run: python -m app.seed assets
+    """
+    app = create_app()
+    with app.app_context():
+        if Asset.query.count() > 0:
+            print(f"Assets table already has {Asset.query.count()} row(s) - skipping demo seed.")
+            return
+
+        demo_assets = [
+            # (name, type, resource_id, cloud_provider, region, environment, classification, owner)
+            ("web-app-prod-01", "Compute Instances", "arn:aws:ec2:us-east-1:111122223333:instance/i-0abcd1234ef567890", "AWS", "us-east-1", "Production", "Confidential", "Neha Verma"),
+            ("api-gateway-prod-02", "Compute Instances", "arn:aws:ec2:ap-south-1:111122223333:instance/i-0fedcba9876543210", "AWS", "ap-south-1", "Production", "Confidential", "Neha Verma"),
+            ("eks-prod-cluster", "Container Platforms", "arn:aws:eks:us-east-1:111122223333:cluster/eks-prod-cluster", "AWS", "us-east-1", "Production", "Confidential", "Rohan Iyer"),
+            ("ecs-app-cluster", "Container Platforms", "arn:aws:ecs:us-east-1:111122223333:cluster/ecs-app-cluster", "AWS", "us-east-1", "Staging", "Internal", "Rohan Iyer"),
+            ("app-data-bucket-prod", "Storage & Databases", "arn:aws:s3:::app-data-bucket-prod", "AWS", "us-east-1", "Production", "Restricted", "Arjun Malhotra"),
+            ("prod-postgres-db", "Storage & Databases", "arn:aws:rds:us-east-1:111122223333:db:prod-postgres-db", "AWS", "us-east-1", "Production", "Restricted", "Arjun Malhotra"),
+            ("prod-vpc-main", "Virtual Network (VPCs)", "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-0a1b2c3d4e5f60789", "AWS", "us-east-1", "Production", "Internal", "Neha Verma"),
+            ("staging-vpc", "Virtual Network (VPCs)", "arn:aws:ec2:ap-south-1:111122223333:vpc/vpc-0f9e8d7c6b5a41230", "AWS", "ap-south-1", "Staging", "Internal", "Neha Verma"),
+            ("evidence-processor-fn", "Serverless Functions", "arn:aws:lambda:us-east-1:111122223333:function:evidence-processor-fn", "AWS", "us-east-1", "Production", "Internal", "Farhan Ali"),
+            ("webhook-handler-fn", "Serverless Functions", "arn:aws:lambda:us-east-1:111122223333:function:webhook-handler-fn", "AWS", "us-east-1", "Production", "Internal", "Farhan Ali"),
+            ("cloudtrail-org-logs", "Monitoring & Logging", "arn:aws:cloudtrail:us-east-1:111122223333:trail/org-logs", "AWS", "us-east-1", "Production", "Internal", "Rohan Iyer"),
+            ("app-log-group", "Monitoring & Logging", "arn:aws:logs:us-east-1:111122223333:log-group:/app/prod", "AWS", "us-east-1", "Production", "Internal", "Rohan Iyer"),
+            ("prod-data-encryption-key", "Key Management", "arn:aws:kms:us-east-1:111122223333:key/1a2b3c4d-5e6f-7890-abcd-ef1234567890", "AWS", "us-east-1", "Production", "Restricted", "Rohan Iyer"),
+            ("backup-encryption-key", "Key Management", "arn:aws:kms:us-east-1:111122223333:key/2b3c4d5e-6f78-9012-bcde-f12345678901", "AWS", "us-east-1", "Production", "Restricted", "Rohan Iyer"),
+            ("iPhone-13-Aditi-Rao", "Mobile Devices", "MDM-DEV-00291", "N/A", "", "Corporate", "Confidential", "Aditi Rao"),
+            ("MacBook-Pro-Karan-Mehta", "Mobile Devices", "MDM-DEV-00417", "N/A", "", "Corporate", "Confidential", "Karan Mehta"),
+            ("aditi.rao@midevops.io", "Identity Users", "arn:aws:iam::111122223333:user/aditi.rao", "AWS", "", "Production", "Internal", "Neha Verma"),
+            ("svc-ci-deploy", "Identity Users", "arn:aws:iam::111122223333:user/svc-ci-deploy", "AWS", "", "Production", "Internal", "Karan Mehta"),
+            ("ReadOnlyAuditorRole", "Identity Roles", "arn:aws:iam::111122223333:role/ReadOnlyAuditorRole", "AWS", "", "Production", "Internal", "Rohan Iyer"),
+            ("EKSNodeInstanceRole", "Identity Roles", "arn:aws:iam::111122223333:role/EKSNodeInstanceRole", "AWS", "", "Production", "Internal", "Rohan Iyer"),
+            ("Engineering-Admins", "Identity Groups", "arn:aws:iam::111122223333:group/Engineering-Admins", "AWS", "", "Production", "Internal", "Neha Verma"),
+            ("Security-ReadOnly", "Identity Groups", "arn:aws:iam::111122223333:group/Security-ReadOnly", "AWS", "", "Production", "Internal", "Rohan Iyer"),
+            ("migrc-platform", "Code Repo", "github.com/midevops/migrc-platform", "GitHub", "", "Production", "Internal", "Karan Mehta"),
+            ("infra-terraform", "Code Repo", "github.com/midevops/infra-terraform", "GitHub", "", "Production", "Internal", "Farhan Ali"),
+        ]
+
+        for name, atype, resource_id, cloud_provider, region, environment, classification, owner in demo_assets:
+            db.session.add(Asset(
+                name=name, type=atype, resource_id=resource_id, cloud_provider=cloud_provider,
+                region=region, environment=environment, classification=classification,
+                owner=owner, status='Active',
+            ))
+        db.session.commit()
+        print(f"Seeded {len(demo_assets)} demo assets across {len(set(a[1] for a in demo_assets))} categories.")
+
+
 if __name__ == '__main__':
-    seed_database()
+    if len(sys.argv) > 1 and sys.argv[1] == 'assets':
+        seed_demo_assets()
+    else:
+        seed_database()

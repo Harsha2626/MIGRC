@@ -56,8 +56,19 @@
             {% elif category == 'People' %}<i class="fas fa-users" style="margin-right:8px;color:var(--accent-warning);"></i>
             {% elif category == 'Physical' %}<i class="fas fa-building-shield" style="margin-right:8px;color:var(--accent-success);"></i>
             {% elif category == 'Technological' %}<i class="fas fa-microchip" style="margin-right:8px;color:var(--accent-danger);"></i>
+            {% elif category == 'Context of the organization' %}<i class="fas fa-compass" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'Leadership' %}<i class="fas fa-crown" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'Planning' %}<i class="fas fa-list-check" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'Support' %}<i class="fas fa-hands-helping" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'Operation' %}<i class="fas fa-gears" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'Performance evaluation' %}<i class="fas fa-chart-line" style="margin-right:8px;color:var(--accent-primary);"></i>
+            {% elif category == 'Improvement' %}<i class="fas fa-arrow-trend-up" style="margin-right:8px;color:var(--accent-primary);"></i>
             {% endif %}
+            {% if category in ['Organizational', 'People', 'Physical', 'Technological'] %}
             {{ category }} Controls ({{ cat_controls|length }})
+            {% else %}
+            {{ category }} ({{ cat_controls|length }})
+            {% endif %}
         </h3>
         <i class="fas fa-chevron-down category-toggle-chevron" style="transition:transform 0.2s;color:var(--text-secondary);"></i>
     </div>

@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response
 from flask_login import login_required, current_user
@@ -10,6 +11,11 @@ from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_rea
 from app.utils import allowed_file, require_permission
 
 compliance_bp = Blueprint('compliance', __name__)
+
+
+def _code_sort_key(code):
+    """Natural sort so '4.1' < '4.2' < ... < '10.2' < 'A.5.1' < ... < 'A.5.10' < 'A.5.11'."""
+    return [int(part) if part.isdigit() else part for part in re.split(r'(\d+)', code or '')]
 
 
 @compliance_bp.route('/compliance')
@@ -60,7 +66,8 @@ def add_framework():
 @login_required
 def framework_detail(framework_id):
     fw = Framework.query.get_or_404(framework_id)
-    controls = Control.query.filter_by(framework_id=fw.id).order_by(Control.code).all()
+    controls = Control.query.filter_by(framework_id=fw.id).all()
+    controls.sort(key=lambda c: _code_sort_key(c.code))
 
     # Group controls by category
     categories = {}
@@ -109,7 +116,8 @@ def control_detail(framework_id, control_id):
         })
 
     # Get all controls in this framework for multi-map dropdown
-    all_controls = Control.query.filter_by(framework_id=fw.id).order_by(Control.code).all()
+    all_controls = Control.query.filter_by(framework_id=fw.id).all()
+    all_controls.sort(key=lambda c: _code_sort_key(c.code))
 
     return render_template('control_detail.html', page='compliance',
         framework=fw, control=ctrl, evidence_list=evidence_list,

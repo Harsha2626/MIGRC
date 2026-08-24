@@ -3,10 +3,34 @@
 {% block breadcrumb %}<span>Asset Management</span>{% endblock %}
 
 {% block content %}
+{% set type_icons = {
+    'Compute Instances': 'server',
+    'Container Platforms': 'box',
+    'Storage & Databases': 'database',
+    'Virtual Network (VPCs)': 'network-wired',
+    'Serverless Functions': 'bolt',
+    'Monitoring & Logging': 'chart-line',
+    'Key Management': 'key',
+    'Mobile Devices': 'mobile-screen-button',
+    'Identity Users': 'user',
+    'Identity Roles': 'user-tag',
+    'Identity Groups': 'users',
+    'Code Repo': 'code-branch',
+} %}
+{% set optional_columns = [
+    ('source', 'Source', true),
+    ('risk', 'Risk Associated', true),
+    ('region', 'Region', true),
+    ('owner', 'Owner', false),
+    ('environment', 'Environment', false),
+    ('classification', 'Classification', false),
+    ('status', 'Status', false),
+] %}
+
 <div class="page-header">
     <div>
         <h1>Asset Management</h1>
-        <p>Track and secure all critical organizational assets</p>
+        <p>Track and secure all critical organizational assets across your cloud and identity providers</p>
     </div>
     <div class="page-actions">
         <a href="/assets/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
@@ -16,116 +40,154 @@
     </div>
 </div>
 
-<!-- Stats -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-server"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Total Assets</div>
-            <div class="stat-value">{{ assets|length }}</div>
+<div class="settings-grid" id="assetTypesGrid">
+    <!-- Asset Types Nav -->
+    <div class="card" style="height:fit-content;" id="assetTypesNavCard">
+        <div class="card-header" style="padding:14px 16px;">
+            <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Asset Types</h3>
+            <i class="fas fa-angles-left" style="cursor:pointer;color:var(--text-secondary);font-size:12px;" title="Collapse" onclick="toggleAssetTypesNav()"></i>
+        </div>
+        <div class="card-body" style="padding:12px;" id="assetTypesNavBody">
+            <div class="settings-nav" id="assetTypesNav">
+                {% for t in asset_types %}
+                <a href="{{ url_for('assets.assets', type=t) }}" class="settings-nav-item {% if t == selected_type %}active{% endif %}" style="text-decoration:none;justify-content:space-between;">
+                    <span><i class="fas fa-{{ type_icons[t] }}" style="width:16px;"></i> {{ t }}</span>
+                    <span class="badge badge-neutral">{{ type_counts[t] }}</span>
+                </a>
+                {% endfor %}
+            </div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-lock"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Confidential</div>
-            <div class="stat-value">{{ assets|selectattr('classification', 'equalto', 'Confidential')|list|length }}</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-cloud"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Cloud (AWS)</div>
-            <div class="stat-value">{{ assets|selectattr('cloud_provider', 'equalto', 'AWS')|list|length }}</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-shield-halved"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Restricted</div>
-            <div class="stat-value">{{ assets|selectattr('classification', 'equalto', 'Restricted')|list|length }}</div>
-        </div>
-    </div>
-</div>
 
-<!-- Toolbar -->
-<div class="toolbar">
-    <div class="search-input-wrapper">
-        <i class="fas fa-search"></i>
-        <input type="text" class="filter-input" placeholder="Search assets..." id="assetSearch" oninput="filterAssets()">
-    </div>
-    <select class="filter-select" id="assetTypeFilter" onchange="filterAssets()">
-        <option value="">All Types</option>
-        <option value="Database">Database</option>
-        <option value="Compute">Compute</option>
-        <option value="Storage">Storage</option>
-        <option value="Network">Network</option>
-        <option value="Endpoint">Endpoint</option>
-    </select>
-    <select class="filter-select" id="assetClassFilter" onchange="filterAssets()">
-        <option value="">All Classifications</option>
-        <option value="Restricted">Restricted</option>
-        <option value="Confidential">Confidential</option>
-        <option value="Internal">Internal</option>
-        <option value="Public">Public</option>
-    </select>
-</div>
+    <!-- Asset Table Panel -->
+    <div class="card">
+        <div class="card-header">
+            <h3>{{ selected_type }} <span class="badge badge-neutral">{{ assets|length }}</span></h3>
+        </div>
+        <div class="card-body" style="padding:16px;">
+            <div class="toolbar" style="margin-bottom:0;">
+                <div class="search-input-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" class="filter-input" placeholder="Search by text" id="assetSearch" oninput="applyAssetFilters()">
+                </div>
 
-<!-- Asset Table -->
-<div class="card">
-    <div class="card-body no-padding">
-        <div class="table-container">
-            <table id="assetTable">
-                <thead>
-                    <tr>
-                        <th>Asset Name</th>
-                        <th>Type</th>
-                        <th>Environment</th>
-                        <th>Classification</th>
-                        <th>Owner</th>
-                        <th>Cloud Provider</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for a in assets %}
-                    <tr data-type="{{ a.type }}" data-class="{{ a.classification }}">
-                        <td>
-                            <div class="flex-center gap-8">
-                                <div class="stat-icon {% if a.type == 'Database' %}blue{% elif a.type == 'Compute' %}green{% elif a.type == 'Storage' %}purple{% elif a.type == 'Network' %}orange{% else %}red{% endif %}" style="width:32px;height:32px;font-size:13px;">
-                                    <i class="fas fa-{% if a.type == 'Database' %}database{% elif a.type == 'Compute' %}microchip{% elif a.type == 'Storage' %}hard-drive{% elif a.type == 'Network' %}network-wired{% else %}laptop{% endif %}"></i>
-                                </div>
-                                <span class="font-semibold">{{ a.name }}</span>
+                <div class="dropdown-panel-wrapper">
+                    <button class="btn btn-secondary" onclick="toggleDropdownPanel('filtersPanel')"><i class="fas fa-filter"></i> More Filters</button>
+                    <div class="dropdown-panel" id="filtersPanel">
+                        <div class="dropdown-panel-grid">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label style="font-size:11px;">Region</label>
+                                <select class="form-control" id="assetRegionFilter" onchange="applyAssetFilters()">
+                                    <option value="">All Regions</option>
+                                    {% for r in regions %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                                </select>
                             </div>
-                        </td>
-                        <td><span class="badge badge-neutral">{{ a.type }}</span></td>
-                        <td>{{ a.environment }}</td>
-                        <td>
-                            {% if a.classification == 'Restricted' %}<span class="badge badge-danger">{{ a.classification }}</span>
-                            {% elif a.classification == 'Confidential' %}<span class="badge badge-warning">{{ a.classification }}</span>
-                            {% else %}<span class="badge badge-info">{{ a.classification }}</span>{% endif %}
-                        </td>
-                        <td>{{ a.owner }}</td>
-                        <td>{{ a.cloud_provider }}</td>
-                        <td><span class="badge badge-success">{{ a.status }}</span></td>
-                        <td>
-                            <div class="flex gap-8">
-                                {% if current_user.can_write %}
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditAssetModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
-                                {% endif %}
-                                {% if current_user.can_delete %}
-                                <form method="POST" action="{{ url_for('assets.delete_asset', asset_id=a.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ a.name }}?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
-                                </form>
-                                {% endif %}
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label style="font-size:11px;">Source</label>
+                                <select class="form-control" id="assetSourceFilter" onchange="applyAssetFilters()">
+                                    <option value="">All Sources</option>
+                                    {% for s in sources %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                                </select>
                             </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-secondary btn-icon" title="Refresh" onclick="window.location.reload()"><i class="fas fa-rotate"></i></button>
+
+                <div class="dropdown-panel-wrapper" style="margin-left:auto;">
+                    <button class="btn btn-secondary" onclick="toggleDropdownPanel('columnsPanel')">Columns <span class="badge badge-neutral" id="columnsCountBadge">3</span> <i class="fas fa-chevron-down" style="font-size:10px;margin-left:2px;"></i></button>
+                    <div class="dropdown-panel" id="columnsPanel">
+                        {% for key, label, default in optional_columns %}
+                        <label class="dropdown-panel-item">
+                            <input type="checkbox" class="asset-col-toggle" data-col="{{ key }}" {% if default %}checked{% endif %} onchange="toggleAssetColumn(this)">
+                            {{ label }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <form id="bulkDeleteForm" method="POST" action="{{ url_for('assets.bulk_delete_assets') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="type" value="{{ selected_type }}">
+                <div id="bulkActionBar" style="display:none;align-items:center;gap:12px;margin-top:12px;padding:8px 12px;background:var(--accent-primary-light);border-radius:var(--radius-md);">
+                    <span style="font-size:13px;font-weight:500;color:var(--accent-primary);"><span id="bulkSelectedCount">0</span> selected</span>
+                    {% if current_user.can_delete %}
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected assets?');"><i class="fas fa-trash"></i> Delete Selected</button>
+                    {% endif %}
+                </div>
+
+                <div class="table-container" style="margin-top:12px;">
+                    <table id="assetTable">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;"><input type="checkbox" id="assetSelectAll" onchange="toggleSelectAllAssets(this)"></th>
+                                <th>Resource ID</th>
+                                <th>Resource Name</th>
+                                <th data-col="source">Source</th>
+                                <th data-col="risk">Risk Associated</th>
+                                <th data-col="region">Region</th>
+                                <th data-col="owner" style="display:none;">Owner</th>
+                                <th data-col="environment" style="display:none;">Environment</th>
+                                <th data-col="classification" style="display:none;">Classification</th>
+                                <th data-col="status" style="display:none;">Status</th>
+                                <th style="width:90px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in assets %}
+                            <tr data-region="{{ a.region or '' }}" data-source="{{ a.cloud_provider or '' }}">
+                                <td><input type="checkbox" class="asset-row-checkbox" name="asset_ids" value="{{ a.id }}" onchange="updateBulkBar()"></td>
+                                <td><span style="font-family:monospace;font-size:12px;color:var(--accent-primary);">{{ a.resource_id or '—' }}</span></td>
+                                <td class="font-semibold">{{ a.name }}</td>
+                                <td data-col="source">
+                                    {% if a.cloud_provider == 'AWS' %}<i class="fab fa-aws" title="AWS"></i>
+                                    {% elif a.cloud_provider == 'Azure' %}<i class="fab fa-microsoft" title="Azure"></i>
+                                    {% elif a.cloud_provider == 'GCP' %}<i class="fab fa-google" title="GCP"></i>
+                                    {% elif a.cloud_provider == 'GitHub' %}<i class="fab fa-github" title="GitHub"></i>
+                                    {% else %}<i class="fas fa-minus" style="color:var(--text-muted);"></i>{% endif %}
+                                    {{ a.cloud_provider or '—' }}
+                                </td>
+                                <td data-col="risk">{{ a.risk_associated or '—' }}</td>
+                                <td data-col="region">{{ a.region or '—' }}</td>
+                                <td data-col="owner" style="display:none;">{{ a.owner or '—' }}</td>
+                                <td data-col="environment" style="display:none;">{{ a.environment or '—' }}</td>
+                                <td data-col="classification" style="display:none;">{{ a.classification or '—' }}</td>
+                                <td data-col="status" style="display:none;"><span class="badge badge-success">{{ a.status }}</span></td>
+                                <td>
+                                    <div class="flex gap-8">
+                                        {% if current_user.can_write %}
+                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditAssetModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Details" onclick="showAssetInfoModal({{ loop.index0 }})"><i class="fas fa-circle-info"></i></button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--text-muted);">No assets in this category yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+
+            <div class="flex-between" style="margin-top:16px;flex-wrap:wrap;gap:12px;">
+                <div class="flex gap-8" style="align-items:center;">
+                    <button class="btn btn-sm btn-secondary btn-icon" id="assetPrevBtn" onclick="changeAssetPage(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <button class="btn btn-sm btn-secondary btn-icon" id="assetNextBtn" onclick="changeAssetPage(1)"><i class="fas fa-chevron-right"></i></button>
+                    <span class="text-sm text-muted" id="assetPageInfo">0-0/0</span>
+                </div>
+                <div class="flex gap-8" style="align-items:center;">
+                    <span class="text-sm text-muted">Show</span>
+                    <select class="filter-select" style="padding:6px 10px;" onchange="changeAssetPerPage(this.value)">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+                    <span class="text-sm text-muted">per page</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -133,38 +195,143 @@
 
 {% block scripts %}
 <script>
-function filterAssets() {
-    const search = document.getElementById('assetSearch').value.toLowerCase();
-    const type = document.getElementById('assetTypeFilter').value;
-    const cls = document.getElementById('assetClassFilter').value;
-    document.querySelectorAll('#assetTable tbody tr').forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchType = !type || row.dataset.type === type;
-        const matchClass = !cls || row.dataset.class === cls;
-        row.style.display = matchSearch && matchType && matchClass ? '' : 'none';
-    });
-}
-
 const ASSETS = {{ asset_dicts|tojson }};
-const ASSET_TYPES = ['Database', 'Compute', 'Storage', 'Network', 'Endpoint'];
+const ASSET_TYPES = {{ asset_types|tojson }};
 const ASSET_ENVIRONMENTS = ['Production', 'Staging', 'Development', 'DR', 'Corporate'];
 const ASSET_CLASSIFICATIONS = ['Restricted', 'Confidential', 'Internal', 'Public'];
-const ASSET_CLOUD_PROVIDERS = ['AWS', 'Azure', 'GCP', 'N/A'];
+const ASSET_CLOUD_PROVIDERS = ['AWS', 'Azure', 'GCP', 'GitHub', 'N/A'];
+const SELECTED_TYPE = {{ selected_type|tojson }};
 
+// ---- Dropdown panels (More Filters / Columns) ----
+function toggleDropdownPanel(id) {
+    document.querySelectorAll('.dropdown-panel').forEach(p => { if (p.id !== id) p.classList.remove('open'); });
+    document.getElementById(id).classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown-panel-wrapper')) {
+        document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.remove('open'));
+    }
+});
+
+// ---- Column visibility ----
+function toggleAssetColumn(checkbox) {
+    const col = checkbox.dataset.col;
+    document.querySelectorAll(`[data-col="${col}"]`).forEach(el => el.style.display = checkbox.checked ? '' : 'none');
+    document.getElementById('columnsCountBadge').textContent = document.querySelectorAll('.asset-col-toggle:checked').length;
+}
+
+// ---- Collapse Asset Types nav ----
+function toggleAssetTypesNav() {
+    const grid = document.getElementById('assetTypesGrid');
+    grid.classList.toggle('nav-collapsed');
+    document.getElementById('assetTypesNavBody').style.display = grid.classList.contains('nav-collapsed') ? 'none' : '';
+}
+
+// ---- Bulk select ----
+function toggleSelectAllAssets(checkbox) {
+    document.querySelectorAll('#assetTable tbody tr').forEach(row => {
+        if (row.style.display !== 'none') {
+            const cb = row.querySelector('.asset-row-checkbox');
+            if (cb) cb.checked = checkbox.checked;
+        }
+    });
+    updateBulkBar();
+}
+function updateBulkBar() {
+    const checked = document.querySelectorAll('.asset-row-checkbox:checked').length;
+    document.getElementById('bulkActionBar').style.display = checked > 0 ? 'flex' : 'none';
+    document.getElementById('bulkSelectedCount').textContent = checked;
+}
+
+// ---- Search / filter / pagination ----
+let assetPage = 1;
+let assetPerPage = 10;
+
+function getAssetRows() {
+    return Array.from(document.querySelectorAll('#assetTable tbody tr')).filter(r => r.querySelector('.asset-row-checkbox'));
+}
+
+function applyAssetFilters() {
+    const search = document.getElementById('assetSearch').value.toLowerCase();
+    const region = document.getElementById('assetRegionFilter') ? document.getElementById('assetRegionFilter').value : '';
+    const source = document.getElementById('assetSourceFilter') ? document.getElementById('assetSourceFilter').value : '';
+    getAssetRows().forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchRegion = !region || row.dataset.region === region;
+        const matchSource = !source || row.dataset.source === source;
+        row.dataset.filteredOut = (!(matchSearch && matchRegion && matchSource)).toString();
+    });
+    assetPage = 1;
+    renderAssetPage();
+}
+
+function renderAssetPage() {
+    const rows = getAssetRows();
+    const visible = rows.filter(r => r.dataset.filteredOut !== 'true');
+    const total = visible.length;
+    const totalPages = Math.max(1, Math.ceil(total / assetPerPage));
+    if (assetPage > totalPages) assetPage = totalPages;
+
+    rows.forEach(r => r.style.display = 'none');
+    visible.forEach((r, i) => {
+        const page = Math.floor(i / assetPerPage) + 1;
+        if (page === assetPage) r.style.display = '';
+    });
+
+    const start = total === 0 ? 0 : (assetPage - 1) * assetPerPage + 1;
+    const end = Math.min(assetPage * assetPerPage, total);
+    document.getElementById('assetPageInfo').textContent = `${start}-${end}/${total}`;
+    document.getElementById('assetPrevBtn').disabled = assetPage <= 1;
+    document.getElementById('assetNextBtn').disabled = assetPage >= totalPages;
+    updateBulkBar();
+}
+
+function changeAssetPage(delta) {
+    assetPage += delta;
+    renderAssetPage();
+}
+
+function changeAssetPerPage(val) {
+    assetPerPage = parseInt(val, 10);
+    assetPage = 1;
+    renderAssetPage();
+}
+
+renderAssetPage();
+
+// ---- Add / Edit / Info modals ----
 function assetFormFields(a) {
     a = a || {};
     return `
         <div class="form-group">
-            <label>Asset Name</label>
-            <input type="text" name="name" class="form-control" placeholder="Enter asset name" value="${a.name || ''}" required>
+            <label>Resource Name</label>
+            <input type="text" name="name" class="form-control" placeholder="Enter resource name" value="${a.name || ''}" required>
+        </div>
+        <div class="form-group">
+            <label>Asset Type</label>
+            <select name="type" class="form-control">
+                ${ASSET_TYPES.map(t => `<option ${t === (a.type || SELECTED_TYPE) ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="form-group">
-                <label>Type</label>
-                <select name="type" class="form-control">
-                    ${ASSET_TYPES.map(t => `<option ${t === a.type ? 'selected' : ''}>${t}</option>`).join('')}
+                <label>Resource ID / ARN</label>
+                <input type="text" name="resource_id" class="form-control" placeholder="arn:aws:..." value="${a.resource_id || ''}">
+            </div>
+            <div class="form-group">
+                <label>Region</label>
+                <input type="text" name="region" class="form-control" placeholder="e.g. ap-south-1" value="${a.region || ''}">
+            </div>
+            <div class="form-group">
+                <label>Source</label>
+                <select name="cloud_provider" class="form-control">
+                    ${ASSET_CLOUD_PROVIDERS.map(c => `<option ${c === a.cloud_provider ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
+            </div>
+            <div class="form-group">
+                <label>Risk Associated</label>
+                <input type="text" name="risk_associated" class="form-control" placeholder="Optional" value="${a.risk_associated || ''}">
             </div>
             <div class="form-group">
                 <label>Environment</label>
@@ -182,12 +349,6 @@ function assetFormFields(a) {
                 <label>Owner</label>
                 <input type="text" name="owner" class="form-control" placeholder="Asset owner" value="${a.owner || ''}">
             </div>
-        </div>
-        <div class="form-group">
-            <label>Cloud Provider</label>
-            <select name="cloud_provider" class="form-control">
-                ${ASSET_CLOUD_PROVIDERS.map(c => `<option ${c === a.cloud_provider ? 'selected' : ''}>${c}</option>`).join('')}
-            </select>
         </div>
     `;
 }
@@ -209,6 +370,23 @@ function showEditAssetModal(idx) {
             ${assetFormFields(a)}
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Save Changes</button>');
+}
+
+function showAssetInfoModal(idx) {
+    const a = ASSETS[idx];
+    openModal(a.name, `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;">
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Resource ID</div><div style="font-family:monospace;word-break:break-all;">${a.resource_id || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Type</div><div>${a.type || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Source</div><div>${a.cloud_provider || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Region</div><div>${a.region || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Risk Associated</div><div>${a.risk_associated || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Status</div><div>${a.status || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Environment</div><div>${a.environment || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Classification</div><div>${a.classification || '—'}</div></div>
+            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Owner</div><div>${a.owner || '—'}</div></div>
+        </div>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Close</button>');
 }
 </script>
 {% endblock %}

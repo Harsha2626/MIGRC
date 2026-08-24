@@ -451,6 +451,43 @@ a:hover { text-decoration: underline; }
 .notification-dropdown-footer:hover { background: var(--bg-tertiary); }
 
 /* ============================================================
+   GENERIC DROPDOWN PANEL (Columns / More Filters popovers)
+   ============================================================ */
+.dropdown-panel-wrapper { position: relative; display: inline-block; }
+.dropdown-panel {
+    display: none;
+    position: absolute;
+    top: 44px;
+    right: 0;
+    min-width: 220px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    z-index: 50;
+}
+.dropdown-panel.open { display: block; }
+.dropdown-panel-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.dropdown-panel-item:hover { background: var(--bg-tertiary); }
+.dropdown-panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 4px;
+    min-width: 320px;
+}
+
+/* ============================================================
    PAGE HEADER
    ============================================================ */
 .page-header {

@@ -535,6 +535,9 @@ class Asset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     type = db.Column(db.String(50))
+    resource_id = db.Column(db.String(300))
+    region = db.Column(db.String(50))
+    risk_associated = db.Column(db.String(50))
     environment = db.Column(db.String(50))
     owner = db.Column(db.String(100))
     classification = db.Column(db.String(30))
@@ -548,6 +551,9 @@ class Asset(db.Model):
             'id': self.id,
             'name': self.name,
             'type': self.type,
+            'resource_id': self.resource_id,
+            'region': self.region,
+            'risk_associated': self.risk_associated,
             'environment': self.environment,
             'owner': self.owner,
             'classification': self.classification,
