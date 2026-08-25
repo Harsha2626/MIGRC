@@ -1,6 +1,5 @@
 /* ============================================================
    MIGRC - Compliance Management Platform Styles
-   Inspired by Scrut.io's clean, modern GRC interface
    ============================================================ */
 
 /* CSS Variables - Light Theme */
@@ -845,6 +844,148 @@ tbody tr:last-child td { border-bottom: none; }
 .fw-stat .dot.green { background: var(--accent-success); }
 .fw-stat .dot.red { background: var(--accent-danger); }
 .fw-stat .dot.gray { background: var(--text-muted); }
+
+/* ============================================================
+   REUSABLE STATUS DOT (Effort Estimate, legends, etc.)
+   ============================================================ */
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.dot.green { background: var(--accent-success); }
+.dot.orange { background: var(--accent-warning); }
+.dot.red { background: var(--accent-danger); }
+.dot.gray { background: var(--text-muted); }
+
+/* ============================================================
+   LOCKED / DISABLED FEATURE CARD (AI panels, JIRA tab, etc.)
+   ============================================================ */
+.locked-card {
+    text-align: center;
+    padding: 32px 20px;
+    color: var(--text-muted);
+}
+.locked-card .locked-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: var(--text-muted);
+    margin: 0 auto 12px;
+}
+.locked-card h4 {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.locked-card p {
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+/* Compact horizontal variant of .locked-card, for banner-style placements */
+.locked-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+}
+.locked-banner .locked-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+    margin: 0;
+    flex-shrink: 0;
+}
+.locked-banner .locked-banner-body { flex: 1; }
+.locked-banner h4 { font-size: 14px; color: var(--text-primary); margin-bottom: 2px; }
+.locked-banner p { font-size: 12px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ============================================================
+   LIFECYCLE STEPPER (policy / workflow progress tracks)
+   ============================================================ */
+.lifecycle-track {
+    display: flex;
+    align-items: flex-start;
+    margin: 4px 0 8px;
+}
+.lifecycle-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    padding-top: 6px;
+}
+.lifecycle-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 11px;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+    background: var(--border-color);
+    z-index: 0;
+}
+.lifecycle-step.done:not(:last-child)::after { background: var(--accent-primary); }
+.lifecycle-step .step-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    z-index: 1;
+}
+.lifecycle-step.done .step-dot { background: var(--accent-primary); border-color: var(--accent-primary); }
+.lifecycle-step.current .step-dot { background: var(--accent-primary); border-color: var(--accent-primary); box-shadow: 0 0 0 4px var(--accent-primary-light); }
+.lifecycle-step .step-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    text-align: center;
+    line-height: 1.3;
+}
+.lifecycle-step.done .step-label, .lifecycle-step.current .step-label { color: var(--text-primary); font-weight: 600; }
+
+/* Hover-lift option cards ("Start Your Policy" style pickers) */
+.option-card {
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+}
+.option-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--accent-primary);
+}
+.option-card .option-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    margin: 0 auto 12px;
+}
+
+/* Icon-led metadata chip (policy detail info grid) */
+.meta-chip-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 8px;
+}
+.meta-chip-label i { font-size: 11px; color: var(--accent-primary); }
 
 /* ============================================================
    RISK MATRIX (5x5 Heatmap)

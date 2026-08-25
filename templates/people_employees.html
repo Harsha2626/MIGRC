@@ -186,7 +186,7 @@
                         <td>
                             <div class="flex gap-8">
                                 <button class="btn btn-sm btn-secondary btn-icon" title="Send Reminder" onclick="showToast('Reminder sent to {{ e.name }}','info')"><i class="fas fa-paper-plane"></i></button>
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditEmployeeModal({{ e.id }}, '{{ e.name }}', '{{ e.status }}', '{{ e.department or '' }}')"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditEmployeeModal({{ e.id }}, '{{ e.name }}', '{{ e.status }}', '{{ e.department or '' }}', {{ e.campaign_ids|tojson }})"><i class="fas fa-pen"></i></button>
                                 <form method="POST" action="{{ url_for('people.delete_employee', employee_id=e.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ e.name }}?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Remove"><i class="fas fa-trash"></i></button>
@@ -235,6 +235,22 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 {% endif %}
 
+const CAMPAIGNS = {{ campaigns_json|tojson }};
+
+function groupCheckboxes(selectedIds) {
+    selectedIds = selectedIds || [];
+    if (!CAMPAIGNS.length) {
+        return '<p class="text-sm text-muted">No groups yet. Create one under People &rarr; Training Campaigns first.</p>';
+    }
+    return `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-md);padding:8px 12px;">` +
+        CAMPAIGNS.map(c => `
+            <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;">
+                <input type="checkbox" name="campaign_ids" value="${c.id}" ${selectedIds.includes(c.id) ? 'checked' : ''}>
+                ${c.name}
+            </label>
+        `).join('') + `</div>`;
+}
+
 function showAddEmployeeModal() {
     openModal('Add Employee', `
         <form id="addEmployeeForm" method="POST" action="{{ url_for('people.create_employee') }}">
@@ -261,11 +277,15 @@ function showAddEmployeeModal() {
                     </select>
                 </div>
             </div>
+            <div class="form-group">
+                <label>Groups</label>
+                ${groupCheckboxes()}
+            </div>
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'addEmployeeForm\').submit()">Add Employee</button>');
 }
 
-function showEditEmployeeModal(id, name, status, department) {
+function showEditEmployeeModal(id, name, status, department, campaignIds) {
     openModal('Edit ' + name, `
         <form id="editEmployeeForm" method="POST" action="/people/employees/${id}/edit">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -281,6 +301,10 @@ function showEditEmployeeModal(id, name, status, department) {
             <div class="form-group">
                 <label>Department</label>
                 <input type="text" name="department" class="form-control" value="${department}">
+            </div>
+            <div class="form-group">
+                <label>Groups</label>
+                ${groupCheckboxes(campaignIds)}
             </div>
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'editEmployeeForm\').submit()">Save</button>');

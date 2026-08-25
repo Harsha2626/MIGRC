@@ -202,16 +202,7 @@ const ASSET_CLASSIFICATIONS = ['Restricted', 'Confidential', 'Internal', 'Public
 const ASSET_CLOUD_PROVIDERS = ['AWS', 'Azure', 'GCP', 'GitHub', 'N/A'];
 const SELECTED_TYPE = {{ selected_type|tojson }};
 
-// ---- Dropdown panels (More Filters / Columns) ----
-function toggleDropdownPanel(id) {
-    document.querySelectorAll('.dropdown-panel').forEach(p => { if (p.id !== id) p.classList.remove('open'); });
-    document.getElementById(id).classList.toggle('open');
-}
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.dropdown-panel-wrapper')) {
-        document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.remove('open'));
-    }
-});
+// toggleDropdownPanel() and its document click-away listener now live in static/js/app.js (shared across pages).
 
 // ---- Column visibility ----
 function toggleAssetColumn(checkbox) {

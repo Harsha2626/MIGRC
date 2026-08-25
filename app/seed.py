@@ -8,6 +8,7 @@ start empty - data should be added by the user through the application.
 
 Run: python -m app.seed
 """
+import os
 import sys
 import random
 from datetime import date, datetime, timedelta
@@ -16,6 +17,7 @@ from app.models import (
     db, User, Framework, Control, Vendor, Employee, TrainingCampaign,
     TrainingCampaignEnrollment, EmployeeAccess, AccessReview,
     ComplianceSnapshot, DashboardSnapshot, ActivityLog, Asset,
+    Policy,
 )
 
 
@@ -464,8 +466,49 @@ def seed_demo_assets():
         print(f"Seeded {len(demo_assets)} demo assets across {len(set(a[1] for a in demo_assets))} categories.")
 
 
+def seed_demo_policies():
+    """
+    Add a handful of demo policies spanning every status and content-state
+    Adds exactly one policy (Information Security Policy, linked to ISO 27001:2022)
+    so the Policies module isn't empty, without cluttering the app with a large
+    dummy dataset.
+
+    Additive only (checks Policy.query.count() first) - safe to run against a
+    database that already has real data, unlike seed_database() which wipes everything.
+
+    Run: python -m app.seed policies
+    """
+    app = create_app()
+    with app.app_context():
+        if Policy.query.count() > 0:
+            print(f"Policies table already has {Policy.query.count()} row(s) - skipping demo seed.")
+            return
+
+        admin = User.query.filter_by(email='harsha@migrc.com').first() or User.query.first()
+        today = date.today()
+
+        policy = Policy(
+            name='Information Security Policy', version='1.0',
+            owner=admin.name if admin else 'Compliance Team',
+            status='Published', framework='ISO 27001:2022', department='Security',
+            effort_estimate='High', recurrence='Annually', entities='Organization Wide',
+            review_cycle_days=365,
+            last_reviewed=(today - timedelta(days=345)).strftime('%Y-%m-%d'),
+            next_review=(today + timedelta(days=20)).strftime('%Y-%m-%d'),
+            requirement_text='Describes information security policy requirements and how they are enforced across the organization.',
+            content='# Information Security Policy\n\nThis is placeholder policy content for demo purposes.\n\n## Purpose\n\nTo define information security policy for ISO 27001:2022.',
+        )
+        if admin:
+            policy.assignees = [admin]
+        db.session.add(policy)
+        db.session.commit()
+        print("Seeded 1 demo policy (Information Security Policy, ISO 27001:2022).")
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'assets':
         seed_demo_assets()
+    elif len(sys.argv) > 1 and sys.argv[1] == 'policies':
+        seed_demo_policies()
     else:
         seed_database()

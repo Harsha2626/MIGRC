@@ -17,3 +17,4 @@ psycopg2-binary==2.9.11
 python-dotenv==1.1.0
 fpdf2==2.8.8
 Flask-Mail==0.10.0
+anthropic==1.0.0

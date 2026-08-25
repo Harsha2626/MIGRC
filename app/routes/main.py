@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from flask import Blueprint, render_template, jsonify, request, Response, session, redirect, url_for, flash
+from flask import Blueprint, render_template, jsonify, request, Response, session, redirect, url_for, flash, current_app, send_from_directory
 from flask_login import login_required
 from app.models import (
     db, Framework, Risk, Policy, Audit, Vendor, Asset, Control, User,
@@ -247,6 +247,14 @@ def trust_center_download(policy_id):
         return redirect(url_for('main.trust_center'))
 
     policy = Policy.query.filter_by(id=policy_id, status='Published').first_or_404()
+
+    if policy.content_state == 'file':
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        return send_from_directory(upload_folder, policy.file_path, as_attachment=True,
+            download_name=policy.file_name or policy.file_path)
+    if policy.content_state == 'external':
+        return redirect(policy.external_url)
+
     pdf_bytes = build_policy_document_pdf(policy)
     return Response(pdf_bytes, mimetype='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="{policy.name.replace(" ", "_")}.pdf"'

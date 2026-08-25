@@ -163,6 +163,10 @@ class Evidence(db.Model):
     review_notes = db.Column(db.Text)
     reviewed_by = db.Column(db.String(100))
     reviewed_at = db.Column(db.DateTime)
+    ai_suggested_status = db.Column(db.String(30))
+    ai_confidence = db.Column(db.Float)
+    ai_rationale = db.Column(db.Text)
+    ai_reviewed_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -260,6 +264,25 @@ class TreatmentMilestone(db.Model):
     completed = db.Column(db.Boolean, default=False)
 
 
+policy_assignees = db.Table(
+    'policy_assignees',
+    db.Column('policy_id', db.Integer, db.ForeignKey('policies.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+)
+
+policy_approvers = db.Table(
+    'policy_approvers',
+    db.Column('policy_id', db.Integer, db.ForeignKey('policies.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+)
+
+policy_controls = db.Table(
+    'policy_controls',
+    db.Column('policy_id', db.Integer, db.ForeignKey('policies.id'), primary_key=True),
+    db.Column('control_id', db.Integer, db.ForeignKey('controls.id'), primary_key=True),
+)
+
+
 class Policy(db.Model):
     __tablename__ = 'policies'
     id = db.Column(db.Integer, primary_key=True)
@@ -267,12 +290,19 @@ class Policy(db.Model):
     content = db.Column(db.Text)
     version = db.Column(db.String(20), default='1.0')
     owner = db.Column(db.String(100))
-    status = db.Column(db.String(30), default='Draft')
+    status = db.Column(db.String(30), default='Not Uploaded')
     framework = db.Column(db.String(50))
     last_reviewed = db.Column(db.String(20))
     next_review = db.Column(db.String(20))
     review_cycle_days = db.Column(db.Integer, default=180)
     file_path = db.Column(db.String(500))
+    file_name = db.Column(db.String(200))
+    external_url = db.Column(db.String(500))
+    requirement_text = db.Column(db.Text)
+    entities = db.Column(db.String(200), default='Organization Wide')
+    effort_estimate = db.Column(db.String(10), default='Medium')
+    recurrence = db.Column(db.String(20), default='Annually')
+    department = db.Column(db.String(50))
     assigned_reviewer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -280,9 +310,14 @@ class Policy(db.Model):
     acks = db.relationship('PolicyAcknowledgement', backref='policy', lazy='dynamic', cascade='all, delete-orphan')
     versions = db.relationship('PolicyVersion', backref='policy', lazy='dynamic', cascade='all, delete-orphan', order_by='PolicyVersion.created_at.desc()')
     reviews = db.relationship('PolicyReview', backref='policy', lazy='dynamic', cascade='all, delete-orphan', order_by='PolicyReview.reviewed_at.desc()')
+    comments = db.relationship('PolicyComment', backref='policy', lazy='dynamic', cascade='all, delete-orphan', order_by='PolicyComment.created_at.desc()')
+    approvals = db.relationship('PolicyApproval', backref='policy', lazy='dynamic', cascade='all, delete-orphan')
     assigned_reviewer = db.relationship('User', foreign_keys=[assigned_reviewer_id])
+    assignees = db.relationship('User', secondary=policy_assignees, backref='assigned_policies')
+    approvers = db.relationship('User', secondary=policy_approvers, backref='approver_policies')
+    controls = db.relationship('Control', secondary=policy_controls, backref='policies')
 
-    STATUS_FLOW = ['Draft', 'In Review', 'Approved', 'Published', 'Retired']
+    STATUS_FLOW = ['Not Uploaded', 'Draft', 'Needs Review', 'Pending Approval', 'Approved', 'Published', 'Retired']
 
     @property
     def acknowledgements(self):
@@ -300,6 +335,23 @@ class Policy(db.Model):
             return None
         return self.STATUS_FLOW[idx + 1] if idx + 1 < len(self.STATUS_FLOW) else None
 
+    @property
+    def content_state(self):
+        if self.file_path:
+            return 'file'
+        if self.external_url:
+            return 'external'
+        if self.status == 'Not Uploaded':
+            return 'blank'
+        return 'content'
+
+    @property
+    def approval_progress(self):
+        rows = self.approvals.all()
+        if not rows:
+            return (0, 0)
+        return (len([r for r in rows if r.status == 'Approved']), len(rows))
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -310,6 +362,10 @@ class Policy(db.Model):
             'status': self.status,
             'framework': self.framework,
             'review_cycle_days': self.review_cycle_days,
+            'department': self.department,
+            'effort_estimate': self.effort_estimate,
+            'recurrence': self.recurrence,
+            'entities': self.entities,
         }
 
 
@@ -343,6 +399,30 @@ class PolicyReview(db.Model):
     reviewed_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     reviewer = db.relationship('User')
+
+
+class PolicyComment(db.Model):
+    __tablename__ = 'policy_comments'
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User')
+
+
+class PolicyApproval(db.Model):
+    __tablename__ = 'policy_approvals'
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
+    approver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    status = db.Column(db.String(20), default='Pending')  # Pending, Approved, Rejected
+    comments = db.Column(db.Text)
+    decided_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    approver = db.relationship('User')
 
 
 class Audit(db.Model):
@@ -588,6 +668,10 @@ class Employee(db.Model):
     @property
     def campaign_names(self):
         return [e.campaign.name for e in self.enrollments]
+
+    @property
+    def campaign_ids(self):
+        return [e.campaign_id for e in self.enrollments]
 
     def to_dict(self):
         return {

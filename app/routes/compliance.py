@@ -8,6 +8,7 @@ from app.models import db, Framework, Control, Evidence, EvidenceMapping, Compli
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
+from app.services.ai_evidence_review import review_evidence as ai_review_evidence
 from app.utils import allowed_file, require_permission
 
 compliance_bp = Blueprint('compliance', __name__)
@@ -109,6 +110,9 @@ def control_detail(framework_id, control_id):
             'uploaded_by': ev.uploaded_by.name if ev.uploaded_by else '—',
             'status': ev.status,
             'review_notes': ev.review_notes,
+            'ai_suggested_status': ev.ai_suggested_status,
+            'ai_confidence': ev.ai_confidence,
+            'ai_rationale': ev.ai_rationale,
             'created_at': ev.created_at,
             'audit_period_start': ev.audit_period_start,
             'audit_period_end': ev.audit_period_end,
@@ -195,6 +199,14 @@ def upload_evidence(framework_id, control_id):
                 db.session.add(EvidenceMapping(evidence_id=evidence.id, control_id=cid_int))
         except ValueError:
             pass
+
+    # AI-suggested review (no-op until ANTHROPIC_API_KEY is configured)
+    suggestion = ai_review_evidence(evidence, ctrl, upload_folder)
+    if suggestion:
+        evidence.ai_suggested_status = suggestion.get('status')
+        evidence.ai_confidence = suggestion.get('confidence')
+        evidence.ai_rationale = suggestion.get('rationale')
+        evidence.ai_reviewed_at = datetime.utcnow()
 
     db.session.commit()
 

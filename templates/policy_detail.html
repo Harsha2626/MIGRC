@@ -7,40 +7,213 @@
 {% endblock %}
 
 {% block content %}
+{% set STATUS_COLORS = {'Not Uploaded': '#94a3b8', 'Draft': '#cbd5e1', 'Needs Review': '#f59e0b', 'Pending Approval': '#3b82f6', 'Approved': '#8b5cf6', 'Published': '#10b981', 'Retired': '#64748b'} %}
+{% set LIFECYCLE_STEPS = ['Not Uploaded', 'Draft', 'Needs Review', 'Pending Approval', 'Approved', 'Published'] %}
+{% set current_index = LIFECYCLE_STEPS.index(policy.status) if policy.status in LIFECYCLE_STEPS else LIFECYCLE_STEPS|length %}
+
 <div class="page-header">
     <div>
         <h1>{{ policy.name }} <span class="text-sm text-muted">v{{ policy.version }}</span></h1>
-        <p>{{ policy.owner }} &middot; {{ policy.framework }} &middot; Next review {{ policy.next_review }}</p>
+        <p>
+            <span class="badge {{ STATUS_BADGE[policy.status] }}">{{ policy.status }}</span>
+            {% if policy.framework %}<span class="badge badge-neutral">{{ policy.framework }}</span>{% endif %}
+            &middot; {{ policy.owner or 'Unassigned owner' }} &middot; Next review {{ policy.next_review }}
+        </p>
     </div>
     <div class="page-actions">
-        {% if policy.status == 'Published' %}<span class="badge badge-success" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
-        {% elif policy.status == 'Retired' %}<span class="badge badge-neutral" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
-        {% elif policy.status == 'Approved' %}<span class="badge badge-info" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
-        {% elif policy.status == 'In Review' %}<span class="badge badge-warning" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>
-        {% else %}<span class="badge badge-neutral" style="font-size:13px;padding:8px 16px;">{{ policy.status }}</span>{% endif %}
+        <button type="button" class="btn btn-secondary" style="opacity:0.85;" title="AI integration is pending" onclick="showToast('AI integration is pending.', 'info')"><i class="fas fa-wand-magic-sparkles"></i> Ask AI Teammates</button>
         <a href="/policies" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
 
-<!-- Workflow actions -->
+<!-- Lifecycle stepper -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body" style="padding:20px 24px 12px;">
+        <div class="lifecycle-track">
+            {% for step in LIFECYCLE_STEPS %}
+            <div class="lifecycle-step {% if loop.index0 < current_index %}done{% elif loop.index0 == current_index %}current{% endif %}">
+                <div class="step-dot"></div>
+                <div class="step-label">{{ step }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if policy.status == 'Retired' %}
+        <p class="text-sm text-muted" style="text-align:center;margin-top:8px;"><i class="fas fa-box-archive"></i> This policy has completed its lifecycle and is now Retired.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Start Your Policy (empty state) -->
+{% if policy.status == 'Not Uploaded' %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h3>Start Your Policy</h3></div>
+    <div class="card-body">
+        <div class="grid-3">
+            <div class="card option-card" style="text-align:center;padding:20px;">
+                <div class="option-icon" style="background:var(--accent-primary-light);color:var(--accent-primary);"><i class="fas fa-file-pen"></i></div>
+                <h4 style="font-size:14px;margin-bottom:6px;">Create a Blank Policy</h4>
+                <p class="text-sm text-muted" style="margin-bottom:12px;">Don't have a policy yet? Draft and build it directly in the editor.</p>
+                {% if current_user.can_write %}
+                <form method="POST" action="{{ url_for('policies.start_blank_policy', policy_id=policy.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-primary">Create Blank</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="card option-card" style="text-align:center;padding:20px;">
+                <div class="option-icon" style="background:var(--accent-success-light);color:var(--accent-success);"><i class="fas fa-cloud-upload-alt"></i></div>
+                <h4 style="font-size:14px;margin-bottom:6px;">Upload Policy Document</h4>
+                <p class="text-sm text-muted" style="margin-bottom:12px;">Upload a file (pdf, doc, docx, xlsx...) for this policy.</p>
+                {% if current_user.can_write %}
+                <form method="POST" action="{{ url_for('policies.upload_policy_file', policy_id=policy.id) }}" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="file" name="file" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.doc,.docx" required style="margin-bottom:8px;font-size:12px;">
+                    <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="card option-card" style="text-align:center;padding:20px;">
+                <div class="option-icon" style="background:var(--accent-info-light);color:var(--accent-info);"><i class="fas fa-link"></i></div>
+                <h4 style="font-size:14px;margin-bottom:6px;">Link an Existing Policy</h4>
+                <p class="text-sm text-muted" style="margin-bottom:12px;">Paste a URL. It can't be edited here.</p>
+                {% if current_user.can_write %}
+                <form method="POST" action="{{ url_for('policies.link_policy_url', policy_id=policy.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="url" name="external_url" class="form-control" placeholder="https://..." required style="margin-bottom:8px;font-size:12px;">
+                    <button type="submit" class="btn btn-sm btn-primary">Link</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Requirement -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <h3><i class="fas fa-clipboard-list" style="margin-right:8px;color:var(--accent-primary);"></i>Requirement</h3>
+    </div>
+    <div class="card-body">
+        {% if policy.requirement_text %}
+        <p class="text-sm" id="requirementText" style="line-height:1.6;{% if policy.requirement_text|length > 220 %}max-height:44px;overflow:hidden;{% endif %}">{{ policy.requirement_text }}</p>
+        {% if policy.requirement_text|length > 220 %}
+        <button class="btn btn-sm btn-secondary" style="margin-top:8px;" onclick="const el=document.getElementById('requirementText'); const open = el.style.maxHeight!=='none'; el.style.maxHeight = open ? 'none' : '44px'; this.textContent = open ? 'View Less' : 'View More';">View More</button>
+        {% endif %}
+        {% else %}
+        <p class="text-sm text-muted">No requirement description yet.</p>
+        {% endif %}
+        {% if current_user.can_write %}
+        <details style="margin-top:12px;">
+            <summary class="text-sm" style="cursor:pointer;color:var(--accent-primary);">Edit requirement</summary>
+            <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="name" value="{{ policy.name }}">
+                <textarea name="requirement_text" class="form-control" rows="3">{{ policy.requirement_text or '' }}</textarea>
+                <button type="submit" class="btn btn-sm btn-primary" style="margin-top:8px;">Save</button>
+            </form>
+        </details>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Metadata row -->
 <div class="card" style="margin-bottom:20px;">
     <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:20px;">
+            <div>
+                <div class="meta-chip-label"><i class="fas fa-user-group"></i>Assigned to</div>
+                <div class="tag-list" style="margin-bottom:6px;">
+                    {% for u in policy.assignees %}<span class="tag">{{ u.name }}</span>{% endfor %}
+                </div>
+                {% if current_user.can_write %}<button class="btn btn-sm btn-secondary btn-icon" title="Edit assignees" onclick="showAssigneesModal()"><i class="fas fa-plus"></i></button>{% endif %}
+            </div>
+            <div>
+                <div class="meta-chip-label"><i class="fas fa-user-check"></i>Approvers</div>
+                <div class="tag-list" style="margin-bottom:6px;">
+                    {% for u in policy.approvers %}<span class="tag">{{ u.name }}</span>{% endfor %}
+                </div>
+                {% if current_user.can_write %}
+                <button class="btn btn-sm btn-secondary btn-icon" title="Edit approvers" {% if policy.status == 'Pending Approval' %}disabled style="opacity:0.5;cursor:not-allowed;"{% endif %} onclick="showApproversModal()"><i class="fas fa-plus"></i></button>
+                {% endif %}
+            </div>
+            <div>
+                <div class="meta-chip-label"><i class="fas fa-building"></i>Entities</div>
+                {% if current_user.can_write %}
+                <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}" style="display:flex;gap:6px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="name" value="{{ policy.name }}">
+                    <input type="text" name="entities" class="form-control" value="{{ policy.entities }}" style="font-size:12px;padding:6px 8px;">
+                    <button type="submit" class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-check"></i></button>
+                </form>
+                {% else %}
+                <span class="text-sm">{{ policy.entities }}</span>
+                {% endif %}
+            </div>
+            <div>
+                <div class="meta-chip-label"><i class="fas fa-gauge-high"></i>Effort Estimate</div>
+                <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="name" value="{{ policy.name }}">
+                    <select name="effort_estimate" class="form-control" style="font-size:12px;padding:6px 8px;" onchange="this.form.submit()" {% if not current_user.can_write %}disabled{% endif %}>
+                        {% for level in POLICY_EFFORT_LEVELS %}<option {% if level == policy.effort_estimate %}selected{% endif %}>{{ level }}</option>{% endfor %}
+                    </select>
+                </form>
+            </div>
+            <div>
+                <div class="meta-chip-label"><i class="fas fa-repeat"></i>Recurrence</div>
+                <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="name" value="{{ policy.name }}">
+                    <select name="recurrence" class="form-control" style="font-size:12px;padding:6px 8px;" onchange="this.form.submit()" {% if not current_user.can_write %}disabled{% endif %}>
+                        {% for r in POLICY_RECURRENCES %}<option {% if r == policy.recurrence %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                    </select>
+                </form>
+            </div>
+            <div>
+                <div class="meta-chip-label"><i class="fas fa-sitemap"></i>Department</div>
+                <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="name" value="{{ policy.name }}">
+                    <select name="department" class="form-control" style="font-size:12px;padding:6px 8px;" onchange="this.form.submit()" {% if not current_user.can_write %}disabled{% endif %}>
+                        <option value="">Unassigned</option>
+                        {% for d in POLICY_DEPARTMENTS %}<option {% if d == policy.department %}selected{% endif %}>{{ d }}</option>{% endfor %}
+                    </select>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workflow actions -->
+{% if policy.status != 'Not Uploaded' %}
+<div class="card" style="margin-bottom:20px;border-left:4px solid {{ STATUS_COLORS[policy.status] }};">
+    <div class="card-body">
         {% if policy.status == 'Draft' %}
+        {% if current_user.can_write %}
         <form method="POST" action="{{ url_for('policies.submit_for_review', policy_id=policy.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="flex gap-8" style="align-items:end;">
-                <div class="form-group" style="margin-bottom:0;flex:1;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+                <div class="form-group" style="margin-bottom:0;">
                     <label>Assign Reviewer</label>
                     <select name="reviewer_id" class="form-control" required>
                         <option value="">Select a reviewer...</option>
                         {% for u in users %}<option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>{% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit for Review</button>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Approvers <span class="text-sm text-muted">(all must sign off)</span></label>
+                    <select name="approver_ids" class="form-control" multiple style="height:76px;" required>
+                        {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+                    </select>
+                </div>
             </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit for Review</button>
         </form>
-        {% elif policy.status == 'In Review' %}
+        {% endif %}
+        {% elif policy.status == 'Needs Review' %}
         <p class="text-sm mb-16">Awaiting review by <strong>{{ policy.assigned_reviewer.name if policy.assigned_reviewer else 'unassigned' }}</strong>.</p>
+        {% if current_user.can_write %}
         <form method="POST" action="{{ url_for('policies.review_policy', policy_id=policy.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
@@ -52,7 +225,42 @@
                 <button type="submit" name="decision" value="reject" class="btn btn-danger"><i class="fas fa-xmark"></i> Reject (back to Draft)</button>
             </div>
         </form>
+        {% endif %}
+        {% elif policy.status == 'Pending Approval' %}
+        {% set approved_count, total_approvers = policy.approval_progress %}
+        <p class="text-sm mb-16">Awaiting sign-off from all approvers &mdash; <strong>{{ approved_count }} of {{ total_approvers }}</strong> signed off.</p>
+        <div class="table-container" style="margin-bottom:16px;">
+            <table>
+                <thead><tr><th>Approver</th><th>Status</th><th>Comments</th></tr></thead>
+                <tbody>
+                    {% for a in approvals %}
+                    <tr>
+                        <td>{{ a.approver.name if a.approver else '-' }}</td>
+                        <td><span class="badge {% if a.status == 'Approved' %}badge-success{% elif a.status == 'Rejected' %}badge-danger{% else %}badge-warning{% endif %}">{{ a.status }}</span></td>
+                        <td class="text-sm text-muted">{{ a.comments or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% set my_pending = approvals|selectattr('approver_id', 'equalto', current_user.id)|selectattr('status', 'equalto', 'Pending')|list %}
+        {% if my_pending %}
+        <form method="POST" action="{{ url_for('policies.sign_off_approval', policy_id=policy.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Your comments</label>
+                <textarea name="comments" class="form-control" placeholder="Optional..."></textarea>
+            </div>
+            <div class="flex gap-8">
+                <button type="submit" name="decision" value="approve" class="btn btn-primary"><i class="fas fa-check"></i> Sign Off &amp; Approve</button>
+                <button type="submit" name="decision" value="reject" class="btn btn-danger"><i class="fas fa-xmark"></i> Reject (back to Draft)</button>
+            </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-muted">You are not one of the pending approvers for this cycle.</p>
+        {% endif %}
         {% elif policy.next_status %}
+        {% if current_user.can_write %}
         <form method="POST" action="{{ url_for('policies.advance_status', policy_id=policy.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="status" value="{{ policy.next_status }}">
@@ -61,17 +269,25 @@
                 {% else %}<i class="fas fa-box-archive"></i> Retire Policy{% endif %}
             </button>
         </form>
+        {% endif %}
         {% else %}
         <p class="text-sm text-muted">This policy is Retired &mdash; no further transitions.</p>
         {% endif %}
     </div>
 </div>
 
+<!-- Content -->
 <div class="grid-2">
-    <!-- Content + Edit -->
     <div class="card">
         <div class="card-header"><h3>Content</h3></div>
         <div class="card-body">
+            {% if policy.content_state == 'file' %}
+            <p class="text-sm text-muted" style="margin-bottom:12px;">This policy is stored as an uploaded document and can't be edited here.</p>
+            <a href="{{ url_for('policies.download_policy_file', policy_id=policy.id) }}" class="btn btn-secondary"><i class="fas fa-download"></i> {{ policy.file_name or 'Download file' }}</a>
+            {% elif policy.content_state == 'external' %}
+            <p class="text-sm text-muted" style="margin-bottom:12px;">This policy is managed externally and can't be edited here.</p>
+            <a href="{{ policy.external_url }}" target="_blank" rel="noopener" class="btn btn-secondary"><i class="fas fa-arrow-up-right-from-square"></i> Open linked document</a>
+            {% else %}
             <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
@@ -98,11 +314,12 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Save (bumps version if content changed)</button>
             </form>
+            {% endif %}
         </div>
     </div>
 
     <div>
-        <!-- Version History -->
+        {% if policy.content_state == 'content' %}
         <div class="card" style="margin-bottom:20px;">
             <div class="card-header"><h3>Version History</h3></div>
             <div class="card-body no-padding">
@@ -125,8 +342,8 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
-        <!-- Review History -->
         <div class="card">
             <div class="card-header"><h3>Review History</h3></div>
             <div class="card-body no-padding">
@@ -152,7 +369,7 @@
 </div>
 
 <!-- Acknowledgements -->
-<div class="card" style="margin-top:20px;">
+<div class="card" style="margin-top:20px;margin-bottom:20px;">
     <div class="card-header">
         <h3>Acknowledgements ({{ policy.acknowledgements }}/{{ policy.total_employees }})</h3>
         {% if policy.status == 'Published' and unacked %}
@@ -182,4 +399,194 @@
         </div>
     </div>
 </div>
+{% endif %}
+
+<!-- Tabs: Comments / Controls & Requirements / Audit Logs / Tickets -->
+<div class="tabs">
+    <button class="tab active" onclick="switchPolicyDetailTab(this, 'comments')"><i class="fas fa-comment" style="margin-right:6px;"></i>Comments</button>
+    <button class="tab" onclick="switchPolicyDetailTab(this, 'controls')"><i class="fas fa-shield-halved" style="margin-right:6px;"></i>Controls &amp; Requirements</button>
+    <button class="tab" onclick="switchPolicyDetailTab(this, 'audit')"><i class="fas fa-clock-rotate-left" style="margin-right:6px;"></i>Audit Logs</button>
+    <button class="tab" onclick="switchPolicyDetailTab(this, 'tickets')"><i class="fas fa-ticket" style="margin-right:6px;"></i>Tickets (JIRA)</button>
+</div>
+
+<div id="commentsTab" class="card">
+    <div class="card-body">
+        {% if current_user.can_write %}
+        <form method="POST" action="{{ url_for('policies.add_comment', policy_id=policy.id) }}" style="margin-bottom:16px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <textarea name="body" class="form-control" rows="2" placeholder="Write a comment..." required></textarea>
+            <button type="submit" class="btn btn-sm btn-primary" style="margin-top:8px;">Comment</button>
+        </form>
+        {% endif %}
+        {% if comments %}
+        {% for c in comments %}
+        <div style="padding:12px 0;border-top:1px solid var(--border-color);">
+            <div class="flex-between">
+                <div class="flex-center gap-8">
+                    <div class="avatar" style="width:26px;height:26px;font-size:10px;">{{ (c.user.name.split(' ')[0][0] ~ (c.user.name.split(' ')[-1][0] if ' ' in c.user.name else '')) if c.user else '?' }}</div>
+                    <span class="font-semibold text-sm">{{ c.user.name if c.user else '-' }}</span>
+                </div>
+                <div class="flex gap-8" style="align-items:center;">
+                    <span class="text-sm text-muted">{{ c.created_at|timesince }}</span>
+                    {% if current_user.can_delete %}
+                    <form method="POST" action="{{ url_for('policies.delete_comment', policy_id=policy.id, comment_id=c.id) }}" onsubmit="return confirm('Delete this comment?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-sm" style="margin-top:6px;margin-left:34px;">{{ c.body }}</p>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:24px;text-align:center;color:var(--text-muted);">No comments yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="controlsTab" class="card" style="display:none;">
+    <div class="card-header">
+        <h3>Linked Controls</h3>
+        {% if current_user.can_write and linkable_controls %}
+        <button class="btn btn-sm btn-primary" onclick="document.getElementById('linkControlForm').style.display='block'"><i class="fas fa-plus"></i> Link Control</button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div id="linkControlForm" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg-tertiary);border-radius:8px;">
+            <form method="POST" action="{{ url_for('policies.link_controls', policy_id=policy.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="search-input-wrapper" style="margin-bottom:8px;">
+                    <i class="fas fa-search"></i>
+                    <input type="text" class="filter-input" placeholder="Search controls..." oninput="filterLinkableControls(this.value)">
+                </div>
+                <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-md);padding:8px 12px;margin-bottom:8px;">
+                    {% for c in linkable_controls %}
+                    <label class="linkable-control-row" data-search="{{ (c.code ~ ' ' ~ c.title)|lower }}" style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;">
+                        <input type="checkbox" name="control_ids" value="{{ c.id }}">
+                        <strong>{{ c.code }}</strong> &mdash; {{ c.title }}
+                    </label>
+                    {% else %}
+                    <p class="text-sm text-muted" style="margin:0;">No controls available to link.</p>
+                    {% endfor %}
+                    <p class="text-sm text-muted" id="noLinkableControlsMatch" style="display:none;margin:8px 0 0;">No controls match your search.</p>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary">Link Selected</button>
+            </form>
+        </div>
+        {% if linked_controls %}
+        <div class="table-container">
+            <table>
+                <thead><tr><th>Code</th><th>Control</th><th style="width:80px;"></th></tr></thead>
+                <tbody>
+                    {% for c in linked_controls %}
+                    <tr>
+                        <td><a href="{{ url_for('compliance.control_detail', framework_id=c.framework_id, control_id=c.id) }}">{{ c.code }}</a></td>
+                        <td class="text-sm">{{ c.title }}</td>
+                        <td>
+                            {% if current_user.can_write %}
+                            <form method="POST" action="{{ url_for('policies.unlink_control', policy_id=policy.id, control_id=c.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Unlink"><i class="fas fa-link-slash"></i></button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:24px;text-align:center;color:var(--text-muted);">No controls linked yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="auditTab" class="card" style="display:none;">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table>
+                <thead><tr><th>When</th><th>User</th><th>Action</th><th>Description</th></tr></thead>
+                <tbody>
+                    {% for e in audit_logs %}
+                    <tr>
+                        <td class="text-sm text-muted" style="white-space:nowrap;">{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
+                        <td class="text-sm">{{ e.user.name if e.user else '-' }}</td>
+                        <td><span class="badge badge-info">{{ e.action }}</span></td>
+                        <td class="text-sm text-muted">{{ e.description or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-muted" style="padding:24px;text-align:center;">No activity recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="ticketsTab" class="card" style="display:none;">
+    <div class="card-body locked-card">
+        <div class="locked-icon"><i class="fas fa-lock"></i></div>
+        <h4>Jira isn't connected</h4>
+        <p>Connect Jira to link tickets to this policy.</p>
+        <button class="btn btn-sm btn-secondary" disabled style="opacity:0.6;cursor:not-allowed;">Connect Jira</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchPolicyDetailTab(el, tab) {
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    ['comments', 'controls', 'audit', 'tickets'].forEach(t => {
+        document.getElementById(t + 'Tab').style.display = t === tab ? '' : 'none';
+    });
+}
+
+const ALL_USERS = {{ users|map(attribute='name')|list|tojson }};
+const ALL_USER_IDS = {{ users|map(attribute='id')|list|tojson }};
+const CURRENT_ASSIGNEE_IDS = {{ policy.assignees|map(attribute='id')|list|tojson }};
+const CURRENT_APPROVER_IDS = {{ policy.approvers|map(attribute='id')|list|tojson }};
+
+function userCheckboxes(selectedIds) {
+    return ALL_USER_IDS.map((id, i) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">
+            <input type="checkbox" name="user_ids" value="${id}" ${selectedIds.includes(id) ? 'checked' : ''}>
+            ${ALL_USERS[i]}
+        </label>
+    `).join('');
+}
+
+function showAssigneesModal() {
+    openModal('Assigned To', `
+        <form id="assigneesForm" method="POST" action="{{ url_for('policies.update_assignees', policy_id=policy.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${userCheckboxes(CURRENT_ASSIGNEE_IDS)}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'assigneesForm\').submit()">Save</button>');
+}
+
+function showApproversModal() {
+    openModal('Approvers', `
+        <p class="text-sm text-muted" style="margin-bottom:8px;">All selected approvers must sign off before this policy can be Approved.</p>
+        <form id="approversForm" method="POST" action="{{ url_for('policies.update_approvers', policy_id=policy.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            ${userCheckboxes(CURRENT_APPROVER_IDS)}
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'approversForm\').submit()">Save</button>');
+}
+
+function filterLinkableControls(query) {
+    query = query.toLowerCase().trim();
+    let anyVisible = false;
+    document.querySelectorAll('.linkable-control-row').forEach(row => {
+        const match = !query || row.dataset.search.includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) anyVisible = true;
+    });
+    const noMatch = document.getElementById('noLinkableControlsMatch');
+    if (noMatch) noMatch.style.display = anyVisible ? 'none' : '';
+}
+</script>
 {% endblock %}

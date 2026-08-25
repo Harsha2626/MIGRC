@@ -161,6 +161,19 @@ function closeModal() {
 }
 
 // ============================================================
+// DROPDOWN PANELS (Columns / More Filters popovers)
+// ============================================================
+function toggleDropdownPanel(id) {
+    document.querySelectorAll('.dropdown-panel').forEach(p => { if (p.id !== id) p.classList.remove('open'); });
+    document.getElementById(id).classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown-panel-wrapper')) {
+        document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.remove('open'));
+    }
+});
+
+// ============================================================
 // TOAST NOTIFICATIONS
 // ============================================================
 function showToast(message, type = 'info') {

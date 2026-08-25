@@ -116,6 +116,13 @@
                         {% if ev.description %}
                         <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">{{ ev.description[:100] }}{% if ev.description|length > 100 %}...{% endif %}</div>
                         {% endif %}
+                        {% if ev.ai_suggested_status %}
+                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--accent-primary-light);color:var(--accent-primary);" title="{{ ev.ai_rationale }}">
+                            <i class="fas fa-wand-magic-sparkles"></i>
+                            AI suggests <strong>{{ ev.ai_suggested_status }}</strong>
+                            {% if ev.ai_confidence %}({{ (ev.ai_confidence * 100)|round|int }}% confidence){% endif %}
+                        </div>
+                        {% endif %}
                     </td>
                     <td><span class="mini-badge mb-blue" style="padding:3px 8px;border-radius:4px;font-size:10px;background:var(--accent-primary-light);color:var(--accent-primary);">{{ ev.source_type }}</span></td>
                     <td style="font-size:12px;">{{ ev.uploaded_by }}</td>

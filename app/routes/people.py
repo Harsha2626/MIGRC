@@ -97,6 +97,7 @@ def employees():
         offboarded_count=len([e for e in all_employees if e.status == 'Offboarded']),
         non_personnel_count=len([e for e in all_employees if e.status == 'Non Personnel']),
         campaigns=campaigns,
+        campaigns_json=[{'id': c.id, 'name': c.name} for c in campaigns],
         departments=departments,
         selected_department=department,
         selected_task_status=task_status,
@@ -122,6 +123,7 @@ def create_employee():
     department = request.form.get('department', '').strip()
     source = request.form.get('source', 'Manual')
     status = request.form.get('status', 'Active')
+    campaign_ids = request.form.getlist('campaign_ids')
 
     if not name or not email:
         flash('Name and email are required.', 'error')
@@ -133,6 +135,11 @@ def create_employee():
 
     employee = Employee(name=name, email=email, department=department, source=source, status=status)
     db.session.add(employee)
+    db.session.flush()
+
+    for cid in campaign_ids:
+        db.session.add(TrainingCampaignEnrollment(campaign_id=int(cid), employee_id=employee.id))
+
     log_activity('created', 'Employee', name)
     db.session.commit()
 
@@ -147,6 +154,7 @@ def edit_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
     status = request.form.get('status', employee.status)
     department = request.form.get('department', employee.department)
+    campaign_ids = {int(cid) for cid in request.form.getlist('campaign_ids')}
 
     employee.status = status
     employee.department = department
@@ -154,6 +162,12 @@ def edit_employee(employee_id):
         employee.offboarded_at = datetime.utcnow()
     elif status != 'Offboarded':
         employee.offboarded_at = None
+
+    current_ids = {e.campaign_id for e in employee.enrollments}
+    for cid in campaign_ids - current_ids:
+        db.session.add(TrainingCampaignEnrollment(campaign_id=cid, employee_id=employee.id))
+    for enrollment in employee.enrollments.filter(TrainingCampaignEnrollment.campaign_id.in_(current_ids - campaign_ids)):
+        db.session.delete(enrollment)
 
     log_activity('updated', 'Employee', employee.name)
     db.session.commit()
