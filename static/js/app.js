@@ -4,6 +4,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     initSidebar();
+    initNavSections();
     initTheme();
     initSearch();
 });
@@ -66,6 +67,17 @@ function initSidebar() {
         const icon = sidebarToggle.querySelector('i');
         if (icon) icon.className = 'fas fa-chevron-right';
     }
+}
+
+// ============================================================
+// NAV SECTIONS (collapsible)
+// ============================================================
+function initNavSections() {
+    document.querySelectorAll('.nav-section-header').forEach(function(header) {
+        header.addEventListener('click', function() {
+            header.closest('.nav-section').classList.toggle('collapsed');
+        });
+    });
 }
 
 // ============================================================

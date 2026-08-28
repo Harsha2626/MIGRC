@@ -31,74 +31,104 @@
         <nav class="sidebar-nav">
             {% if current_user.is_authenticated %}
             <div class="nav-section">
-                <span class="nav-section-title">Overview</span>
-                <a href="/" class="nav-item {% if page == 'dashboard' %}active{% endif %}">
-                    <i class="fas fa-chart-pie"></i>
-                    <span>Dashboard</span>
-                </a>
+                <button type="button" class="nav-section-header">
+                    <i class="fas fa-house nav-section-icon"></i>
+                    <span class="nav-section-title">Overview</span>
+                    <i class="fas fa-chevron-down nav-section-chevron"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="/" class="nav-item {% if page == 'dashboard' %}active{% endif %}">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </div>
             </div>
 
             <div class="nav-section">
-                <span class="nav-section-title">Governance</span>
-                <a href="/compliance" class="nav-item {% if page == 'compliance' %}active{% endif %}">
-                    <i class="fas fa-clipboard-check"></i>
-                    <span>Compliance</span>
-                </a>
-                <a href="/risks" class="nav-item {% if page == 'risks' %}active{% endif %}">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Risk Management</span>
-                </a>
-                <a href="/policies" class="nav-item {% if page == 'policies' %}active{% endif %}">
-                    <i class="fas fa-file-shield"></i>
-                    <span>Policies</span>
-                </a>
+                <button type="button" class="nav-section-header">
+                    <i class="fas fa-scale-balanced nav-section-icon"></i>
+                    <span class="nav-section-title">Governance</span>
+                    <i class="fas fa-chevron-down nav-section-chevron"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="/compliance" class="nav-item {% if page == 'compliance' %}active{% endif %}">
+                        <i class="fas fa-clipboard-check"></i>
+                        <span>Compliance</span>
+                    </a>
+                    <a href="/risks" class="nav-item {% if page == 'risks' %}active{% endif %}">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Risk Management</span>
+                    </a>
+                    <a href="/policies" class="nav-item {% if page == 'policies' %}active{% endif %}">
+                        <i class="fas fa-file-shield"></i>
+                        <span>Policies</span>
+                    </a>
+                </div>
             </div>
 
             <div class="nav-section">
-                <span class="nav-section-title">Operations</span>
-                <a href="/audits" class="nav-item {% if page == 'audits' %}active{% endif %}">
-                    <i class="fas fa-magnifying-glass-chart"></i>
-                    <span>Audit Center</span>
-                </a>
-                <a href="/vendors" class="nav-item {% if page == 'vendors' %}active{% endif %}">
-                    <i class="fas fa-building"></i>
-                    <span>Vendors</span>
-                </a>
-                <a href="/assets" class="nav-item {% if page == 'assets' %}active{% endif %}">
-                    <i class="fas fa-server"></i>
-                    <span>Assets</span>
-                </a>
+                <button type="button" class="nav-section-header">
+                    <i class="fas fa-gears nav-section-icon"></i>
+                    <span class="nav-section-title">Operations</span>
+                    <i class="fas fa-chevron-down nav-section-chevron"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="/audits" class="nav-item {% if page == 'audits' %}active{% endif %}">
+                        <i class="fas fa-magnifying-glass-chart"></i>
+                        <span>Audit Center</span>
+                    </a>
+                    <a href="/vendors" class="nav-item {% if page == 'vendors' %}active{% endif %}">
+                        <i class="fas fa-building"></i>
+                        <span>Vendors</span>
+                    </a>
+                    <a href="/assets" class="nav-item {% if page == 'assets' %}active{% endif %}">
+                        <i class="fas fa-server"></i>
+                        <span>Assets</span>
+                    </a>
+                </div>
             </div>
 
             <div class="nav-section">
-                <span class="nav-section-title">People</span>
-                <a href="/people/employees" class="nav-item {% if page == 'employees' %}active{% endif %}">
-                    <i class="fas fa-users"></i>
-                    <span>Employees</span>
-                </a>
-                <a href="/people/training-campaigns" class="nav-item {% if page == 'training_campaigns' %}active{% endif %}">
-                    <i class="fas fa-graduation-cap"></i>
-                    <span>Training Campaigns</span>
-                </a>
-                <a href="/people/access-reviews" class="nav-item {% if page == 'access_reviews' %}active{% endif %}">
-                    <i class="fas fa-user-lock"></i>
-                    <span>Access Reviews</span>
-                </a>
+                <button type="button" class="nav-section-header">
+                    <i class="fas fa-users nav-section-icon"></i>
+                    <span class="nav-section-title">People</span>
+                    <i class="fas fa-chevron-down nav-section-chevron"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="/people/employees" class="nav-item {% if page == 'employees' %}active{% endif %}">
+                        <i class="fas fa-users"></i>
+                        <span>Employees</span>
+                    </a>
+                    <a href="/people/training-campaigns" class="nav-item {% if page == 'training_campaigns' %}active{% endif %}">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>Training Campaigns</span>
+                    </a>
+                    <a href="/people/access-reviews" class="nav-item {% if page == 'access_reviews' %}active{% endif %}">
+                        <i class="fas fa-user-lock"></i>
+                        <span>Access Reviews</span>
+                    </a>
+                </div>
             </div>
             {% endif %}
 
             <div class="nav-section">
-                <span class="nav-section-title">External</span>
-                <a href="/trust-center" class="nav-item {% if page == 'trust_center' %}active{% endif %}">
-                    <i class="fas fa-certificate"></i>
-                    <span>Trust Center</span>
-                </a>
-                {% if current_user.is_authenticated %}
-                <a href="/reports" class="nav-item {% if page == 'reports' %}active{% endif %}">
-                    <i class="fas fa-file-export"></i>
-                    <span>Reports</span>
-                </a>
-                {% endif %}
+                <button type="button" class="nav-section-header">
+                    <i class="fas fa-globe nav-section-icon"></i>
+                    <span class="nav-section-title">External</span>
+                    <i class="fas fa-chevron-down nav-section-chevron"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="/trust-center" class="nav-item {% if page == 'trust_center' %}active{% endif %}">
+                        <i class="fas fa-certificate"></i>
+                        <span>Trust Center</span>
+                    </a>
+                    {% if current_user.is_authenticated %}
+                    <a href="/reports" class="nav-item {% if page == 'reports' %}active{% endif %}">
+                        <i class="fas fa-file-export"></i>
+                        <span>Reports</span>
+                    </a>
+                    {% endif %}
+                </div>
             </div>
         </nav>
 
