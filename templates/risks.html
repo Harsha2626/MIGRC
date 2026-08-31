@@ -52,6 +52,8 @@
 <div class="tabs">
     <button class="tab active" onclick="switchRiskView(this, 'register')">Risk Register</button>
     <button class="tab" onclick="switchRiskView(this, 'matrix')">Risk Matrix</button>
+    <button class="tab" onclick="switchRiskView(this, 'tasks')">Mitigation Tasks</button>
+    <button class="tab" onclick="switchRiskView(this, 'discovery')">Risk Discovery</button>
 </div>
 
 <!-- Risk Register View -->
@@ -158,6 +160,168 @@
         </div>
     </div>
 </div>
+
+<!-- Mitigation Tasks View -->
+<div id="tasksView" style="display:none;">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-list-check"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Open</div>
+                <div class="stat-value">{{ task_counts.open }}</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon red"><i class="fas fa-clock"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Overdue</div>
+                <div class="stat-value">{{ task_counts.overdue }}</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Needs Attention</div>
+                <div class="stat-value">{{ task_counts.needs_attention }}</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
+            <div class="stat-info">
+                <div class="stat-label">Completed</div>
+                <div class="stat-value">{{ task_counts.completed }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <div class="search-input-wrapper">
+            <i class="fas fa-search"></i>
+            <input type="text" class="filter-input" placeholder="Search tasks..." id="taskSearch" oninput="filterTasks()">
+        </div>
+        <select class="filter-select" id="taskStatusFilter" onchange="filterTasks()">
+            <option value="">All Statuses</option>
+            <option value="Planned">Planned</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Pending Approval">Pending Approval</option>
+            <option value="Needs Revision">Needs Revision</option>
+            <option value="Completed">Completed</option>
+            <option value="Overdue">Overdue</option>
+        </select>
+        {% if current_user.can_write %}
+        <button class="btn btn-primary" onclick="showAddTaskModal()" style="margin-left:auto;"><i class="fas fa-plus"></i> Add Task</button>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-body no-padding">
+            <div class="table-container">
+                <table id="taskTable">
+                    <thead>
+                        <tr>
+                            <th>Mitigation Task</th>
+                            <th>Risk</th>
+                            <th>Strategy</th>
+                            <th>Status</th>
+                            <th>Due Date</th>
+                            <th>Assignee</th>
+                            <th>Department</th>
+                            {% if current_user.can_write %}<th>Update Status</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tasks %}
+                        <tr data-status="{{ 'Overdue' if t.overdue else t.status }}">
+                            <td>{{ t.action }}</td>
+                            <td><a href="{{ url_for('risks.risk_detail', risk_id=t.risk_id) }}" style="text-decoration:none;">{{ t.risk_title }}</a></td>
+                            <td><span class="badge badge-neutral">{{ t.treatment_strategy }}</span></td>
+                            <td>
+                                {% if t.overdue %}<span class="badge badge-danger">Overdue</span>
+                                {% elif t.status == 'Completed' %}<span class="badge badge-success">Completed</span>
+                                {% elif t.status in ['Pending Approval', 'Needs Revision'] %}<span class="badge badge-warning">{{ t.status }}</span>
+                                {% else %}<span class="badge badge-info">{{ t.status }}</span>{% endif %}
+                            </td>
+                            <td>{{ t.deadline or '—' }}</td>
+                            <td>{{ t.owner or '—' }}</td>
+                            <td>{{ t.department or 'No Department' }}</td>
+                            {% if current_user.can_write %}
+                            <td>
+                                <form method="POST" action="{{ url_for('risks.update_treatment_status', risk_id=t.risk_id, treatment_id=t.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="next" value="tasks">
+                                    <select name="status" class="form-control" style="padding:4px 8px;font-size:12px;" onchange="this.form.submit()">
+                                        {% for s in task_statuses %}<option value="{{ s }}" {% if s == t.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                                    </select>
+                                </form>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                        {% if not tasks %}
+                        <tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-secondary);">No mitigation tasks yet. Add one here, or open a risk's detail page to attach a treatment plan.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Risk Discovery View -->
+<div id="discoveryView" style="display:none;">
+    <div class="toolbar">
+        <div class="search-input-wrapper">
+            <i class="fas fa-search"></i>
+            <input type="text" class="filter-input" placeholder="Search risk library..." id="discoverySearch" oninput="filterDiscovery()">
+        </div>
+        <select class="filter-select" id="discoveryCategoryFilter" onchange="filterDiscovery()">
+            <option value="">All Categories</option>
+            {% for c in ['Access Control','Data Protection','Vendor Risk','Cloud Security','Business Continuity','Social Engineering','Vulnerability Mgmt'] %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="card">
+        <div class="card-body no-padding">
+            <div class="table-container">
+                <table id="discoveryTable">
+                    <thead>
+                        <tr>
+                            <th>Risk</th>
+                            <th>Category</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in catalog %}
+                        <tr data-category="{{ item.category }}">
+                            <td>
+                                <div class="font-semibold">{{ item.title }}</div>
+                                <div class="text-sm text-muted">{{ item.description }}</div>
+                            </td>
+                            <td><span class="badge badge-neutral">{{ item.category }}</span></td>
+                            <td>
+                                {% if item.in_register %}
+                                <span class="badge badge-success"><i class="fas fa-check"></i> In Register</span>
+                                {% elif current_user.can_write %}
+                                <form method="POST" action="{{ url_for('risks.add_from_catalog') }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="title" value="{{ item.title }}">
+                                    <input type="hidden" name="category" value="{{ item.category }}">
+                                    <input type="hidden" name="description" value="{{ item.description }}">
+                                    <button type="submit" class="btn btn-sm btn-secondary">Add to Register</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -198,7 +362,20 @@ function switchRiskView(el, view) {
     el.classList.add('active');
     document.getElementById('registerView').style.display = view === 'register' ? '' : 'none';
     document.getElementById('matrixView').style.display = view === 'matrix' ? '' : 'none';
+    document.getElementById('tasksView').style.display = view === 'tasks' ? '' : 'none';
+    document.getElementById('discoveryView').style.display = view === 'discovery' ? '' : 'none';
+    history.replaceState(null, '', view === 'register' ? location.pathname : `#${view}`);
 }
+
+// Deep-link support: land on the right tab after a redirect (e.g. /risks#tasks)
+(function() {
+    const view = location.hash.replace('#', '');
+    const tabIndex = { register: 0, matrix: 1, tasks: 2, discovery: 3 }[view];
+    if (tabIndex !== undefined && tabIndex > 0) {
+        const tab = document.querySelectorAll('.tab')[tabIndex];
+        if (tab) switchRiskView(tab, view);
+    }
+})();
 
 function filterRisks() {
     const search = document.getElementById('riskSearch').value.toLowerCase();
@@ -211,6 +388,60 @@ function filterRisks() {
         const matchImpact = !impact || row.dataset.impact === impact;
         row.style.display = matchSearch && matchStatus && matchImpact ? '' : 'none';
     });
+}
+
+function filterTasks() {
+    const search = document.getElementById('taskSearch').value.toLowerCase();
+    const status = document.getElementById('taskStatusFilter').value;
+    document.querySelectorAll('#taskTable tbody tr').forEach(row => {
+        if (!row.dataset.status) return;
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchStatus = !status || row.dataset.status === status;
+        row.style.display = matchSearch && matchStatus ? '' : 'none';
+    });
+}
+
+function filterDiscovery() {
+    const search = document.getElementById('discoverySearch').value.toLowerCase();
+    const category = document.getElementById('discoveryCategoryFilter').value;
+    document.querySelectorAll('#discoveryTable tbody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchCategory = !category || row.dataset.category === category;
+        row.style.display = matchSearch && matchCategory ? '' : 'none';
+    });
+}
+
+function showAddTaskModal() {
+    const riskOptions = risks.map(r => `<option value="${r.id}">${r.title}</option>`).join('');
+    openModal('Add Mitigation Task', `
+        <form id="taskForm" method="POST" action="/risks/tasks/add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Risk</label>
+                <select name="risk_id" class="form-control" required>${riskOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Task</label>
+                <input type="text" name="action" class="form-control" placeholder="e.g. Enable MFA for all admin accounts" required>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label>Assignee</label>
+                    <input type="text" name="owner" class="form-control" placeholder="Who owns this task?">
+                </div>
+                <div class="form-group">
+                    <label>Department</label>
+                    <input type="text" name="department" class="form-control" placeholder="e.g. IT, HR">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" name="deadline" class="form-control">
+            </div>
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'taskForm\').submit()">Add Task</button>');
 }
 
 const RISK_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];

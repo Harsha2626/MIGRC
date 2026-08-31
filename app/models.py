@@ -240,8 +240,9 @@ class RiskTreatment(db.Model):
     risk_id = db.Column(db.Integer, db.ForeignKey('risks.id'), nullable=False)
     action = db.Column(db.Text, nullable=False)
     owner = db.Column(db.String(100))
+    department = db.Column(db.String(100))
     deadline = db.Column(db.String(20))
-    status = db.Column(db.String(20), default='Planned')  # Planned, In Progress, Completed
+    status = db.Column(db.String(20), default='Planned')  # Planned, In Progress, Pending Approval, Needs Revision, Completed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
 
