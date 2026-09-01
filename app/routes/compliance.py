@@ -4,7 +4,7 @@ from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from app.models import db, Framework, Control, Evidence, EvidenceMapping, ComplianceSnapshot
+from app.models import db, Framework, Control, Evidence, EvidenceMapping, ComplianceSnapshot, Policy
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
@@ -25,6 +25,49 @@ def compliance():
     frameworks = Framework.query.all()
     return render_template('compliance.html', page='compliance',
         frameworks=[fw.to_dict() for fw in frameworks])
+
+
+@compliance_bp.route('/tests')
+@login_required
+def tests():
+    """A unified checklist of every ongoing compliance check: control
+    assessments and policy publication status, in one filterable list."""
+    rows = []
+
+    for c in Control.query.all():
+        if c.status == 'Passing':
+            display_status = 'Passing'
+        elif c.status == 'Not Applicable':
+            display_status = 'Ignored'
+        else:  # Failing, Not Assessed
+            display_status = 'Fix Required'
+        rows.append({
+            'name': c.title, 'type': 'Control', 'status': display_status,
+            'assignee': c.owner or None,
+            'framework': c.framework.name if c.framework else None,
+            'link': url_for('compliance.control_detail', framework_id=c.framework_id, control_id=c.id),
+        })
+
+    for p in Policy.query.all():
+        if p.status in ('Approved', 'Published'):
+            display_status = 'Passing'
+        elif p.status == 'Retired':
+            display_status = 'Ignored'
+        else:  # Not Uploaded, Draft, Needs Review, Pending Approval
+            display_status = 'Fix Required'
+        rows.append({
+            'name': p.name, 'type': 'Policy', 'status': display_status,
+            'assignee': p.assigned_reviewer.name if p.assigned_reviewer else None,
+            'framework': p.framework or None, 'effort': p.effort_estimate,
+            'link': url_for('policies.policy_detail', policy_id=p.id),
+        })
+
+    counts = {
+        'passing': sum(1 for r in rows if r['status'] == 'Passing'),
+        'fix_required': sum(1 for r in rows if r['status'] == 'Fix Required'),
+        'ignored': sum(1 for r in rows if r['status'] == 'Ignored'),
+    }
+    return render_template('tests.html', page='tests', rows=rows, counts=counts)
 
 
 @compliance_bp.route('/compliance/add', methods=['POST'])

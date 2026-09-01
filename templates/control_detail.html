@@ -23,15 +23,26 @@
 </div>
 
 <!-- Control Info -->
-{% if control.description or control.evidence_requirement %}
 <div class="card" style="margin-bottom:20px;">
     <div class="card-body">
-        {% if control.description %}
-        <div style="margin-bottom:12px;">
-            <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Description</div>
-            <p style="font-size:13px;line-height:1.6;">{{ control.description }}</p>
+        <div style="display:flex;gap:32px;margin-bottom:16px;flex-wrap:wrap;">
+            <div>
+                <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Framework</div>
+                <span class="badge badge-neutral">{{ framework.name }}</span>
+            </div>
+            <div>
+                <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Scope</div>
+                <span class="badge badge-neutral">{{ control.category or 'General' }}</span>
+            </div>
         </div>
-        {% endif %}
+        <div style="margin-bottom:{{ '12px' if control.evidence_requirement else '0' }};">
+            <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Requirement Description</div>
+            {% if control.description %}
+            <p style="font-size:13px;line-height:1.6;">{{ control.description }}</p>
+            {% else %}
+            <p style="font-size:13px;line-height:1.6;color:var(--text-muted);font-style:italic;">No description available for this requirement yet.</p>
+            {% endif %}
+        </div>
         {% if control.evidence_requirement %}
         <div>
             <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Evidence Requirements</div>
@@ -40,7 +51,6 @@
         {% endif %}
     </div>
 </div>
-{% endif %}
 
 <!-- Evidence Summary -->
 <div class="grid-4" style="margin-bottom:24px;">

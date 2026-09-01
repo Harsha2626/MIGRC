@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Tests{% endblock %}
+{% block breadcrumb %}<span>Tests</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Tests</h1>
+        <p>Every ongoing compliance check in one place &mdash; control assessments and policy publication status</p>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card stat-card-filter" data-stat-status="Passing" style="cursor:pointer;" onclick="filterByStatCard(this, 'Passing')">
+        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Passing</div>
+            <div class="stat-value">{{ counts.passing }}</div>
+        </div>
+    </div>
+    <div class="stat-card stat-card-filter" data-stat-status="Fix Required" style="cursor:pointer;" onclick="filterByStatCard(this, 'Fix Required')">
+        <div class="stat-icon red"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Fix Required</div>
+            <div class="stat-value">{{ counts.fix_required }}</div>
+        </div>
+    </div>
+    <div class="stat-card stat-card-filter" data-stat-status="Ignored" style="cursor:pointer;" onclick="filterByStatCard(this, 'Ignored')">
+        <div class="stat-icon blue"><i class="fas fa-eye-slash"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">Ignored</div>
+            <div class="stat-value">{{ counts.ignored }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab active" onclick="switchTestType(this, '')">All</button>
+    <button class="tab" onclick="switchTestType(this, 'Control')">Controls</button>
+    <button class="tab" onclick="switchTestType(this, 'Policy')">Policies</button>
+</div>
+
+<div class="toolbar">
+    <div class="search-input-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" class="filter-input" placeholder="Search tests..." id="testSearch" oninput="filterTests()">
+    </div>
+    <select class="filter-select" id="testStatusFilter" onchange="filterTests()">
+        <option value="">All Statuses</option>
+        <option value="Passing">Passing</option>
+        <option value="Fix Required">Fix Required</option>
+        <option value="Ignored">Ignored</option>
+    </select>
+</div>
+
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table id="testTable">
+                <thead>
+                    <tr>
+                        <th>Test Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Effort Estimate</th>
+                        <th>Assignee</th>
+                        <th>Framework</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr data-type="{{ r.type }}" data-status="{{ r.status }}">
+                        <td><a href="{{ r.link }}" class="font-semibold" style="text-decoration:none;">{{ r.name }}</a></td>
+                        <td><span class="badge badge-neutral">{{ r.type }}</span></td>
+                        <td>
+                            {% if r.status == 'Passing' %}<span class="badge badge-success">Passing</span>
+                            {% elif r.status == 'Fix Required' %}<span class="badge badge-danger">Fix Required</span>
+                            {% else %}<span class="badge badge-neutral">Ignored</span>{% endif %}
+                        </td>
+                        <td>{{ r.effort or '—' }}</td>
+                        <td>{{ r.assignee or '—' }}</td>
+                        <td>{{ r.framework or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not rows %}
+                    <tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-secondary);">No tests yet. Tests are generated from your Controls and Policies as you add them.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTestType = '';
+
+function switchTestType(el, type) {
+    currentTestType = type;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    filterTests();
+}
+
+function filterTests() {
+    const search = document.getElementById('testSearch').value.toLowerCase();
+    const status = document.getElementById('testStatusFilter').value;
+    document.querySelectorAll('.stat-card-filter').forEach(card => {
+        card.classList.toggle('stat-card-active', card.dataset.statStatus === status);
+    });
+    document.querySelectorAll('#testTable tbody tr').forEach(row => {
+        if (!row.dataset.type) return;
+        const text = row.textContent.toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchStatus = !status || row.dataset.status === status;
+        const matchType = !currentTestType || row.dataset.type === currentTestType;
+        row.style.display = matchSearch && matchStatus && matchType ? '' : 'none';
+    });
+}
+
+function filterByStatCard(el, status) {
+    const statusFilter = document.getElementById('testStatusFilter');
+    // Clicking the already-active card clears the filter; otherwise selects it
+    statusFilter.value = statusFilter.value === status ? '' : status;
+    filterTests();
+    document.querySelector('.table-container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+</script>
+{% endblock %}

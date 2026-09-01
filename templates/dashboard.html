@@ -20,10 +20,10 @@
     <div class="card">
         <div class="card-header">
             <h3>Control Status Overview</h3>
-            <select class="filter-select" style="font-size:12px;padding:4px 10px;">
-                <option>All Frameworks</option>
+            <select class="filter-select" id="controlsDonutFilter" style="font-size:12px;padding:4px 10px;" onchange="updateControlsDonut(this.value)">
+                <option value="all">All Frameworks</option>
                 {% for fw in frameworks %}
-                <option>{{ fw.name }}</option>
+                <option value="{{ fw.id }}">{{ fw.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -31,22 +31,22 @@
             <div class="chart-container" style="width:220px;height:220px;">
                 <canvas id="controlsDonut"></canvas>
                 <div class="chart-center-label">
-                    <div class="value">{{ compliance_score }}%</div>
+                    <div class="value" id="donutScoreValue">{{ compliance_score }}%</div>
                     <div class="label">Score</div>
                 </div>
             </div>
             <div>
                 <div class="legend">
-                    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Passing ({{ passing_controls }})</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Passing (<span id="donutPassingCount">{{ passing_controls }}</span>)</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Failing ({{ failing_controls }})</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Failing (<span id="donutFailingCount">{{ failing_controls }}</span>)</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Not Assessed ({{ total_controls - passing_controls - failing_controls - na_controls }})</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Not Assessed (<span id="donutNotAssessedCount">{{ total_controls - passing_controls - failing_controls - na_controls }}</span>)</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A ({{ na_controls }})</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A (<span id="donutNaCount">{{ na_controls }}</span>)</div>
                 </div>
             </div>
         </div>
@@ -175,20 +175,24 @@
 
 {% block scripts %}
 <script>
+const FRAMEWORK_DONUT_DATA = {{ frameworks|tojson }};
+const ALL_FRAMEWORKS_DONUT_DATA = {
+    id: 'all', passing: {{ passing_controls }}, failing: {{ failing_controls }},
+    not_assessed: {{ total_controls - passing_controls - failing_controls - na_controls }},
+    not_applicable: {{ na_controls }}, compliance_score: {{ compliance_score }}
+};
+
+let controlsDonutChart;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Controls Donut Chart
     const donutCtx = document.getElementById('controlsDonut').getContext('2d');
-    new Chart(donutCtx, {
+    controlsDonutChart = new Chart(donutCtx, {
         type: 'doughnut',
         data: {
             labels: ['Passing', 'Failing', 'Not Assessed', 'N/A'],
             datasets: [{
-                data: [
-                    {{ passing_controls }},
-                    {{ failing_controls }},
-                    {{ total_controls - passing_controls - failing_controls - na_controls }},
-                    {{ na_controls }}
-                ],
+                data: [ALL_FRAMEWORKS_DONUT_DATA.passing, ALL_FRAMEWORKS_DONUT_DATA.failing,
+                    ALL_FRAMEWORKS_DONUT_DATA.not_assessed, ALL_FRAMEWORKS_DONUT_DATA.not_applicable],
                 backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#94a3b8'],
                 borderWidth: 0,
                 cutout: '75%'
@@ -201,5 +205,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+function updateControlsDonut(selectedId) {
+    const data = selectedId === 'all'
+        ? ALL_FRAMEWORKS_DONUT_DATA
+        : FRAMEWORK_DONUT_DATA.find(fw => String(fw.id) === String(selectedId));
+    if (!data) return;
+
+    controlsDonutChart.data.datasets[0].data = [data.passing, data.failing, data.not_assessed, data.not_applicable];
+    controlsDonutChart.update();
+
+    document.getElementById('donutScoreValue').textContent = data.compliance_score + '%';
+    document.getElementById('donutPassingCount').textContent = data.passing;
+    document.getElementById('donutFailingCount').textContent = data.failing;
+    document.getElementById('donutNotAssessedCount').textContent = data.not_assessed;
+    document.getElementById('donutNaCount').textContent = data.not_applicable;
+}
 </script>
 {% endblock %}
