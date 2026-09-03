@@ -18,17 +18,11 @@
                 <div class="settings-nav-item active" onclick="switchSettings(this, 'general')">
                     <i class="fas fa-building"></i> Organization
                 </div>
-                <div class="settings-nav-item" onclick="switchSettings(this, 'integrations')">
-                    <i class="fas fa-plug"></i> Integrations
-                </div>
                 <div class="settings-nav-item" onclick="switchSettings(this, 'notifications')">
                     <i class="fas fa-bell"></i> Notifications
                 </div>
                 <div class="settings-nav-item" onclick="switchSettings(this, 'users')">
                     <i class="fas fa-users"></i> Users & Roles
-                </div>
-                <div class="settings-nav-item" onclick="switchSettings(this, 'security')">
-                    <i class="fas fa-shield-halved"></i> Security
                 </div>
                 <a href="/settings/activity-log" class="settings-nav-item" style="text-decoration:none;">
                     <i class="fas fa-clock-rotate-left"></i> Audit Trail
@@ -42,17 +36,69 @@
         <!-- General Settings -->
         <div class="settings-panel" id="panel-general">
             <div class="card">
-                <div class="card-header"><h3>Organization Settings</h3></div>
-                <div class="card-body">
-                    <div class="form-group">
-                        <label>Organization Name</label>
-                        <input type="text" class="form-control" value="Midevops Services Pvt Ltd">
+                <div class="card-header">
+                    <h3>Organization Info</h3>
+                    <div class="flex gap-8">
+                        <a href="/settings/activity-log" class="btn btn-sm btn-secondary"><i class="fas fa-clock-rotate-left"></i> Audit Log</a>
+                        <button class="btn btn-sm btn-primary" onclick="showToast('Organization settings saved successfully','success')">Save Changes</button>
                     </div>
+                </div>
+                <div class="card-body">
+
+                    <div class="form-group">
+                        <label>Organization Logo <span class="required-star">*</span></label>
+                        <div class="flex-center gap-12">
+                            <div class="logo-upload-box">
+                                <img id="orgLogoPreview" style="display:none;" alt="Organization logo">
+                                <i class="fas fa-building" id="orgLogoFallback"></i>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('orgLogoInput').click()">Replace Logo</button>
+                                <div class="text-sm text-muted mt-4">Select a file (Max size 2MB)</div>
+                            </div>
+                            <input type="file" id="orgLogoInput" accept="image/*" style="display:none;" onchange="previewOrgLogo(this)">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Organization Name <span class="required-star">*</span></label>
+                        <input type="text" class="form-control" id="orgName" maxlength="100" value="Midevops_NFR-POC" oninput="updateFieldCounter('orgName','orgNameCount',100)">
+                        <div class="field-counter" id="orgNameCount">16/100</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Legal Name <span class="required-star">*</span></label>
+                        <input type="text" class="form-control" id="orgLegalName" maxlength="100" value="Midevops Services Pvt Ltd" oninput="updateFieldCounter('orgLegalName','orgLegalNameCount',100)">
+                        <div class="field-counter" id="orgLegalNameCount">26/100</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Company URL</label>
+                        <input type="text" class="form-control" id="orgUrl" maxlength="200" value="https://www.midevops.io" oninput="updateFieldCounter('orgUrl','orgUrlCount',200)">
+                        <div class="field-counter" id="orgUrlCount">23/200</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Work Arrangement <span class="required-star">*</span></label>
+                        <div class="radio-card-group">
+                            <label class="radio-card"><input type="radio" name="work_arrangement" value="Remote"> Remote</label>
+                            <label class="radio-card"><input type="radio" name="work_arrangement" value="Hybrid"> Hybrid</label>
+                            <label class="radio-card selected"><input type="radio" name="work_arrangement" value="Office" checked> Office</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Business Address</label>
+                        <textarea class="form-control" id="orgAddress" maxlength="500" rows="3" placeholder="Enter your registered business address" oninput="updateFieldCounter('orgAddress','orgAddressCount',500)"></textarea>
+                        <div class="field-counter" id="orgAddressCount">0/500</div>
+                    </div>
+
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                         <div class="form-group">
                             <label>Industry</label>
                             <select class="form-control">
-                                <option selected>Technology / SaaS</option>
+                                <option>Technology / SaaS</option>
+                                <option selected>Information Technology</option>
                                 <option>Healthcare</option>
                                 <option>Finance</option>
                                 <option>Retail</option>
@@ -70,10 +116,35 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="form-group">
+                        <label>Geographic Scope</label>
+                        <select class="form-control" onchange="addGeoScopeTag(this)">
+                            <option value="">Geographic Scope</option>
+                            <option value="India">India</option>
+                            <option value="United States">United States</option>
+                            <option value="United Kingdom">United Kingdom</option>
+                            <option value="European Union">European Union</option>
+                            <option value="Global">Global</option>
+                        </select>
+                        <div class="tag-list mt-8" id="geoScopeTags">
+                            <span class="chip" data-value="India">India <i class="fas fa-times" onclick="this.parentElement.remove()"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Fiscal Year</label>
+                        <div class="radio-card-group">
+                            <label class="radio-card selected"><input type="radio" name="fiscal_year" value="Jan-Dec" checked> January &ndash; December</label>
+                            <label class="radio-card"><input type="radio" name="fiscal_year" value="Apr-Mar"> April &ndash; March</label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>Primary Contact Email</label>
                         <input type="email" class="form-control" value="admin@midevops.com">
                     </div>
+
                     <div class="form-group">
                         <label>Timezone</label>
                         <select class="form-control">
@@ -83,71 +154,8 @@
                             <option>Europe/London (GMT, UTC+0)</option>
                         </select>
                     </div>
-                    <button class="btn btn-primary" onclick="showToast('Settings saved successfully','success')">Save Changes</button>
-                </div>
-            </div>
-        </div>
 
-        <!-- Integrations -->
-        <div class="settings-panel" id="panel-integrations" style="display:none;">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Cloud Integrations</h3>
-                    <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Add Integration</button>
-                </div>
-                <div class="card-body">
-                    <div style="display:flex;flex-direction:column;gap:12px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-                            <div class="flex-center gap-12">
-                                <div class="stat-icon orange" style="width:40px;height:40px;"><i class="fab fa-aws"></i></div>
-                                <div>
-                                    <div class="font-semibold">Amazon Web Services</div>
-                                    <div class="text-sm text-muted">Connect AWS accounts for continuous monitoring</div>
-                                </div>
-                            </div>
-                            <span class="badge badge-neutral">Not Connected</span>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-                            <div class="flex-center gap-12">
-                                <div class="stat-icon blue" style="width:40px;height:40px;"><i class="fab fa-microsoft"></i></div>
-                                <div>
-                                    <div class="font-semibold">Microsoft Azure</div>
-                                    <div class="text-sm text-muted">Connect Azure subscriptions</div>
-                                </div>
-                            </div>
-                            <span class="badge badge-neutral">Not Connected</span>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-                            <div class="flex-center gap-12">
-                                <div class="stat-icon red" style="width:40px;height:40px;"><i class="fab fa-google"></i></div>
-                                <div>
-                                    <div class="font-semibold">Google Cloud Platform</div>
-                                    <div class="text-sm text-muted">Connect GCP projects</div>
-                                </div>
-                            </div>
-                            <span class="badge badge-neutral">Not Connected</span>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-                            <div class="flex-center gap-12">
-                                <div class="stat-icon purple" style="width:40px;height:40px;"><i class="fab fa-github"></i></div>
-                                <div>
-                                    <div class="font-semibold">GitHub</div>
-                                    <div class="text-sm text-muted">Connect repositories for code scanning</div>
-                                </div>
-                            </div>
-                            <span class="badge badge-neutral">Not Connected</span>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-                            <div class="flex-center gap-12">
-                                <div class="stat-icon green" style="width:40px;height:40px;"><i class="fab fa-slack"></i></div>
-                                <div>
-                                    <div class="font-semibold">Slack</div>
-                                    <div class="text-sm text-muted">Receive compliance alerts in Slack</div>
-                                </div>
-                            </div>
-                            <span class="badge badge-neutral">Not Connected</span>
-                        </div>
-                    </div>
+                    <button class="btn btn-primary" onclick="showToast('Organization settings saved successfully','success')">Save Changes</button>
                 </div>
             </div>
         </div>
@@ -233,59 +241,56 @@
                 </div>
             </div>
         </div>
-
-        <!-- Security -->
-        <div class="settings-panel" id="panel-security" style="display:none;">
-            <div class="card">
-                <div class="card-header"><h3>Security Settings</h3></div>
-                <div class="card-body">
-                    <div class="form-group">
-                        <label>Session Timeout</label>
-                        <select class="form-control">
-                            <option>15 minutes</option>
-                            <option selected>30 minutes</option>
-                            <option>1 hour</option>
-                            <option>4 hours</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Password Policy</label>
-                        <select class="form-control">
-                            <option>Standard (8+ characters)</option>
-                            <option selected>Strong (12+ characters, mixed case, numbers, symbols)</option>
-                            <option>Custom</option>
-                        </select>
-                    </div>
-                    <div class="flex-between" style="padding:12px 0;border-bottom:1px solid var(--border-color);margin-bottom:16px;">
-                        <div>
-                            <div class="font-semibold" style="font-size:13px;">Enforce MFA</div>
-                            <div class="text-sm text-muted">Require multi-factor authentication for all users</div>
-                        </div>
-                        <label style="position:relative;width:44px;height:24px;cursor:pointer;">
-                            <input type="checkbox" checked style="opacity:0;width:0;height:0;">
-                            <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--accent-success);border-radius:24px;transition:0.3s;"></span>
-                        </label>
-                    </div>
-                    <div class="flex-between" style="padding:12px 0;margin-bottom:16px;">
-                        <div>
-                            <div class="font-semibold" style="font-size:13px;">IP Allowlist</div>
-                            <div class="text-sm text-muted">Restrict access to specific IP addresses</div>
-                        </div>
-                        <label style="position:relative;width:44px;height:24px;cursor:pointer;">
-                            <input type="checkbox" style="opacity:0;width:0;height:0;">
-                            <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--bg-tertiary);border-radius:24px;transition:0.3s;"></span>
-                        </label>
-                    </div>
-                    <button class="btn btn-primary" onclick="showToast('Security settings saved','success')">Save Settings</button>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function updateFieldCounter(fieldId, counterId, max) {
+    const el = document.getElementById(fieldId);
+    document.getElementById(counterId).textContent = `${el.value.length}/${max}`;
+}
+
+function addGeoScopeTag(select) {
+    const value = select.value;
+    if (!value) return;
+    const container = document.getElementById('geoScopeTags');
+    if (container.querySelector(`[data-value="${value}"]`)) { select.value = ''; return; }
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.dataset.value = value;
+    chip.innerHTML = `${value} <i class="fas fa-times" onclick="this.parentElement.remove()"></i>`;
+    container.appendChild(chip);
+    select.value = '';
+}
+
+function previewOrgLogo(input) {
+    if (!input.files || !input.files[0]) return;
+    if (input.files[0].size > 2 * 1024 * 1024) {
+        showToast('Logo must be under 2MB', 'error');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById('orgLogoPreview');
+        img.src = e.target.result;
+        img.style.display = '';
+        document.getElementById('orgLogoFallback').style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+document.querySelectorAll('.radio-card-group').forEach(group => {
+    group.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            group.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
+            radio.closest('.radio-card').classList.add('selected');
+        });
+    });
+});
+
 function switchSettings(el, panel) {
     document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.remove('active'));
     el.classList.add('active');

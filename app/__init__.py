@@ -60,6 +60,7 @@ def create_app():
     from app.routes.people import people_bp
     from app.routes.notifications import notifications_bp
     from app.routes.reports import reports_bp
+    from app.routes.integrations import integrations_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -72,5 +73,6 @@ def create_app():
     app.register_blueprint(people_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(integrations_bp)
 
     return app
