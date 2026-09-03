@@ -36,11 +36,26 @@ def policies():
     all_users = User.query.order_by(User.name).all()
     all_frameworks = Framework.query.order_by(Framework.name).all()
 
+    # Dashboard filters (Assignee / Department / Framework)
+    selected_assignee = request.args.get('assignee', '')
+    selected_department = request.args.get('department', '')
+    selected_framework = request.args.get('framework', '')
+
+    def assignee_label(policy):
+        return policy.assignees[0].name if policy.assignees else 'No Assignee'
+
+    dashboard_policies = [
+        p for p in all_policies
+        if (not selected_assignee or assignee_label(p) == selected_assignee)
+        and (not selected_department or p.department == selected_department)
+        and (not selected_framework or p.framework == selected_framework)
+    ]
+
     unacked_by_policy = {}
     review_due_soon = {}
     upcoming_reviews = []
     today = date.today()
-    for policy in all_policies:
+    for policy in dashboard_policies:
         acked_ids = {a.employee_id for a in policy.acks}
         unacked_by_policy[policy.id] = [
             {'id': e.id, 'name': e.name} for e in all_employees if e.id not in acked_ids
@@ -54,16 +69,16 @@ def policies():
 
     # Dashboard: status breakdown for the stacked progress bar
     status_counts = {s: 0 for s in Policy.STATUS_FLOW}
-    for policy in all_policies:
+    for policy in dashboard_policies:
         if policy.status in status_counts:
             status_counts[policy.status] += 1
     published_count = status_counts.get('Published', 0)
-    total_count = len(all_policies)
+    total_count = len(dashboard_policies)
 
     # Dashboard: policies-by-assignee stacked bar chart data
     assignee_buckets = {}
-    for policy in all_policies:
-        label = policy.assignees[0].name if policy.assignees else 'No Assignee'
+    for policy in dashboard_policies:
+        label = assignee_label(policy)
         bucket = assignee_buckets.setdefault(label, {s: 0 for s in Policy.STATUS_FLOW})
         bucket[policy.status] = bucket.get(policy.status, 0) + 1
     chart_labels = sorted(assignee_buckets.keys(), key=lambda l: (l == 'No Assignee', l))
@@ -80,8 +95,8 @@ def policies():
         ]
     ]
 
-    return render_template('policies.html', page='policies', policies=all_policies,
-        policy_dicts=[p.to_dict() for p in all_policies],
+    return render_template('policies.html', page='policies', policies=dashboard_policies,
+        policy_dicts=[p.to_dict() for p in dashboard_policies],
         unacked_by_policy=unacked_by_policy,
         review_due_soon=review_due_soon,
         upcoming_reviews=upcoming_reviews,
@@ -89,6 +104,8 @@ def policies():
         chart_labels=chart_labels, chart_datasets=chart_datasets,
         all_users=all_users, all_frameworks=all_frameworks, policies_status_flow=Policy.STATUS_FLOW,
         POLICY_DEPARTMENTS=POLICY_DEPARTMENTS, STATUS_BADGE=STATUS_BADGE,
+        selected_assignee=selected_assignee, selected_department=selected_department,
+        selected_framework=selected_framework,
         STATUS_COLORS={'Not Uploaded': '#94a3b8', 'Draft': '#cbd5e1', 'Needs Review': '#f59e0b',
             'Pending Approval': '#3b82f6', 'Approved': '#8b5cf6', 'Published': '#10b981', 'Retired': '#64748b'})
 

@@ -5,6 +5,7 @@
 {% block content %}
 {% set needs_attention = status_counts.get('Needs Review', 0) + status_counts.get('Pending Approval', 0) %}
 {% set in_progress = status_counts.get('Draft', 0) + status_counts.get('Not Uploaded', 0) %}
+{% set active_view = request.args.get('view', 'dashboard') %}
 
 <div class="page-header">
     <div>
@@ -20,12 +21,32 @@
 </div>
 
 <div class="tabs">
-    <button class="tab active" onclick="switchPolicyView(this, 'dashboard')"><i class="fas fa-gauge" style="margin-right:6px;"></i>Dashboard</button>
-    <button class="tab" onclick="switchPolicyView(this, 'all')"><i class="fas fa-list" style="margin-right:6px;"></i>All Policies</button>
+    <button class="tab {{ 'active' if active_view == 'dashboard' }}" onclick="switchPolicyView(this, 'dashboard')"><i class="fas fa-gauge" style="margin-right:6px;"></i>Dashboard</button>
+    <button class="tab {{ 'active' if active_view == 'all' }}" onclick="switchPolicyView(this, 'all')"><i class="fas fa-list" style="margin-right:6px;"></i>All Policies</button>
+
+    <form id="dashboardFilterForm" method="GET" action="{{ url_for('policies.policies') }}" style="margin-left:auto;display:flex;gap:8px;align-self:center;">
+        <input type="hidden" name="view" id="filterViewInput" value="{{ active_view }}">
+        <select class="filter-select" name="assignee" onchange="this.form.submit()">
+            <option value="">Assignee</option>
+            {% for u in all_users %}<option value="{{ u.name }}" {% if selected_assignee == u.name %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+            <option value="No Assignee" {% if selected_assignee == 'No Assignee' %}selected{% endif %}>No Assignee</option>
+        </select>
+        <select class="filter-select" name="department" onchange="this.form.submit()">
+            <option value="">Department</option>
+            {% for d in POLICY_DEPARTMENTS %}<option value="{{ d }}" {% if selected_department == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+        </select>
+        <select class="filter-select" name="framework" onchange="this.form.submit()">
+            <option value="">Framework</option>
+            {% for f in all_frameworks %}<option value="{{ f.name }}" {% if selected_framework == f.name %}selected{% endif %}>{{ f.name }}</option>{% endfor %}
+        </select>
+        {% if selected_assignee or selected_department or selected_framework %}
+        <a href="{{ url_for('policies.policies', view=active_view) }}" class="btn btn-secondary btn-sm" title="Clear filters"><i class="fas fa-xmark"></i></a>
+        {% endif %}
+    </form>
 </div>
 
 <!-- ============ DASHBOARD VIEW ============ -->
-<div id="dashboardView">
+<div id="dashboardView" style="{{ '' if active_view == 'dashboard' else 'display:none;' }}">
     <div class="stats-grid" style="margin-bottom:20px;">
         <div class="stat-card">
             <div class="stat-icon blue"><i class="fas fa-file-shield"></i></div>
@@ -125,7 +146,7 @@
 </div>
 
 <!-- ============ ALL POLICIES VIEW ============ -->
-<div id="allPoliciesView" style="display:none;">
+<div id="allPoliciesView" style="{{ '' if active_view == 'all' else 'display:none;' }}">
     <div class="card" style="margin-bottom:16px;">
         <div class="card-body" style="padding:16px;">
             <div class="toolbar" style="margin-bottom:0;">
@@ -263,6 +284,7 @@ function switchPolicyView(el, view) {
     el.classList.add('active');
     document.getElementById('dashboardView').style.display = view === 'dashboard' ? '' : 'none';
     document.getElementById('allPoliciesView').style.display = view === 'all' ? '' : 'none';
+    document.getElementById('filterViewInput').value = view;
 }
 
 // ---- Policy Status donut ----
