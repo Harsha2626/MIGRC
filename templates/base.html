@@ -132,11 +132,11 @@
                     <i class="fas fa-chevron-down nav-section-chevron"></i>
                 </button>
                 <div class="nav-section-items">
-                    <a href="/trust-center" class="nav-item {% if page == 'trust_center' %}active{% endif %}">
-                        <i class="fas fa-certificate"></i>
-                        <span>Trust Center</span>
-                    </a>
                     {% if current_user.is_authenticated %}
+                    <a href="/integrations" class="nav-item {% if page == 'integrations' %}active{% endif %}">
+                        <i class="fas fa-plug"></i>
+                        <span>Integrations</span>
+                    </a>
                     <a href="/reports" class="nav-item {% if page == 'reports' %}active{% endif %}">
                         <i class="fas fa-file-export"></i>
                         <span>Reports</span>
