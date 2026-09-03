@@ -407,19 +407,19 @@ def seed_database():
 
         # ---- INTEGRATED PLATFORMS (VENDORS) ----
         vendors_data = [
-            dict(name='AWS', category='Cloud Infrastructure', risk_tier='Critical', risk_score=82,
+            dict(name='AWS', category='Cloud Infrastructure',
                  status='Approved', contact_name='AWS Support', contact_email='security@aws.com',
                  last_assessment='2026-06-15', next_assessment='2026-12-15',
                  compliance=['SOC 2', 'ISO 27001', 'HIPAA']),
-            dict(name='Google Workspace', category='Communication', risk_tier='High', risk_score=74,
+            dict(name='Google Workspace', category='Communication',
                  status='Approved', contact_name='Google Workspace Admin', contact_email='security@google.com',
                  last_assessment='2026-05-20', next_assessment='2026-11-20',
                  compliance=['SOC 2', 'ISO 27001']),
-            dict(name='GitHub', category='Development', risk_tier='Critical', risk_score=78,
+            dict(name='GitHub', category='Development',
                  status='Approved', contact_name='GitHub Support', contact_email='security@github.com',
                  last_assessment='2026-04-10', next_assessment='2026-10-10',
                  compliance=['SOC 2', 'ISO 27001']),
-            dict(name='Slack', category='Communication', risk_tier='Medium', risk_score=60,
+            dict(name='Slack', category='Communication',
                  status='Approved', contact_name='Slack Support', contact_email='security@slack.com',
                  last_assessment='2026-03-15', next_assessment='2026-09-15',
                  compliance=['SOC 2']),

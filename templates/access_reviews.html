@@ -141,7 +141,6 @@
                     <tr>
                         <th>Application</th>
                         <th>Category</th>
-                        <th>Risk Tier</th>
                         <th>Status</th>
                         <th>Employees with Access</th>
                         <th>Linked Reviews</th>
@@ -157,11 +156,6 @@
                             </div>
                         </td>
                         <td class="text-muted">{{ v.category }}</td>
-                        <td>
-                            {% if v.risk_tier == 'Critical' %}<span class="badge badge-danger">{{ v.risk_tier }}</span>
-                            {% elif v.risk_tier == 'High' %}<span class="badge badge-warning">{{ v.risk_tier }}</span>
-                            {% else %}<span class="badge badge-info">{{ v.risk_tier }}</span>{% endif %}
-                        </td>
                         <td>
                             {% if v.status == 'Approved' %}<span class="badge badge-success">{{ v.status }}</span>
                             {% else %}<span class="badge badge-warning">{{ v.status }}</span>{% endif %}

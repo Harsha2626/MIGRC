@@ -523,7 +523,7 @@ class Remediation(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-VENDOR_REASSESSMENT_DAYS = {'Critical': 90, 'High': 180, 'Medium': 270, 'Low': 365}
+VENDOR_REASSESSMENT_DAYS = 180
 
 
 class Vendor(db.Model):
@@ -531,9 +531,8 @@ class Vendor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     category = db.Column(db.String(50))
-    risk_tier = db.Column(db.String(20))
-    risk_score = db.Column(db.Integer)
     status = db.Column(db.String(30), default='Under Review')
+    website = db.Column(db.String(300))
     contact_name = db.Column(db.String(100))
     contact_email = db.Column(db.String(120))
     last_assessment = db.Column(db.String(20))
@@ -544,16 +543,14 @@ class Vendor(db.Model):
 
     assessments = db.relationship('VendorAssessment', backref='vendor', lazy='dynamic', cascade='all, delete-orphan')
     documents = db.relationship('Evidence', backref='vendor', lazy='dynamic', foreign_keys='Evidence.vendor_id')
-    risk_snapshots = db.relationship('VendorRiskSnapshot', backref='vendor', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
             'category': self.category,
-            'risk_tier': self.risk_tier,
-            'risk_score': self.risk_score,
             'status': self.status,
+            'website': self.website,
             'contact_name': self.contact_name,
             'contact_email': self.contact_email,
             'compliance': self.compliance or [],
@@ -601,14 +598,6 @@ class VendorAssessmentResponse(db.Model):
     answer_text = db.Column(db.Text)
 
     question = db.relationship('QuestionnaireQuestion')
-
-
-class VendorRiskSnapshot(db.Model):
-    __tablename__ = 'vendor_risk_snapshots'
-    id = db.Column(db.Integer, primary_key=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
-    risk_score = db.Column(db.Integer)
-    snapshot_date = db.Column(db.Date, default=date.today)
 
 
 class Asset(db.Model):

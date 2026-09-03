@@ -1,5 +1,5 @@
 from datetime import date
-from app.models import db, Framework, Risk, Policy, Evidence, Vendor, ComplianceSnapshot, DashboardSnapshot, VendorRiskSnapshot
+from app.models import db, Framework, Risk, Policy, Evidence, ComplianceSnapshot, DashboardSnapshot
 
 
 def ensure_snapshots_for_today():
@@ -27,10 +27,5 @@ def ensure_snapshots_for_today():
             active_policies=Policy.query.filter_by(status='Published').count(),
             pending_evidence=Evidence.query.filter_by(status='Pending Review').count(),
         ))
-
-    for vendor in Vendor.query.all():
-        exists = VendorRiskSnapshot.query.filter_by(vendor_id=vendor.id, snapshot_date=today).first()
-        if not exists:
-            db.session.add(VendorRiskSnapshot(vendor_id=vendor.id, risk_score=vendor.risk_score, snapshot_date=today))
 
     db.session.commit()
