@@ -678,16 +678,45 @@ class Employee(db.Model):
         }
 
 
+campaign_materials = db.Table(
+    'campaign_materials',
+    db.Column('campaign_id', db.Integer, db.ForeignKey('training_campaigns.id'), primary_key=True),
+    db.Column('material_id', db.Integer, db.ForeignKey('training_materials.id'), primary_key=True),
+)
+
+
+class TrainingMaterial(db.Model):
+    __tablename__ = 'training_materials'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    type = db.Column(db.String(20), default='Document')  # Document, Link, Video
+    file_path = db.Column(db.String(500))
+    file_name = db.Column(db.String(200))
+    url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    ICON_BY_TYPE = {'Document': 'fa-file-pdf', 'Link': 'fa-link', 'Video': 'fa-circle-play'}
+
+    @property
+    def icon(self):
+        return self.ICON_BY_TYPE.get(self.type, 'fa-file')
+
+
 class TrainingCampaign(db.Model):
     __tablename__ = 'training_campaigns'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.String(500))
     status = db.Column(db.String(30), default='Draft')
     launch_date = db.Column(db.String(20))
     end_date = db.Column(db.String(20))
+    timezone = db.Column(db.String(50), default='(GMT+05:30) Asia/Calcutta')
+    no_end_date = db.Column(db.Boolean, default=False)
+    sla_days = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     enrollments = db.relationship('TrainingCampaignEnrollment', backref='campaign', lazy='dynamic', cascade='all, delete-orphan')
+    materials = db.relationship('TrainingMaterial', secondary=campaign_materials, backref='campaigns')
 
     @property
     def total_enrolled(self):

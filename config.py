@@ -15,7 +15,7 @@ class Config:
     }
     UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file upload
-    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'csv', 'xlsx', 'doc', 'docx'}
+    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'csv', 'xlsx', 'doc', 'docx', 'ppt', 'pptx'}
 
     # Email notifications are opt-in and off by default — set MAIL_ENABLED=true once
     # MAIL_SERVER/USERNAME/PASSWORD are configured for a real SMTP account.
