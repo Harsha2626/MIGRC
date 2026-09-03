@@ -1,12 +1,19 @@
+import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
+from werkzeug.utils import secure_filename
 from app.models import (
-    db, Employee, TrainingCampaign, TrainingCampaignEnrollment,
-    EmployeeAccess, AccessReview, Vendor,
+    db, Employee, TrainingCampaign, TrainingCampaignEnrollment, TrainingMaterial,
+    EmployeeAccess, AccessReview, Vendor, ActivityLog,
 )
 from app.services.activity import log_activity
-from app.utils import require_permission
+from app.utils import allowed_file, require_permission
+
+CAMPAIGN_TIMEZONES = [
+    '(GMT+05:30) Asia/Calcutta', '(GMT+00:00) Europe/London',
+    '(GMT-05:00) US/Eastern', '(GMT-08:00) US/Pacific',
+]
 
 people_bp = Blueprint('people', __name__)
 
@@ -210,7 +217,67 @@ def training_campaigns():
         in_progress_count=len(in_progress),
         completed_count=len(completed),
         employee_count=Employee.query.count(),
+        materials=TrainingMaterial.query.order_by(TrainingMaterial.created_at.desc()).all(),
+        timezones=CAMPAIGN_TIMEZONES,
     )
+
+
+@people_bp.route('/people/training-materials', methods=['POST'])
+@login_required
+@require_permission('write')
+def create_training_material():
+    title = request.form.get('title', '').strip()
+    material_type = request.form.get('type', 'Document')
+
+    if not title:
+        flash('Training title is required.', 'error')
+        return redirect(url_for('people.training_campaigns'))
+
+    material = TrainingMaterial(title=title, type=material_type)
+
+    if material_type == 'Document':
+        file = request.files.get('file')
+        if not file or file.filename == '':
+            flash('Please choose a file to upload.', 'error')
+            return redirect(url_for('people.training_campaigns'))
+        if not allowed_file(file.filename):
+            flash('File type not allowed. Use: pdf, doc, docx, ppt, pptx.', 'error')
+            return redirect(url_for('people.training_campaigns'))
+        filename = secure_filename(file.filename)
+        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+        unique_filename = f'{timestamp}_{filename}'
+        file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
+        material.file_path = unique_filename
+        material.file_name = filename
+    else:
+        url = request.form.get('url', '').strip()
+        if not url:
+            flash(f'A {material_type.lower()} URL is required.', 'error')
+            return redirect(url_for('people.training_campaigns'))
+        material.url = url
+
+    db.session.add(material)
+    log_activity('created', 'TrainingMaterial', title)
+    db.session.commit()
+    flash(f'Training "{title}" added to the library.', 'success')
+    return redirect(url_for('people.training_campaigns'))
+
+
+@people_bp.route('/people/training-materials/<int:material_id>/delete', methods=['POST'])
+@login_required
+@require_permission('delete')
+def delete_training_material(material_id):
+    material = TrainingMaterial.query.get_or_404(material_id)
+    title = material.title
+    if material.file_path:
+        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], material.file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    db.session.delete(material)
+    log_activity('deleted', 'TrainingMaterial', title)
+    db.session.commit()
+    flash(f'Training "{title}" removed from the library.', 'info')
+    return redirect(url_for('people.training_campaigns'))
 
 
 @people_bp.route('/people/training-campaigns', methods=['POST'])
@@ -218,16 +285,33 @@ def training_campaigns():
 @require_permission('write')
 def create_training_campaign():
     name = request.form.get('name', '').strip()
-    status = request.form.get('status', 'Draft')
+    description = request.form.get('description', '').strip()
     launch_date = request.form.get('launch_date', '')
     end_date = request.form.get('end_date', '')
+    no_end_date = request.form.get('no_end_date') == 'on'
+    timezone = request.form.get('timezone', CAMPAIGN_TIMEZONES[0])
+    sla_enabled = request.form.get('sla_enabled') == 'on'
+    sla_days = request.form.get('sla_days', type=int) if sla_enabled else None
     assign_to = request.form.get('assign_to', 'none')
+    material_ids = [int(mid) for mid in request.form.getlist('material_ids') if mid]
 
     if not name:
         flash('Campaign name is required.', 'error')
         return redirect(url_for('people.training_campaigns'))
+    if not launch_date:
+        flash('Launch date & time is required.', 'error')
+        return redirect(url_for('people.training_campaigns'))
 
-    campaign = TrainingCampaign(name=name, status=status, launch_date=launch_date, end_date=end_date)
+    now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
+    status = 'Upcoming' if launch_date > now else 'In Progress'
+
+    campaign = TrainingCampaign(
+        name=name, description=description or None, status=status,
+        launch_date=launch_date, end_date=None if no_end_date else end_date,
+        no_end_date=no_end_date, timezone=timezone, sla_days=sla_days,
+    )
+    if material_ids:
+        campaign.materials = TrainingMaterial.query.filter(TrainingMaterial.id.in_(material_ids)).all()
     db.session.add(campaign)
     db.session.flush()
 
@@ -235,10 +319,108 @@ def create_training_campaign():
         for employee in Employee.query.all():
             db.session.add(TrainingCampaignEnrollment(campaign_id=campaign.id, employee_id=employee.id))
 
-    log_activity('created', 'TrainingCampaign', name)
+    log_activity('created', 'TrainingCampaign', name, f'{current_user.name} launched campaign "{name}"')
     db.session.commit()
-    flash(f'Campaign "{name}" created.', 'success')
+    flash(f'Campaign "{name}" launched.', 'success')
     return redirect(url_for('people.training_campaigns'))
+
+
+@people_bp.route('/people/training-campaigns/<int:campaign_id>')
+@login_required
+def campaign_detail(campaign_id):
+    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    tab = request.args.get('tab', 'overview')
+
+    now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
+    if campaign.status == 'Completed':
+        banner = 'Campaign has ended'
+    elif campaign.launch_date and campaign.launch_date > now:
+        banner = 'Campaign is yet to start'
+    else:
+        banner = 'Campaign is in progress'
+
+    enrollments = campaign.enrollments.join(Employee).order_by(Employee.name).all()
+    completed_within_sla = None
+    if campaign.sla_days and campaign.total_enrolled:
+        deadline_days = campaign.sla_days
+        on_time = 0
+        for e in enrollments:
+            if e.completed and e.completed_at and campaign.launch_date:
+                try:
+                    launch_dt = datetime.strptime(campaign.launch_date, '%Y-%m-%dT%H:%M')
+                    if (e.completed_at - launch_dt).days <= deadline_days:
+                        on_time += 1
+                except ValueError:
+                    pass
+        completed_within_sla = round((on_time / campaign.total_enrolled) * 100)
+
+    audit_logs = ActivityLog.query.filter_by(entity_type='TrainingCampaign', entity_name=campaign.name).order_by(ActivityLog.created_at.desc()).all()
+    all_employees = Employee.query.order_by(Employee.name).all()
+    enrolled_ids = {e.employee_id for e in enrollments}
+
+    return render_template('campaign_detail.html', page='training_campaigns',
+        campaign=campaign, banner=banner, enrollments=enrollments,
+        completed_within_sla=completed_within_sla, audit_logs=audit_logs,
+        all_employees=all_employees, enrolled_ids=enrolled_ids,
+        tab=tab)
+
+
+@people_bp.route('/people/training-campaigns/<int:campaign_id>/edit', methods=['POST'])
+@login_required
+@require_permission('write')
+def edit_training_campaign(campaign_id):
+    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('Campaign name is required.', 'error')
+        return redirect(url_for('people.campaign_detail', campaign_id=campaign_id, tab='settings'))
+
+    campaign.name = name
+    campaign.description = request.form.get('description', '').strip() or None
+    campaign.launch_date = request.form.get('launch_date', campaign.launch_date)
+    campaign.timezone = request.form.get('timezone', campaign.timezone)
+    no_end_date = request.form.get('no_end_date') == 'on'
+    campaign.no_end_date = no_end_date
+    campaign.end_date = None if no_end_date else request.form.get('end_date', campaign.end_date)
+    sla_enabled = request.form.get('sla_enabled') == 'on'
+    campaign.sla_days = request.form.get('sla_days', type=int) if sla_enabled else None
+    material_ids = [int(mid) for mid in request.form.getlist('material_ids') if mid]
+    campaign.materials = TrainingMaterial.query.filter(TrainingMaterial.id.in_(material_ids)).all() if material_ids else []
+
+    log_activity('updated', 'TrainingCampaign', name, f'{current_user.name} updated campaign "{name}" settings')
+    db.session.commit()
+    flash('Campaign details updated.', 'success')
+    return redirect(url_for('people.campaign_detail', campaign_id=campaign_id, tab='settings'))
+
+
+@people_bp.route('/people/training-campaigns/<int:campaign_id>/employees', methods=['POST'])
+@login_required
+@require_permission('write')
+def update_campaign_employees(campaign_id):
+    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    employee_ids = {int(eid) for eid in request.form.getlist('employee_ids')}
+    current_ids = {e.employee_id for e in campaign.enrollments}
+
+    for eid in employee_ids - current_ids:
+        db.session.add(TrainingCampaignEnrollment(campaign_id=campaign.id, employee_id=eid))
+    for enrollment in campaign.enrollments.filter(TrainingCampaignEnrollment.employee_id.in_(current_ids - employee_ids)):
+        db.session.delete(enrollment)
+
+    log_activity('updated', 'TrainingCampaign', campaign.name, f'{current_user.name} updated enrolled employees for "{campaign.name}"')
+    db.session.commit()
+    flash('Enrolled employees updated.', 'success')
+    return redirect(url_for('people.campaign_detail', campaign_id=campaign_id, tab='employees'))
+
+
+@people_bp.route('/people/training-campaigns/<int:campaign_id>/enrollments/<int:enrollment_id>/toggle', methods=['POST'])
+@login_required
+@require_permission('write')
+def toggle_enrollment_completed(campaign_id, enrollment_id):
+    enrollment = TrainingCampaignEnrollment.query.filter_by(id=enrollment_id, campaign_id=campaign_id).first_or_404()
+    enrollment.completed = not enrollment.completed
+    enrollment.completed_at = datetime.utcnow() if enrollment.completed else None
+    db.session.commit()
+    return redirect(url_for('people.campaign_detail', campaign_id=campaign_id, tab='employees'))
 
 
 @people_bp.route('/people/training-campaigns/<int:campaign_id>/delete', methods=['POST'])

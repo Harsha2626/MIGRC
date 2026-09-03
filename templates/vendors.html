@@ -91,14 +91,16 @@
                         <td>
                             {% if v.risk_tier == 'Critical' %}<span class="badge badge-danger">{{ v.risk_tier }}</span>
                             {% elif v.risk_tier == 'High' %}<span class="badge badge-warning">{{ v.risk_tier }}</span>
-                            {% else %}<span class="badge badge-info">{{ v.risk_tier }}</span>{% endif %}
+                            {% elif v.risk_tier %}<span class="badge badge-info">{{ v.risk_tier }}</span>
+                            {% else %}<span class="badge badge-neutral">Not Set</span>{% endif %}
                         </td>
                         <td>
+                            {% set score = v.risk_score or 0 %}
                             <div class="flex-center gap-8">
                                 <div class="risk-score-bar">
-                                    <div class="risk-score-fill" style="width:{{ v.risk_score }}%;background:{% if v.risk_score >= 80 %}#10b981{% elif v.risk_score >= 60 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+                                    <div class="risk-score-fill" style="width:{{ score }}%;background:{% if score >= 80 %}#10b981{% elif score >= 60 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
                                 </div>
-                                <span class="font-semibold">{{ v.risk_score }}</span>
+                                <span class="font-semibold">{{ v.risk_score if v.risk_score is not none else '—' }}</span>
                             </div>
                         </td>
                         <td>

@@ -9,7 +9,8 @@
         <p>Launch and track security awareness training campaigns across your employees</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-primary" onclick="showAddCampaignModal()"><i class="fas fa-plus"></i> Add Campaign</button>
+        <button class="btn btn-secondary" onclick="showAddTrainingMaterialModal()"><i class="fas fa-book"></i> Training Library</button>
+        <button class="btn btn-primary" onclick="openCampaignWizard()"><i class="fas fa-plus"></i> Add Campaign</button>
     </div>
 </div>
 
@@ -46,6 +47,7 @@
                     <tr>
                         <th>Campaign Name</th>
                         <th>Status</th>
+                        <th>Training</th>
                         <th>Launch Date</th>
                         <th>End Date</th>
                         <th>Completion Rate</th>
@@ -55,16 +57,24 @@
                 </thead>
                 <tbody>
                     {% for c in campaigns %}
-                    <tr>
-                        <td class="font-semibold">{{ c.name }}</td>
+                    <tr onclick="window.location='{{ url_for('people.campaign_detail', campaign_id=c.id) }}'" style="cursor:pointer;">
+                        <td>
+                            <div class="font-semibold">{{ c.name }}</div>
+                            {% if c.description %}<div class="text-sm text-muted">{{ c.description }}</div>{% endif %}
+                        </td>
                         <td>
                             {% if c.status == 'Completed' %}<span class="badge badge-success">{{ c.status }}</span>
                             {% elif c.status == 'In Progress' %}<span class="badge badge-primary">{{ c.status }}</span>
                             {% elif c.status == 'Upcoming' %}<span class="badge badge-info">{{ c.status }}</span>
                             {% else %}<span class="badge badge-neutral">{{ c.status }}</span>{% endif %}
                         </td>
-                        <td>{{ c.launch_date or '-' }}</td>
-                        <td>{{ c.end_date or '-' }}</td>
+                        <td>
+                            <div class="tag-list">
+                                {% for m in c.materials %}<span class="tag">{{ m.title }}</span>{% else %}<span class="text-sm text-muted">&mdash;</span>{% endfor %}
+                            </div>
+                        </td>
+                        <td class="text-sm">{{ c.launch_date.replace('T', ' ') if c.launch_date else '-' }}</td>
+                        <td class="text-sm">{{ 'No end date' if c.no_end_date else (c.end_date.replace('T', ' ') if c.end_date else '-') }}</td>
                         <td style="width:160px;">
                             <div class="flex-center gap-8">
                                 <div class="progress-bar" style="width:80px;">
@@ -74,9 +84,8 @@
                             </div>
                         </td>
                         <td class="text-sm text-muted">{{ c.created_at.strftime('%d %b %Y') if c.created_at else '-' }}</td>
-                        <td>
+                        <td onclick="event.stopPropagation()">
                             <div class="flex gap-8">
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Reminder" onclick="showToast('Reminders sent for {{ c.name }}','info')"><i class="fas fa-bell"></i></button>
                                 <form method="POST" action="{{ url_for('people.delete_training_campaign', campaign_id=c.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ c.name }}?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
@@ -90,46 +99,299 @@
         </div>
     </div>
 </div>
+
+<!-- Create Campaign Wizard -->
+<div class="wizard-overlay" id="campaignWizardOverlay">
+    <div class="wizard-modal">
+        <div class="wizard-rail">
+            <div class="wizard-rail-title">Create Campaign</div>
+            <div class="wizard-step-item" data-step="1">
+                <div class="wizard-step-circle">1</div>
+                <div><div class="wizard-step-label-num">Step 1</div><div class="wizard-step-label-title">Campaign Details</div></div>
+            </div>
+            <div class="wizard-step-item" data-step="2">
+                <div class="wizard-step-circle">2</div>
+                <div><div class="wizard-step-label-num">Step 2</div><div class="wizard-step-label-title">Review Information</div></div>
+            </div>
+        </div>
+
+        <div class="wizard-content">
+            <div class="wizard-content-header">
+                <h3 id="campaignWizardStepTitle">Campaign Details</h3>
+                <button type="button" class="modal-close" onclick="closeCampaignWizard()"><i class="fas fa-times"></i></button>
+            </div>
+
+            <form id="campaignWizardForm" method="POST" action="{{ url_for('people.create_training_campaign') }}" style="display:contents;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="wizard-content-body">
+
+                    <!-- Step 1: Campaign Details -->
+                    <div class="wizard-step-panel active" data-step="1">
+                        <div class="form-group">
+                            <label>Campaign Name <span class="required-star">*</span></label>
+                            <input type="text" name="name" id="campName" class="form-control" maxlength="100" placeholder="e.g., Q3 2026 Security Awareness" required oninput="updateFieldCounter('campName','campNameCount',100)">
+                            <div class="field-counter" id="campNameCount">0/100</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Description (Optional)</label>
+                            <textarea name="description" id="campDescription" class="form-control" rows="3" maxlength="500" placeholder="Type the description here" oninput="updateFieldCounter('campDescription','campDescriptionCount',500)"></textarea>
+                            <div class="field-counter" id="campDescriptionCount">0/500</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Select Training</label>
+                            <p class="text-sm text-muted mb-8">Choose training material from your library for this campaign. Need something new? Use "Training Library" above to add it first.</p>
+                            <div class="radio-card-group mb-16">
+                                <label class="radio-card selected"><input type="radio" name="material_type_filter" value="" checked onchange="filterWizardMaterials('')"> All</label>
+                                <label class="radio-card"><input type="radio" name="material_type_filter" value="Document" onchange="filterWizardMaterials('Document')"> Document</label>
+                                <label class="radio-card"><input type="radio" name="material_type_filter" value="Link" onchange="filterWizardMaterials('Link')"> Link</label>
+                                <label class="radio-card"><input type="radio" name="material_type_filter" value="Video" onchange="filterWizardMaterials('Video')"> Video</label>
+                            </div>
+                            <div class="material-picker-grid" id="materialPickerGrid">
+                                {% for m in materials %}
+                                <label class="material-picker-card" data-type="{{ m.type }}">
+                                    <input type="checkbox" name="material_ids" value="{{ m.id }}">
+                                    <i class="fas {{ m.icon }}"></i>
+                                    <span>{{ m.title }}</span>
+                                </label>
+                                {% else %}
+                                <div class="text-sm text-muted">Your training library is empty. Click "Training Library" above to add your first document, link, or video.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <h4 style="font-size:14px;margin:20px 0 12px;">Schedule Campaign</h4>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                            <div class="form-group">
+                                <label>Launch Date &amp; Time <span class="required-star">*</span></label>
+                                <input type="datetime-local" name="launch_date" id="campLaunch" class="form-control" required onchange="updateCampaignDuration()">
+                            </div>
+                            <div class="form-group">
+                                <label>Timezone <span class="required-star">*</span></label>
+                                <select name="timezone" class="form-control">
+                                    {% for tz in timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end;">
+                            <div class="form-group">
+                                <label>End Date &amp; Time <span class="required-star">*</span></label>
+                                <input type="datetime-local" name="end_date" id="campEnd" class="form-control" onchange="updateCampaignDuration()">
+                            </div>
+                            <div class="form-group" id="campaignDurationBox">
+                                <label>Campaign Duration</label>
+                                <div class="text-sm font-semibold" id="campaignDurationText">&mdash;</div>
+                            </div>
+                        </div>
+                        <label class="flex-center gap-8 text-sm mb-16" style="font-weight:400;">
+                            <input type="checkbox" name="no_end_date" id="campNoEndDate" onchange="toggleNoEndDate()"> This campaign does not have an end date
+                        </label>
+                        <label class="flex-center gap-8 text-sm" style="font-weight:400;">
+                            <input type="checkbox" name="sla_enabled" id="campSlaEnabled" onchange="toggleSla()"> Set your campaign SLA
+                            <input type="number" name="sla_days" id="campSlaDays" class="form-control" style="width:90px;" min="1" value="0" disabled>
+                            <i class="fas fa-circle-info text-muted" title="Number of days employees have to complete training after enrollment"></i>
+                        </label>
+
+                        <div class="form-group mt-16">
+                            <label>Assign To</label>
+                            <select name="assign_to" class="form-control">
+                                <option value="none">No one yet</option>
+                                <option value="all">All Employees ({{ employee_count }})</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Review Information -->
+                    <div class="wizard-step-panel" data-step="2">
+                        <div class="wizard-review-row"><span class="label">Campaign Name</span><span class="value" id="reviewCampName">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Description</span><span class="value" id="reviewCampDescription">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Training Selected</span><span class="value" id="reviewCampMaterials">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Launch Date &amp; Time</span><span class="value" id="reviewCampLaunch">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Timezone</span><span class="value" id="reviewCampTimezone">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">End Date &amp; Time</span><span class="value" id="reviewCampEnd">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Campaign Duration</span><span class="value" id="reviewCampDuration">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Campaign SLA</span><span class="value" id="reviewCampSla">&mdash;</span></div>
+                        <div class="wizard-review-row"><span class="label">Assign To</span><span class="value" id="reviewCampAssign">&mdash;</span></div>
+                    </div>
+
+                </div>
+
+                <div class="wizard-content-footer">
+                    <button type="button" class="btn btn-secondary" id="campaignWizardBackBtn" onclick="campaignWizardBack()">Back</button>
+                    <div style="display:flex;gap:8px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeCampaignWizard()">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="campaignWizardNextBtn" onclick="campaignWizardNext()">Next <i class="fas fa-arrow-right"></i></button>
+                        <button type="submit" class="btn btn-primary" id="campaignWizardLaunchBtn" style="display:none;"><i class="fas fa-rocket"></i> Launch Campaign</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function showAddCampaignModal() {
-    openModal('Add Training Campaign', `
-        <form id="addCampaignForm" method="POST" action="{{ url_for('people.create_training_campaign') }}">
+function updateFieldCounter(fieldId, counterId, max) {
+    const el = document.getElementById(fieldId);
+    document.getElementById(counterId).textContent = `${el.value.length}/${max}`;
+}
+
+// ---- Training Library ----
+function showAddTrainingMaterialModal() {
+    openModal('Training Library', `
+        <div style="display:flex;flex-direction:column;gap:10px;max-height:220px;overflow-y:auto;margin-bottom:20px;">
+            {% for m in materials %}
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border-color);border-radius:8px;">
+                <div class="flex-center gap-8"><i class="fas {{ m.icon }}" style="color:var(--accent-primary);"></i> <span class="text-sm font-semibold">{{ m.title|e }}</span> <span class="badge badge-neutral">{{ m.type }}</span></div>
+                <form method="POST" action="{{ url_for('people.delete_training_material', material_id=m.id) }}" onsubmit="return confirm('Remove {{ m.title|e }} from the library?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-danger btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+            {% else %}
+            <div class="text-sm text-muted">No training materials yet &mdash; add your first one below.</div>
+            {% endfor %}
+        </div>
+        <form id="addMaterialForm" method="POST" action="{{ url_for('people.create_training_material') }}" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Campaign Name</label>
-                <input type="text" name="name" class="form-control" placeholder="e.g., Q3 2026 Security Awareness" required>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                <div class="form-group">
-                    <label>Launch Date</label>
-                    <input type="date" name="launch_date" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>End Date</label>
-                    <input type="date" name="end_date" class="form-control">
-                </div>
+                <label>Title</label>
+                <input type="text" name="title" class="form-control" placeholder="e.g., ISMS Training" required>
             </div>
             <div class="form-group">
-                <label>Status</label>
-                <select name="status" class="form-control">
-                    <option>Draft</option>
-                    <option>Upcoming</option>
-                    <option>In Progress</option>
-                    <option>Completed</option>
+                <label>Type</label>
+                <select name="type" class="form-control" onchange="toggleMaterialTypeFields(this.value)">
+                    <option value="Document">Document</option>
+                    <option value="Link">Link</option>
+                    <option value="Video">Video</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label>Assign To</label>
-                <select name="assign_to" class="form-control">
-                    <option value="none">No one yet</option>
-                    <option value="all">All Employees ({{ employee_count }})</option>
-                </select>
+            <div class="form-group" id="materialFileGroup">
+                <label>File</label>
+                <input type="file" name="file" class="form-control" accept=".pdf,.doc,.docx,.ppt,.pptx">
+            </div>
+            <div class="form-group" id="materialUrlGroup" style="display:none;">
+                <label>URL</label>
+                <input type="text" name="url" class="form-control" placeholder="https://...">
             </div>
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'addCampaignForm\').submit()">Create Campaign</button>');
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Close</button><button class="btn btn-primary" onclick="document.getElementById(\'addMaterialForm\').submit()">Add Training</button>');
 }
+
+function toggleMaterialTypeFields(type) {
+    document.getElementById('materialFileGroup').style.display = type === 'Document' ? '' : 'none';
+    document.getElementById('materialUrlGroup').style.display = type === 'Document' ? 'none' : '';
+}
+
+// ---- Campaign Wizard ----
+const CAMPAIGN_WIZARD_TITLES = {1: 'Campaign Details', 2: 'Review Information'};
+let campaignWizardStep = 1;
+
+function openCampaignWizard() {
+    campaignWizardStep = 1;
+    document.getElementById('campaignWizardForm').reset();
+    document.getElementById('campSlaDays').disabled = true;
+    document.getElementById('campEnd').disabled = false;
+    updateFieldCounter('campName', 'campNameCount', 100);
+    updateFieldCounter('campDescription', 'campDescriptionCount', 500);
+    renderCampaignWizardStep();
+    document.getElementById('campaignWizardOverlay').classList.add('active');
+}
+
+function closeCampaignWizard() {
+    document.getElementById('campaignWizardOverlay').classList.remove('active');
+}
+
+function renderCampaignWizardStep() {
+    document.querySelectorAll('#campaignWizardOverlay .wizard-step-panel').forEach(p => {
+        p.classList.toggle('active', Number(p.dataset.step) === campaignWizardStep);
+    });
+    document.querySelectorAll('#campaignWizardOverlay .wizard-step-item').forEach(item => {
+        const n = Number(item.dataset.step);
+        item.classList.toggle('active', n === campaignWizardStep);
+        item.classList.toggle('done', n < campaignWizardStep);
+    });
+    document.getElementById('campaignWizardStepTitle').textContent = CAMPAIGN_WIZARD_TITLES[campaignWizardStep];
+    document.getElementById('campaignWizardBackBtn').style.visibility = campaignWizardStep === 1 ? 'hidden' : 'visible';
+    document.getElementById('campaignWizardNextBtn').style.display = campaignWizardStep === 2 ? 'none' : '';
+    document.getElementById('campaignWizardLaunchBtn').style.display = campaignWizardStep === 2 ? '' : 'none';
+    if (campaignWizardStep === 2) renderCampaignReview();
+}
+
+function campaignWizardNext() {
+    const form = document.getElementById('campaignWizardForm');
+    if (campaignWizardStep === 1) {
+        const name = form.querySelector('[name="name"]').value.trim();
+        const launch = form.querySelector('[name="launch_date"]').value;
+        if (!name) { showToast('Campaign name is required', 'error'); return; }
+        if (!launch) { showToast('Launch date & time is required', 'error'); return; }
+    }
+    if (campaignWizardStep < 2) { campaignWizardStep++; renderCampaignWizardStep(); }
+}
+
+function campaignWizardBack() {
+    if (campaignWizardStep > 1) { campaignWizardStep--; renderCampaignWizardStep(); }
+}
+
+function filterWizardMaterials(type) {
+    document.querySelectorAll('#materialPickerGrid .material-picker-card').forEach(card => {
+        card.style.display = (!type || card.dataset.type === type) ? '' : 'none';
+    });
+}
+
+function updateCampaignDuration() {
+    const launch = document.getElementById('campLaunch').value;
+    const end = document.getElementById('campEnd').value;
+    const box = document.getElementById('campaignDurationText');
+    if (!launch || !end) { box.textContent = '—'; return; }
+    const diffMs = new Date(end) - new Date(launch);
+    if (diffMs <= 0) { box.textContent = 'End must be after launch'; return; }
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+    const mins = Math.floor((diffMs / (1000 * 60)) % 60);
+    box.textContent = `${days} days ${hours} hours ${mins} minutes`;
+}
+
+function toggleNoEndDate() {
+    const checked = document.getElementById('campNoEndDate').checked;
+    const endInput = document.getElementById('campEnd');
+    endInput.disabled = checked;
+    if (checked) { endInput.value = ''; }
+    document.getElementById('campaignDurationText').textContent = checked ? 'No end date' : '—';
+}
+
+function toggleSla() {
+    const checked = document.getElementById('campSlaEnabled').checked;
+    document.getElementById('campSlaDays').disabled = !checked;
+}
+
+function renderCampaignReview() {
+    const form = document.getElementById('campaignWizardForm');
+    const val = name => { const el = form.querySelector(`[name="${name}"]`); return el ? el.value : ''; };
+
+    document.getElementById('reviewCampName').textContent = val('name') || '—';
+    document.getElementById('reviewCampDescription').textContent = val('description') || '—';
+
+    const materialNames = Array.from(form.querySelectorAll('[name="material_ids"]:checked')).map(cb => cb.closest('.material-picker-card').querySelector('span').textContent);
+    document.getElementById('reviewCampMaterials').textContent = materialNames.length ? materialNames.join(', ') : 'None selected';
+
+    document.getElementById('reviewCampLaunch').textContent = val('launch_date') ? val('launch_date').replace('T', ' ') : '—';
+    document.getElementById('reviewCampTimezone').textContent = val('timezone') || '—';
+
+    const noEndDate = document.getElementById('campNoEndDate').checked;
+    document.getElementById('reviewCampEnd').textContent = noEndDate ? 'No end date' : (val('end_date') ? val('end_date').replace('T', ' ') : '—');
+    document.getElementById('reviewCampDuration').textContent = document.getElementById('campaignDurationText').textContent;
+
+    const slaEnabled = document.getElementById('campSlaEnabled').checked;
+    document.getElementById('reviewCampSla').textContent = slaEnabled ? `${val('sla_days') || 0} day(s)` : 'Not set';
+
+    const assignSelect = form.querySelector('[name="assign_to"]');
+    document.getElementById('reviewCampAssign').textContent = assignSelect.options[assignSelect.selectedIndex].text;
+}
+
+document.getElementById('campaignWizardOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeCampaignWizard();
+});
 </script>
 {% endblock %}

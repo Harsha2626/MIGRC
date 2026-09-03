@@ -401,12 +401,11 @@
 </div>
 {% endif %}
 
-<!-- Tabs: Comments / Controls & Requirements / Audit Logs / Tickets -->
+<!-- Tabs: Comments / Controls & Requirements / Audit Logs -->
 <div class="tabs">
     <button class="tab active" onclick="switchPolicyDetailTab(this, 'comments')"><i class="fas fa-comment" style="margin-right:6px;"></i>Comments</button>
     <button class="tab" onclick="switchPolicyDetailTab(this, 'controls')"><i class="fas fa-shield-halved" style="margin-right:6px;"></i>Controls &amp; Requirements</button>
     <button class="tab" onclick="switchPolicyDetailTab(this, 'audit')"><i class="fas fa-clock-rotate-left" style="margin-right:6px;"></i>Audit Logs</button>
-    <button class="tab" onclick="switchPolicyDetailTab(this, 'tickets')"><i class="fas fa-ticket" style="margin-right:6px;"></i>Tickets (JIRA)</button>
 </div>
 
 <div id="commentsTab" class="card">
@@ -523,15 +522,6 @@
         </div>
     </div>
 </div>
-
-<div id="ticketsTab" class="card" style="display:none;">
-    <div class="card-body locked-card">
-        <div class="locked-icon"><i class="fas fa-lock"></i></div>
-        <h4>Jira isn't connected</h4>
-        <p>Connect Jira to link tickets to this policy.</p>
-        <button class="btn btn-sm btn-secondary" disabled style="opacity:0.6;cursor:not-allowed;">Connect Jira</button>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -539,7 +529,7 @@
 function switchPolicyDetailTab(el, tab) {
     document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
-    ['comments', 'controls', 'audit', 'tickets'].forEach(t => {
+    ['comments', 'controls', 'audit'].forEach(t => {
         document.getElementById(t + 'Tab').style.display = t === tab ? '' : 'none';
     });
 }
