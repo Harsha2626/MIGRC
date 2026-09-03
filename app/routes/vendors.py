@@ -5,21 +5,20 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
     db, Vendor, VENDOR_REASSESSMENT_DAYS, QuestionnaireTemplate, QuestionnaireQuestion,
-    VendorAssessment, VendorAssessmentResponse, VendorRiskSnapshot, Evidence,
+    VendorAssessment, VendorAssessmentResponse, Evidence,
 )
 from app.services.activity import log_activity
 from app.services.csv_export import csv_response
-from app.utils import allowed_file, parse_date_safe, require_permission
+from app.utils import allowed_file, require_permission
 
 vendors_bp = Blueprint('vendors', __name__)
 
-RISK_TIER_MIDPOINTS = {'Critical': 90, 'High': 70, 'Medium': 50, 'Low': 20}
+VENDOR_STATUSES = ['Pending', 'In Progress', 'Approved']
 
 
-def _next_assessment_date(risk_tier, from_date=None):
+def _next_assessment_date(from_date=None):
     from_date = from_date or datetime.utcnow().date()
-    days = VENDOR_REASSESSMENT_DAYS.get(risk_tier, 180)
-    return (from_date + timedelta(days=days)).strftime('%Y-%m-%d')
+    return (from_date + timedelta(days=VENDOR_REASSESSMENT_DAYS)).strftime('%Y-%m-%d')
 
 
 @vendors_bp.route('/vendors')
@@ -27,7 +26,7 @@ def _next_assessment_date(risk_tier, from_date=None):
 def vendors():
     all_vendors = Vendor.query.all()
     return render_template('vendors.html', page='vendors', vendors=all_vendors,
-        vendor_dicts=[v.to_dict() for v in all_vendors])
+        vendor_dicts=[v.to_dict() for v in all_vendors], VENDOR_STATUSES=VENDOR_STATUSES)
 
 
 @vendors_bp.route('/vendors/add', methods=['POST'])
@@ -35,26 +34,25 @@ def vendors():
 @require_permission('write')
 def add_vendor():
     name = request.form.get('name', '').strip()
-    risk_tier = request.form.get('risk_tier', 'Medium')
+    status = request.form.get('status', 'Pending')
 
     if not name:
         flash('Vendor name is required.', 'error')
         return redirect(url_for('vendors.vendors'))
 
-    if risk_tier not in RISK_TIER_MIDPOINTS:
-        risk_tier = 'Medium'
+    if status not in VENDOR_STATUSES:
+        status = 'Pending'
 
     today = datetime.utcnow().date()
     vendor = Vendor(
         name=name,
         category=request.form.get('category', ''),
-        risk_tier=risk_tier,
-        risk_score=RISK_TIER_MIDPOINTS[risk_tier],
-        status='Under Review',
+        status=status,
+        website=request.form.get('website', '').strip(),
         contact_name=request.form.get('contact_name', ''),
         contact_email=request.form.get('contact_email', ''),
         last_assessment=today.strftime('%Y-%m-%d'),
-        next_assessment=_next_assessment_date(risk_tier, today),
+        next_assessment=_next_assessment_date(today),
         compliance=request.form.getlist('compliance'),
     )
     db.session.add(vendor)
@@ -73,13 +71,8 @@ def vendor_detail(vendor_id):
     documents = vendor.documents.all()
     templates = QuestionnaireTemplate.query.order_by(QuestionnaireTemplate.name).all()
 
-    snapshots = vendor.risk_snapshots.order_by(VendorRiskSnapshot.snapshot_date).all()
-    trend_labels = [s.snapshot_date.strftime('%d %b') for s in snapshots]
-    trend_data = [s.risk_score for s in snapshots]
-
     return render_template('vendor_detail.html', page='vendors',
-        vendor=vendor, assessments=assessments, documents=documents, templates=templates,
-        trend_labels=trend_labels, trend_data=trend_data)
+        vendor=vendor, assessments=assessments, documents=documents, templates=templates)
 
 
 @vendors_bp.route('/vendors/<int:vendor_id>/edit', methods=['POST'])
@@ -88,28 +81,22 @@ def vendor_detail(vendor_id):
 def edit_vendor(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
     name = request.form.get('name', '').strip()
-    risk_tier = request.form.get('risk_tier', vendor.risk_tier)
 
     if not name:
         flash('Vendor name is required.', 'error')
         return redirect(url_for('vendors.vendors'))
 
-    if risk_tier not in RISK_TIER_MIDPOINTS:
-        risk_tier = vendor.risk_tier
+    status = request.form.get('status', vendor.status)
+    if status not in VENDOR_STATUSES:
+        status = vendor.status
 
-    tier_changed = risk_tier != vendor.risk_tier
     vendor.name = name
     vendor.category = request.form.get('category', vendor.category)
-    vendor.risk_tier = risk_tier
-    vendor.risk_score = RISK_TIER_MIDPOINTS[risk_tier]
-    vendor.status = request.form.get('status', vendor.status)
+    vendor.status = status
+    vendor.website = request.form.get('website', vendor.website)
     vendor.contact_name = request.form.get('contact_name', vendor.contact_name)
     vendor.contact_email = request.form.get('contact_email', vendor.contact_email)
     vendor.compliance = request.form.getlist('compliance') or vendor.compliance
-
-    if tier_changed:
-        last = parse_date_safe(vendor.last_assessment) or datetime.utcnow().date()
-        vendor.next_assessment = _next_assessment_date(risk_tier, last)
 
     log_activity('updated', 'Vendor', name)
     db.session.commit()
@@ -133,8 +120,8 @@ def delete_vendor(vendor_id):
 @vendors_bp.route('/vendors/export')
 @login_required
 def export_vendors():
-    rows = [(v.name, v.category, v.risk_tier, v.risk_score, v.status, v.contact_name, v.contact_email, v.last_assessment, v.next_assessment) for v in Vendor.query.all()]
-    return csv_response('vendors.csv', ['Name', 'Category', 'Risk Tier', 'Risk Score', 'Status', 'Contact Name', 'Contact Email', 'Last Assessment', 'Next Assessment'], rows)
+    rows = [(v.name, v.category, v.status, v.website, v.contact_name, v.contact_email, v.last_assessment, v.next_assessment) for v in Vendor.query.all()]
+    return csv_response('vendors.csv', ['Name', 'Category', 'Status', 'Website', 'Contact Name', 'Contact Email', 'Last Assessment', 'Next Assessment'], rows)
 
 
 # ---- QUESTIONNAIRE TEMPLATES ----
@@ -240,7 +227,7 @@ def respond_assessment(vendor_id, assessment_id):
         assessment.verdict = verdict
         assessment.completed_date = datetime.utcnow().strftime('%Y-%m-%d')
         vendor.last_assessment = assessment.completed_date
-        vendor.next_assessment = _next_assessment_date(vendor.risk_tier)
+        vendor.next_assessment = _next_assessment_date()
         log_activity('status_changed', 'Vendor', vendor.name,
             f'{current_user.name} completed the assessment for {vendor.name} ({verdict})')
     else:

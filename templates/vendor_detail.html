@@ -13,93 +13,38 @@
         <p>{{ vendor.category }} &middot; Next assessment due {{ vendor.next_assessment }} &middot; <a href="/vendors">Edit core fields on Vendor list</a></p>
     </div>
     <div class="page-actions">
-        {% if vendor.risk_tier == 'Critical' %}<span class="badge badge-danger" style="font-size:13px;padding:8px 16px;">{{ vendor.risk_tier }}</span>
-        {% elif vendor.risk_tier == 'High' %}<span class="badge badge-warning" style="font-size:13px;padding:8px 16px;">{{ vendor.risk_tier }}</span>
-        {% else %}<span class="badge badge-info" style="font-size:13px;padding:8px 16px;">{{ vendor.risk_tier }}</span>{% endif %}
         <a href="/vendors" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
 
-<div class="grid-2" style="margin-bottom:20px;">
-    <div class="card">
-        <div class="card-header"><h3>Risk Score Trend</h3></div>
-        <div class="card-body">
-            {% if trend_data|length >= 2 %}
-            <div class="chart-container-wide" style="height:200px;">
-                <canvas id="vendorTrendChart"></canvas>
-            </div>
-            {% else %}
-            <p class="text-sm text-muted">Not enough history yet &mdash; the trend line appears after a couple of days of snapshots.</p>
-            {% endif %}
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-header"><h3>Reassessment Cadence</h3></div>
-        <div class="card-body">
-            <p class="text-sm">Based on the <strong>{{ vendor.risk_tier }}</strong> tier, this vendor is reassessed automatically:</p>
-            <table style="margin-top:10px;">
-                <tr><td class="text-sm">Critical</td><td class="text-sm text-muted">every 90 days</td></tr>
-                <tr><td class="text-sm">High</td><td class="text-sm text-muted">every 180 days</td></tr>
-                <tr><td class="text-sm">Medium</td><td class="text-sm text-muted">every 270 days</td></tr>
-                <tr><td class="text-sm">Low</td><td class="text-sm text-muted">every 365 days</td></tr>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Assessments -->
+<!-- Vendor Details -->
 <div class="card" style="margin-bottom:20px;">
-    <div class="card-header">
-        <h3>Assessments</h3>
-        <div class="flex gap-8">
-            <a href="{{ url_for('vendors.questionnaires') }}" class="btn btn-sm btn-secondary"><i class="fas fa-list-check"></i> Manage Templates</a>
-            <button class="btn btn-sm btn-primary" onclick="toggleEl('sendAssessment')"><i class="fas fa-paper-plane"></i> Send Assessment</button>
-        </div>
-    </div>
+    <div class="card-header"><h3>Vendor Details</h3></div>
     <div class="card-body">
-        <div id="sendAssessment" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg-tertiary);border-radius:8px;">
-            {% if templates %}
-            <form method="POST" action="{{ url_for('vendors.send_assessment', vendor_id=vendor.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="flex gap-8">
-                    <select name="template_id" class="form-control">
-                        {% for t in templates %}<option value="{{ t.id }}">{{ t.name }} ({{ t.questions.count() }} questions)</option>{% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-primary">Send</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+            <div>
+                <div class="text-sm text-muted">Category</div>
+                <div class="font-semibold">{{ vendor.category or '—' }}</div>
+            </div>
+            <div>
+                <div class="text-sm text-muted">Vendor URL</div>
+                <div class="font-semibold">
+                    {% if vendor.website %}<a href="{{ vendor.website }}" target="_blank" rel="noopener noreferrer">{{ vendor.website }}</a>
+                    {% else %}—{% endif %}
                 </div>
-            </form>
-            {% else %}
-            <p class="text-sm text-muted">No questionnaire templates yet. <a href="{{ url_for('vendors.questionnaires') }}">Create one</a> first.</p>
-            {% endif %}
+            </div>
+            <div>
+                <div class="text-sm text-muted">POC Name</div>
+                <div class="font-semibold">{{ vendor.contact_name or '—' }}</div>
+            </div>
+            <div>
+                <div class="text-sm text-muted">POC Email</div>
+                <div class="font-semibold">
+                    {% if vendor.contact_email %}<a href="mailto:{{ vendor.contact_email }}">{{ vendor.contact_email }}</a>
+                    {% else %}—{% endif %}
+                </div>
+            </div>
         </div>
-
-        {% if assessments %}
-        <table>
-            <thead><tr><th>Template</th><th>Status</th><th>Sent</th><th>Completed</th><th>Verdict</th><th></th></tr></thead>
-            <tbody>
-                {% for a in assessments %}
-                <tr>
-                    <td>{{ a.template.name }}</td>
-                    <td><span class="badge {% if a.status == 'Completed' %}badge-success{% elif a.status == 'In Progress' %}badge-warning{% else %}badge-neutral{% endif %}">{{ a.status }}</span></td>
-                    <td class="text-sm">{{ a.sent_date }}</td>
-                    <td class="text-sm">{{ a.completed_date or '-' }}</td>
-                    <td>
-                        {% if a.verdict %}
-                        <span class="badge {% if a.verdict == 'Pass' %}badge-success{% elif a.verdict == 'Fail' %}badge-danger{% else %}badge-warning{% endif %}">{{ a.verdict }}</span>
-                        {% else %}<span class="text-muted text-sm">-</span>{% endif %}
-                    </td>
-                    <td><a href="{{ url_for('vendors.assessment_detail', vendor_id=vendor.id, assessment_id=a.id) }}" class="btn btn-sm btn-secondary">{{ 'View' if a.status == 'Completed' else 'Respond' }}</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-clipboard-question"></i>
-            <h3>No assessments yet</h3>
-            <p>Send a questionnaire to start tracking this vendor's compliance posture.</p>
-        </div>
-        {% endif %}
     </div>
 </div>
 
@@ -151,32 +96,5 @@ function toggleEl(id) {
     const el = document.getElementById(id);
     el.style.display = el.style.display === 'none' ? '' : 'none';
 }
-
-{% if trend_data|length >= 2 %}
-document.addEventListener('DOMContentLoaded', function() {
-    new Chart(document.getElementById('vendorTrendChart').getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: {{ trend_labels|tojson }},
-            datasets: [{
-                label: 'Risk Score',
-                data: {{ trend_data|tojson }},
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59,130,246,0.1)',
-                fill: true,
-                tension: 0.4,
-                borderWidth: 2,
-                pointRadius: 3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, max: 100 } }
-        }
-    });
-});
-{% endif %}
 </script>
 {% endblock %}

@@ -5,13 +5,12 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Vendor Risk Management</h1>
+        <h1>Vendor Management</h1>
         <p>Assess and monitor third-party vendor security posture</p>
     </div>
     <div class="page-actions">
         <a href="/vendors/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
         {% if current_user.can_write %}
-        <button class="btn btn-secondary"><i class="fas fa-file-import"></i> Send Questionnaire</button>
         <button class="btn btn-primary" onclick="showAddVendorModal()"><i class="fas fa-plus"></i> Add Vendor</button>
         {% endif %}
     </div>
@@ -24,20 +23,6 @@
         <div class="stat-info">
             <div class="stat-label">Total Vendors</div>
             <div class="stat-value">{{ vendors|length }}</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-exclamation-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Critical Tier</div>
-            <div class="stat-value">{{ vendors|selectattr('risk_tier', 'equalto', 'Critical')|list|length }}</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">High Tier</div>
-            <div class="stat-value">{{ vendors|selectattr('risk_tier', 'equalto', 'High')|list|length }}</div>
         </div>
     </div>
     <div class="stat-card">
@@ -55,13 +40,6 @@
         <i class="fas fa-search"></i>
         <input type="text" class="filter-input" placeholder="Search vendors..." id="vendorSearch" oninput="filterVendors()">
     </div>
-    <select class="filter-select" id="vendorTierFilter" onchange="filterVendors()">
-        <option value="">All Risk Tiers</option>
-        <option value="Critical">Critical</option>
-        <option value="High">High</option>
-        <option value="Medium">Medium</option>
-        <option value="Low">Low</option>
-    </select>
 </div>
 
 <!-- Vendor Table -->
@@ -73,8 +51,6 @@
                     <tr>
                         <th>Vendor</th>
                         <th>Category</th>
-                        <th>Risk Tier</th>
-                        <th>Risk Score</th>
                         <th>Status</th>
                         <th>Compliance</th>
                         <th>Last Assessment</th>
@@ -83,26 +59,14 @@
                 </thead>
                 <tbody>
                     {% for v in vendors %}
-                    <tr data-tier="{{ v.risk_tier }}">
+                    <tr>
                         <td>
                             <a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="font-semibold" style="text-decoration:none;">{{ v.name }}</a>
                         </td>
                         <td class="text-muted">{{ v.category }}</td>
                         <td>
-                            {% if v.risk_tier == 'Critical' %}<span class="badge badge-danger">{{ v.risk_tier }}</span>
-                            {% elif v.risk_tier == 'High' %}<span class="badge badge-warning">{{ v.risk_tier }}</span>
-                            {% else %}<span class="badge badge-info">{{ v.risk_tier }}</span>{% endif %}
-                        </td>
-                        <td>
-                            <div class="flex-center gap-8">
-                                <div class="risk-score-bar">
-                                    <div class="risk-score-fill" style="width:{{ v.risk_score }}%;background:{% if v.risk_score >= 80 %}#10b981{% elif v.risk_score >= 60 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
-                                </div>
-                                <span class="font-semibold">{{ v.risk_score }}</span>
-                            </div>
-                        </td>
-                        <td>
                             {% if v.status == 'Approved' %}<span class="badge badge-success">{{ v.status }}</span>
+                            {% elif v.status == 'In Progress' %}<span class="badge badge-info">{{ v.status }}</span>
                             {% else %}<span class="badge badge-warning">{{ v.status }}</span>{% endif %}
                         </td>
                         <td>
@@ -143,18 +107,15 @@
 <script>
 function filterVendors() {
     const search = document.getElementById('vendorSearch').value.toLowerCase();
-    const tier = document.getElementById('vendorTierFilter').value;
     document.querySelectorAll('#vendorTable tbody tr').forEach(row => {
         const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchTier = !tier || row.dataset.tier === tier;
-        row.style.display = matchSearch && matchTier ? '' : 'none';
+        row.style.display = !search || text.includes(search) ? '' : 'none';
     });
 }
 
 const VENDORS = {{ vendor_dicts|tojson }};
 const VENDOR_CATEGORIES = ['Cloud Infrastructure', 'Communication', 'Development', 'CRM', 'Payment Processing', 'Project Management', 'Monitoring', 'Other'];
-const VENDOR_TIERS = ['Critical', 'High', 'Medium', 'Low'];
+const VENDOR_STATUSES = {{ VENDOR_STATUSES|tojson }};
 const VENDOR_COMPLIANCE = ['SOC 2', 'ISO 27001', 'GDPR', 'HIPAA', 'PCI DSS'];
 
 function vendorFormFields(v) {
@@ -173,19 +134,25 @@ function vendorFormFields(v) {
                 </select>
             </div>
             <div class="form-group">
-                <label>Risk Tier</label>
-                <select name="risk_tier" class="form-control">
-                    ${VENDOR_TIERS.map(t => `<option ${t === v.risk_tier ? 'selected' : ''}>${t}</option>`).join('')}
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    ${VENDOR_STATUSES.map(s => `<option ${s === (v.status || 'Pending') ? 'selected' : ''}>${s}</option>`).join('')}
                 </select>
             </div>
         </div>
         <div class="form-group">
-            <label>Contact Name</label>
-            <input type="text" name="contact_name" class="form-control" placeholder="Vendor security contact" value="${v.contact_name || ''}">
+            <label>Vendor URL</label>
+            <input type="url" name="website" class="form-control" placeholder="https://vendor.com" value="${v.website || ''}">
         </div>
-        <div class="form-group">
-            <label>Contact Email</label>
-            <input type="email" name="contact_email" class="form-control" placeholder="security@vendor.com" value="${v.contact_email || ''}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+                <label>POC Name</label>
+                <input type="text" name="contact_name" class="form-control" placeholder="Point of contact" value="${v.contact_name || ''}">
+            </div>
+            <div class="form-group">
+                <label>POC Email</label>
+                <input type="email" name="contact_email" class="form-control" placeholder="security@vendor.com" value="${v.contact_email || ''}">
+            </div>
         </div>
         <div class="form-group">
             <label>Compliance Certifications</label>
