@@ -227,11 +227,12 @@
                             <tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
                         </thead>
                         <tbody>
-                            {% for u in users %}
+                            {% for m in memberships %}
+                            {% set u = m.user %}
                             <tr>
                                 <td class="flex-center gap-8"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] if ' ' in u.name else '' }}</div> {{ u.name }}</td>
                                 <td>{{ u.email }}</td>
-                                <td><span class="badge {% if u.role == 'Admin' %}badge-primary{% elif u.role == 'Auditor' %}badge-neutral{% else %}badge-info{% endif %}">{{ u.role }}</span></td>
+                                <td><span class="badge {% if m.role == 'Admin' %}badge-primary{% elif m.role == 'Auditor' %}badge-neutral{% else %}badge-info{% endif %}">{{ m.role }}</span></td>
                                 <td><span class="badge {% if u.is_active_user %}badge-success{% else %}badge-neutral{% endif %}">{{ 'Active' if u.is_active_user else 'Inactive' }}</span></td>
                                 <td>{% if current_user.can_manage_users %}<button class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-pen"></i></button>{% endif %}</td>
                             </tr>

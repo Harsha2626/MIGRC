@@ -32,7 +32,10 @@ class User(UserMixin, db.Model):
     }
 
     def has_permission(self, perm):
-        return perm in self.ROLE_PERMISSIONS.get(self.role, set())
+        from flask import g
+        membership = getattr(g, 'current_membership', None)
+        role = membership.role if membership else self.role
+        return perm in self.ROLE_PERMISSIONS.get(role, set())
 
     @property
     def can_write(self):
@@ -63,6 +66,51 @@ class User(UserMixin, db.Model):
     @property
     def is_active(self):
         return self.is_active_user
+
+
+class Organization(db.Model):
+    __tablename__ = 'organizations'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(100), unique=True, nullable=False)
+    logo_path = db.Column(db.String(500))
+    legal_name = db.Column(db.String(100))
+    company_url = db.Column(db.String(200))
+    work_arrangement = db.Column(db.String(20))
+    business_address = db.Column(db.Text)
+    industry = db.Column(db.String(100))
+    geographic_scope = db.Column(db.JSON, default=list)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DepartmentOwner(db.Model):
+    __tablename__ = 'department_owners'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    department = db.Column(db.String(50), nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('organization_id', 'department', name='uq_org_department'),)
+
+    organization = db.relationship('Organization', backref='department_owners')
+    owner = db.relationship('User')
+
+
+class OrganizationMembership(db.Model):
+    __tablename__ = 'organization_memberships'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    role = db.Column(db.String(30), nullable=False, default='Viewer')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'organization_id', name='uq_user_org'),)
+
+    user = db.relationship('User', backref='memberships')
+    organization = db.relationship('Organization', backref='memberships')
 
 
 class Framework(db.Model):
@@ -598,6 +646,17 @@ class VendorAssessmentResponse(db.Model):
     answer_text = db.Column(db.Text)
 
     question = db.relationship('QuestionnaireQuestion')
+
+
+class SetupTask(db.Model):
+    """Manual-completion tracking for Setup Wizard steps that have no natural data signal
+    (e.g. 'connect an integration'). Steps backed by real data (policies, employees, ...)
+    are marked done automatically and never get a row here."""
+    __tablename__ = 'setup_tasks'
+    id = db.Column(db.Integer, primary_key=True)
+    task_key = db.Column(db.String(50), unique=True, nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime)
 
 
 class Asset(db.Model):

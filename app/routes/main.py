@@ -1,9 +1,10 @@
 from datetime import date, timedelta
-from flask import Blueprint, render_template, jsonify, request, Response, session, redirect, url_for, flash, current_app, send_from_directory
+from flask import Blueprint, render_template, jsonify, request, Response, session, redirect, url_for, flash, current_app, send_from_directory, g
 from flask_login import login_required
 from app.models import (
     db, Framework, Risk, Policy, Audit, Vendor, Asset, Control, User,
     Evidence, ComplianceSnapshot, DashboardSnapshot, ActivityLog, TrainingCampaign, NDAAcceptance,
+    OrganizationMembership,
 )
 from app.services.snapshots import ensure_snapshots_for_today
 from app.services.notifications import ensure_notifications_for_today
@@ -289,8 +290,9 @@ def trust_center_badge():
 @main_bp.route('/settings')
 @login_required
 def settings():
-    users = User.query.all()
-    return render_template('settings.html', page='settings', users=users)
+    memberships = OrganizationMembership.query.filter_by(
+        organization_id=g.current_org.id).all() if g.current_org else []
+    return render_template('settings.html', page='settings', memberships=memberships)
 
 
 @main_bp.route('/settings/activity-log')

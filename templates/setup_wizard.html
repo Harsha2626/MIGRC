@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Setup Wizard{% endblock %}
+{% block breadcrumb %}<span>Setup Wizard</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Setup Wizard</h1>
+        <p>Get MIGRC configured and your compliance program up and running.</p>
+    </div>
+    <div class="page-actions" style="min-width:220px;flex-direction:column;align-items:stretch;gap:6px;">
+        <div class="flex-between">
+            <span class="text-sm font-semibold">Progress</span>
+            <span class="text-sm font-semibold" style="color:var(--accent-success);">{{ total_done }}/{{ total_tasks }}</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill green" style="width:{{ (total_done / total_tasks * 100)|round if total_tasks else 0 }}%;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Phase summary strip -->
+<div class="stats-grid" style="margin-bottom:20px;">
+    {% for phase in phases %}
+    <div class="stat-card">
+        <div class="stat-icon {% if phase.done == phase.total %}green{% else %}blue{% endif %}"><i class="fas {{ phase.icon }}"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">{{ phase.title }}</div>
+            <div class="stat-value" style="font-size:16px;">{{ phase.done }}/{{ phase.total }} Tasks Done</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Task list -->
+{% for phase in phases %}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <h3>{{ phase.title }}</h3>
+        <span class="badge {% if phase.done == phase.total %}badge-success{% else %}badge-neutral{% endif %}">{{ phase.done }}/{{ phase.total }}</span>
+    </div>
+    <div class="card-body no-padding">
+        {% for t in phase.tasks %}
+        <div style="border-bottom:1px solid var(--border-color);{{ 'border-bottom:none;' if loop.last }}">
+            <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;cursor:pointer;" onclick="toggleEl('task-{{ t.key }}')">
+                <i class="fas {{ 'fa-circle-check' if t.completed else 'fa-circle' }}" style="color:{{ 'var(--accent-success)' if t.completed else 'var(--text-muted)' }};font-size:16px;"></i>
+                <div style="flex:1;">
+                    <div class="font-semibold" style="{{ 'text-decoration:line-through;color:var(--text-muted);' if t.completed }}">{{ t.title }}</div>
+                    <div class="text-sm text-muted">{{ t.description }}</div>
+                </div>
+                <i class="fas fa-chevron-down text-muted" style="font-size:11px;"></i>
+            </div>
+            <div id="task-{{ t.key }}" style="display:{{ '' if t.key == first_incomplete_key else 'none' }};padding:0 22px 20px 54px;">
+
+                {# ---- ORGANIZATION DETAILS ---- #}
+                {% if t.key == 'org_details' %}
+                    {% if t.completed %}
+                    <div style="background:var(--accent-success-light);border:1px solid var(--accent-success);border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+                        <div class="font-semibold" style="color:var(--accent-success);margin-bottom:2px;">Organization Details Saved</div>
+                        <div class="text-sm text-muted">Manage and update these details any time from this task.</div>
+                    </div>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('setup.save_organization') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-group">
+                            <label>Organization Logo</label>
+                            <div class="flex-center gap-12">
+                                <div class="logo-upload-box">
+                                    {% if org and org.logo_path %}<img src="{{ url_for('setup.organization_logo', org_id=org.id) }}" alt="Organization logo" style="max-width:100%;max-height:100%;">
+                                    {% else %}<i class="fas fa-building"></i>{% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('orgLogoInput').click()">Upload Logo</button>
+                                <input type="file" name="logo" id="orgLogoInput" accept="image/*" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Organization Name</label>
+                            <input type="text" name="name" class="form-control" value="{{ org.name if org else '' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Legal Name</label>
+                            <input type="text" name="legal_name" class="form-control" placeholder="Full legal entity name" value="{{ org.legal_name if org else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Company URL</label>
+                            <input type="text" name="company_url" class="form-control" placeholder="https://yourcompany.com" value="{{ org.company_url if org else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Work Arrangement</label>
+                            <div class="radio-card-group">
+                                {% for w in WORK_ARRANGEMENTS %}
+                                <label class="radio-card {{ 'selected' if org and org.work_arrangement == w }}"><input type="radio" name="work_arrangement" value="{{ w }}" {{ 'checked' if org and org.work_arrangement == w }}> {{ w }}</label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Business Address</label>
+                            <textarea name="business_address" class="form-control" rows="3" placeholder="Enter your registered business address">{{ org.business_address if org else '' }}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Industry</label>
+                            <select name="industry" class="form-control">
+                                <option value="">Select industry</option>
+                                {% for ind in INDUSTRIES %}<option value="{{ ind }}" {{ 'selected' if org and org.industry == ind }}>{{ ind }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Geographic Scope</label>
+                            <select id="geoScopeSelect" class="form-control" onchange="addGeoScopeTag(this)">
+                                <option value="">Add a region</option>
+                                {% for g_ in GEOGRAPHIC_SCOPES %}<option value="{{ g_ }}">{{ g_ }}</option>{% endfor %}
+                            </select>
+                            <div class="tag-list mt-8" id="geoScopeTags">
+                                {% for g_ in (org.geographic_scope or []) if org %}
+                                <span class="chip" data-value="{{ g_ }}">{{ g_ }}<input type="hidden" name="geographic_scope" value="{{ g_ }}"><i class="fas fa-times" onclick="this.parentElement.remove()"></i></span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Organization Details</button>
+                    </form>
+
+                {# ---- IDENTITY PROVIDER ---- #}
+                {% elif t.key == 'connect_identity_provider' %}
+                    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:14px;">
+                        {% for idp in IDENTITY_PROVIDERS %}
+                        <div class="card" style="padding:14px;">
+                            <div class="flex-center gap-8" style="margin-bottom:10px;"><i class="{{ idp.icon }}"></i> <span class="font-semibold">{{ idp.name }}</span></div>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="showToast('{{ idp.name }} integration coming soon.', 'info')">Integrate</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="flex gap-8">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="openInviteContributor()"><i class="fas fa-user-plus"></i> Invite Contributor</button>
+                        {% if current_user.can_write %}
+                        <form method="POST" action="{{ url_for('setup.toggle_task', task_key=t.key) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-secondary">{{ 'Undo' if t.completed else "I Don't Need This" }}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                {# ---- DEPARTMENT OWNERS ---- #}
+                {% elif t.key == 'assign_department_owners' %}
+                    <form method="POST" action="{{ url_for('setup.save_department_owners') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div id="deptOwnerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+                            {% for dept in departments %}
+                            <div class="card" style="padding:14px;">
+                                <div class="font-semibold text-sm" style="text-transform:uppercase;margin-bottom:8px;">{{ dept }}</div>
+                                <input type="hidden" name="department" value="{{ dept }}">
+                                <label class="text-sm text-muted">Owner</label>
+                                <select name="owner_id" class="form-control">
+                                    <option value="">Select Owner</option>
+                                    {% for u in org_members %}<option value="{{ u.id }}" {{ 'selected' if dept_owner_map.get(dept) == u.id }}>{{ u.name }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="flex gap-8">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="openInviteContributor()"><i class="fas fa-user-plus"></i> Invite Contributor</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="addDepartmentCard()"><i class="fas fa-plus"></i> Add New Department</button>
+                            <button type="submit" class="btn btn-sm btn-primary">Save & Continue</button>
+                        </div>
+                    </form>
+
+                {# ---- CLOUD PROVIDERS ---- #}
+                {% elif t.key == 'connect_cloud_providers' %}
+                    <div class="text-sm" style="background:var(--accent-primary-light);border:1px solid var(--accent-primary);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+                        <i class="fas fa-wand-magic-sparkles" style="color:var(--accent-primary);margin-right:6px;"></i>
+                        Once connected, MIGRC AI will automatically scan these accounts for security misconfigurations and vulnerabilities.
+                    </div>
+                    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:14px;">
+                        {% for cp in CLOUD_PROVIDERS %}
+                        <div class="card" style="padding:14px;">
+                            <div class="flex-center gap-8" style="margin-bottom:10px;"><i class="{{ cp.icon }}"></i> <span class="font-semibold">{{ cp.name }}</span></div>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="showToast('{{ cp.name }} integration coming soon.', 'info')">Integrate</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="flex gap-8">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="openInviteContributor()"><i class="fas fa-user-plus"></i> Invite Contributor</button>
+                        {% if current_user.can_write %}
+                        <form method="POST" action="{{ url_for('setup.toggle_task', task_key=t.key) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-secondary">{{ 'Undo' if t.completed else "I Don't Need This" }}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                {# ---- SCHEDULE AUDITS ---- #}
+                {% elif t.key == 'schedule_audit' %}
+                    <form method="POST" action="{{ url_for('setup.schedule_audits') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        {% if frameworks %}
+                        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px;">
+                            {% for fw in frameworks %}
+                            <div class="card" style="padding:14px;">
+                                <div class="flex-between" style="margin-bottom:8px;">
+                                    <span class="font-semibold">{{ fw.name }} Audit</span>
+                                </div>
+                                <input type="hidden" name="framework_id" value="{{ fw.id }}">
+                                <label class="text-sm text-muted">Audit Request Date</label>
+                                <input type="date" name="audit_date" class="form-control" value="{{ scheduled_audits.get(fw.name, '') }}">
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary">Save Schedule</button>
+                        {% else %}
+                        <p class="text-sm text-muted">Add a compliance framework first, then come back here to schedule its audit.</p>
+                        {% endif %}
+                    </form>
+
+                {# ---- GENERIC TASK (link out + auto/manual status) ---- #}
+                {% else %}
+                <div class="flex gap-8">
+                    {% if t.url %}<a href="{{ t.url }}" class="btn btn-sm btn-secondary">{{ t.link_label }}</a>{% endif %}
+                    <span class="text-sm text-muted" style="align-self:center;">
+                        {{ 'Completed automatically based on your data.' if t.completed else "This will complete automatically once you've added data here." }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEl(id) {
+    const el = document.getElementById(id);
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function addGeoScopeTag(select) {
+    const value = select.value;
+    if (!value) return;
+    const container = document.getElementById('geoScopeTags');
+    if (container.querySelector(`[data-value="${value}"]`)) { select.value = ''; return; }
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.dataset.value = value;
+    chip.innerHTML = `${value}<input type="hidden" name="geographic_scope" value="${value}"><i class="fas fa-times" onclick="this.parentElement.remove()"></i>`;
+    container.appendChild(chip);
+    select.value = '';
+}
+
+function addDepartmentCard() {
+    const name = prompt('New department name:');
+    if (!name || !name.trim()) return;
+    const grid = document.getElementById('deptOwnerGrid');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.padding = '14px';
+    card.innerHTML = `
+        <div class="font-semibold text-sm" style="text-transform:uppercase;margin-bottom:8px;">${name}</div>
+        <input type="hidden" name="department" value="${name}">
+        <label class="text-sm text-muted">Owner</label>
+        <select name="owner_id" class="form-control">
+            <option value="">Select Owner</option>
+            {% for u in org_members %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+        </select>
+    `;
+    grid.appendChild(card);
+}
+
+function openInviteContributor() {
+    openModal('Invite Contributor', `
+        <form id="inviteContributorForm" action="/register" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. John Doe" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" class="form-control" placeholder="e.g. john@company.com" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" class="form-control" placeholder="Min 6 characters" minlength="6">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select name="role" class="form-control">
+                    <option value="Viewer">Viewer</option>
+                    <option value="Auditor">Auditor</option>
+                    <option value="Compliance Manager">Compliance Manager</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </div>
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'inviteContributorForm\').submit()">Send Invite</button>');
+}
+</script>
+{% endblock %}

@@ -1,10 +1,10 @@
 import os
-from flask import Flask
+from flask import Flask, g
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
 from flask_wtf import CSRFProtect
 from flask_mail import Mail
-from app.models import db, User
+from app.models import db, User, OrganizationMembership
 from app.utils import timesince
 
 migrate = Migrate()
@@ -37,6 +37,25 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    @app.before_request
+    def load_current_org():
+        if current_user.is_authenticated:
+            from app.services.org_context import get_current_org
+            g.current_org, g.current_membership = get_current_org()
+        else:
+            g.current_org, g.current_membership = None, None
+
+    @app.context_processor
+    def inject_org_context():
+        if not current_user.is_authenticated:
+            return {}
+        memberships = OrganizationMembership.query.filter_by(user_id=current_user.id).all()
+        return {
+            'current_org': g.current_org,
+            'current_membership': g.current_membership,
+            'user_organizations': [m.organization for m in memberships],
+        }
+
     @app.context_processor
     def inject_notifications():
         if not current_user.is_authenticated:
@@ -61,6 +80,8 @@ def create_app():
     from app.routes.notifications import notifications_bp
     from app.routes.reports import reports_bp
     from app.routes.integrations import integrations_bp
+    from app.routes.setup import setup_bp
+    from app.routes.organizations import organizations_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -74,5 +95,7 @@ def create_app():
     app.register_blueprint(notifications_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(integrations_bp)
+    app.register_blueprint(setup_bp)
+    app.register_blueprint(organizations_bp)
 
     return app

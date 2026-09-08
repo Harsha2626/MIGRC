@@ -88,6 +88,27 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Risk -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header" style="cursor:pointer;" onclick="toggleEl('vendorRiskPanel')">
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+            <i class="fas fa-wand-magic-sparkles" style="color:var(--accent-primary);font-size:15px;margin-top:2px;"></i>
+            <div>
+                <h3 style="margin-bottom:2px;">Risk</h3>
+                <p class="text-sm text-muted" style="margin-bottom:0;">AI analyzes this vendor's uploaded documents to surface potential risks. Review and add them to your <a href="/risks">risk register</a> once reviewed.</p>
+            </div>
+        </div>
+        <i class="fas fa-chevron-up" style="color:var(--text-muted);font-size:12px;"></i>
+    </div>
+    <div class="card-body" id="vendorRiskPanel">
+        <div class="locked-card">
+            <div class="locked-icon"><i class="fas fa-lock"></i></div>
+            <h4>AI is Not Enabled</h4>
+            <p>You currently don't have access to AI risk suggestions because AI is disabled.<br>Kindly enable it from <a href="/settings">Settings &gt; AI</a>.</p>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
