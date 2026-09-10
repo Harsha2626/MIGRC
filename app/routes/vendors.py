@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, g
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
@@ -24,7 +24,10 @@ def _next_assessment_date(from_date=None):
 @vendors_bp.route('/vendors')
 @login_required
 def vendors():
-    all_vendors = Vendor.query.all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    all_vendors = Vendor.query.filter_by(organization_id=g.current_org.id).all()
     return render_template('vendors.html', page='vendors', vendors=all_vendors,
         vendor_dicts=[v.to_dict() for v in all_vendors], VENDOR_STATUSES=VENDOR_STATUSES)
 
@@ -33,6 +36,10 @@ def vendors():
 @login_required
 @require_permission('write')
 def add_vendor():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     status = request.form.get('status', 'Pending')
 
@@ -54,6 +61,7 @@ def add_vendor():
         last_assessment=today.strftime('%Y-%m-%d'),
         next_assessment=_next_assessment_date(today),
         compliance=request.form.getlist('compliance'),
+        organization_id=g.current_org.id,
     )
     db.session.add(vendor)
     log_activity('created', 'Vendor', name)
@@ -66,10 +74,12 @@ def add_vendor():
 @vendors_bp.route('/vendors/<int:vendor_id>')
 @login_required
 def vendor_detail(vendor_id):
-    vendor = Vendor.query.get_or_404(vendor_id)
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     assessments = vendor.assessments.order_by(VendorAssessment.id.desc()).all()
     documents = vendor.documents.all()
-    templates = QuestionnaireTemplate.query.order_by(QuestionnaireTemplate.name).all()
+    templates = QuestionnaireTemplate.query.filter_by(
+        organization_id=g.current_org.id if g.current_org else -1
+    ).order_by(QuestionnaireTemplate.name).all()
 
     return render_template('vendor_detail.html', page='vendors',
         vendor=vendor, assessments=assessments, documents=documents, templates=templates)
@@ -79,7 +89,7 @@ def vendor_detail(vendor_id):
 @login_required
 @require_permission('write')
 def edit_vendor(vendor_id):
-    vendor = Vendor.query.get_or_404(vendor_id)
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = request.form.get('name', '').strip()
 
     if not name:
@@ -108,7 +118,7 @@ def edit_vendor(vendor_id):
 @login_required
 @require_permission('delete')
 def delete_vendor(vendor_id):
-    vendor = Vendor.query.get_or_404(vendor_id)
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = vendor.name
     db.session.delete(vendor)
     log_activity('deleted', 'Vendor', name)
@@ -120,7 +130,11 @@ def delete_vendor(vendor_id):
 @vendors_bp.route('/vendors/export')
 @login_required
 def export_vendors():
-    rows = [(v.name, v.category, v.status, v.website, v.contact_name, v.contact_email, v.last_assessment, v.next_assessment) for v in Vendor.query.all()]
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    org_vendors = Vendor.query.filter_by(organization_id=g.current_org.id).all()
+    rows = [(v.name, v.category, v.status, v.website, v.contact_name, v.contact_email, v.last_assessment, v.next_assessment) for v in org_vendors]
     return csv_response('vendors.csv', ['Name', 'Category', 'Status', 'Website', 'Contact Name', 'Contact Email', 'Last Assessment', 'Next Assessment'], rows)
 
 
@@ -129,7 +143,10 @@ def export_vendors():
 @vendors_bp.route('/vendors/questionnaires')
 @login_required
 def questionnaires():
-    templates = QuestionnaireTemplate.query.order_by(QuestionnaireTemplate.name).all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    templates = QuestionnaireTemplate.query.filter_by(organization_id=g.current_org.id).order_by(QuestionnaireTemplate.name).all()
     return render_template('questionnaire_templates.html', page='vendors', templates=templates)
 
 
@@ -137,12 +154,16 @@ def questionnaires():
 @login_required
 @require_permission('write')
 def add_questionnaire():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     if not name:
         flash('Template name is required.', 'error')
         return redirect(url_for('vendors.questionnaires'))
 
-    template = QuestionnaireTemplate(name=name, description=request.form.get('description', ''))
+    template = QuestionnaireTemplate(name=name, description=request.form.get('description', ''), organization_id=g.current_org.id)
     db.session.add(template)
     db.session.flush()
 
@@ -160,7 +181,7 @@ def add_questionnaire():
 @login_required
 @require_permission('delete')
 def delete_questionnaire(template_id):
-    template = QuestionnaireTemplate.query.get_or_404(template_id)
+    template = QuestionnaireTemplate.query.filter_by(id=template_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = template.name
     db.session.delete(template)
     log_activity('deleted', 'Vendor', name, f'{current_user.name} deleted questionnaire template "{name}"')
@@ -175,9 +196,11 @@ def delete_questionnaire(template_id):
 @login_required
 @require_permission('write')
 def send_assessment(vendor_id):
-    vendor = Vendor.query.get_or_404(vendor_id)
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     template_id = request.form.get('template_id')
-    template = QuestionnaireTemplate.query.get(int(template_id)) if template_id else None
+    template = QuestionnaireTemplate.query.filter_by(
+        id=int(template_id), organization_id=g.current_org.id if g.current_org else -1
+    ).first() if template_id else None
 
     if not template:
         flash('Please select a questionnaire template.', 'error')
@@ -197,7 +220,8 @@ def send_assessment(vendor_id):
 @vendors_bp.route('/vendors/<int:vendor_id>/assessments/<int:assessment_id>')
 @login_required
 def assessment_detail(vendor_id, assessment_id):
-    assessment = VendorAssessment.query.filter_by(id=assessment_id, vendor_id=vendor_id).first_or_404()
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    assessment = vendor.assessments.filter_by(id=assessment_id).first_or_404()
     existing = {r.question_id: r.answer_text for r in assessment.responses}
     return render_template('vendor_assessment.html', page='vendors',
         assessment=assessment, existing=existing)
@@ -207,8 +231,8 @@ def assessment_detail(vendor_id, assessment_id):
 @login_required
 @require_permission('write')
 def respond_assessment(vendor_id, assessment_id):
-    assessment = VendorAssessment.query.filter_by(id=assessment_id, vendor_id=vendor_id).first_or_404()
-    vendor = assessment.vendor
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    assessment = vendor.assessments.filter_by(id=assessment_id).first_or_404()
     verdict = request.form.get('verdict')
     complete = request.form.get('complete') == '1'
 
@@ -245,7 +269,7 @@ def respond_assessment(vendor_id, assessment_id):
 @login_required
 @require_permission('write')
 def upload_vendor_document(vendor_id):
-    vendor = Vendor.query.get_or_404(vendor_id)
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     file = request.files.get('file')
     title = request.form.get('title', '').strip() or f'Document for {vendor.name}'
 
@@ -285,7 +309,8 @@ def upload_vendor_document(vendor_id):
 @login_required
 @require_permission('delete')
 def delete_vendor_document(vendor_id, evidence_id):
-    doc = Evidence.query.filter_by(id=evidence_id, vendor_id=vendor_id).first_or_404()
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    doc = Evidence.query.filter_by(id=evidence_id, vendor_id=vendor.id).first_or_404()
     file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], doc.file_path) if doc.file_path else None
     if file_path and os.path.exists(file_path):
         os.remove(file_path)

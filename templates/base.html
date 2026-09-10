@@ -204,9 +204,9 @@
                         </form>
                         {% endfor %}
                         <div style="border-top:1px solid var(--border-color);margin:6px 0;padding-top:6px;">
-                            <a href="{{ url_for('setup.setup_wizard') }}" class="dropdown-panel-item" style="text-decoration:none;">
+                            <button type="button" onclick="showCreateOrgModal()" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;">
                                 <i class="fas fa-plus"></i> Onboard a New Organization
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -293,6 +293,20 @@
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script>
+    function showCreateOrgModal() {
+        document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.remove('open'));
+        openModal('Onboard a New Organization', `
+            <form id="createOrgForm" method="POST" action="{{ url_for('organizations.create_organization') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <p class="text-sm text-muted mb-16">This creates a brand-new organization with its own membership. You'll be its Admin and land in its setup wizard right after.</p>
+                <div class="form-group">
+                    <label>Organization Name <span class="required-star">*</span></label>
+                    <input type="text" name="name" class="form-control" placeholder="e.g. Acme Corp" required autofocus>
+                </div>
+            </form>
+        `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'createOrgForm\').submit()">Create Organization</button>');
+    }
+
     (function() {
         var btn = document.getElementById('notifBellBtn');
         var dropdown = document.getElementById('notifDropdown');

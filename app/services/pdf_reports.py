@@ -109,7 +109,7 @@ def build_compliance_report_pdf(framework, subtitle=None):
     ])
 
     pdf.section(f'Controls ({len(controls)})')
-    rows = [(c.code, c.title[:55], c.category or '-', c.status) for c in controls]
+    rows = [(c.code, c.title[:55], c.category or '-', c.org_status) for c in controls]
     pdf.table(['Code', 'Title', 'Category', 'Status'], rows, [20, 95, 40, 35])
 
     return bytes(pdf.output())

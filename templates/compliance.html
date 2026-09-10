@@ -18,11 +18,18 @@
 <!-- Framework Cards Grid -->
 <div class="grid-3" id="frameworkGrid">
     {% for fw in frameworks %}
-    <div class="framework-card" data-category="{{ fw.category|lower }}" onclick="window.location='/compliance/{{ fw.id }}'" style="cursor:pointer;">
+    <div class="framework-card" data-category="{{ fw.category|lower }}" onclick="window.location='/compliance/{{ fw.id }}'" style="cursor:pointer;position:relative;">
+        {% if current_user.can_delete %}
+        <form method="POST" action="/compliance/{{ fw.id }}/delete" onclick="event.stopPropagation();" onsubmit="return confirm('{% if fw.is_shared %}\'{{ fw.name }}\' is part of the shared library used by every organization. Deleting it removes it for everyone. Continue?{% else %}Delete \'{{ fw.name }}\'?{% endif %}');" style="position:absolute;bottom:16px;right:20px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Delete framework"><i class="fas fa-trash"></i></button>
+        </form>
+        {% endif %}
         <div class="framework-card-header">
             <div>
                 <h4>{{ fw.name }}</h4>
                 <span class="fw-category">{{ fw.category }} &middot; {{ fw.total_controls }} controls</span>
+                <div style="margin-top:6px;"><span class="badge {% if fw.is_shared %}badge-info{% else %}badge-neutral{% endif %}" style="font-size:10px;">{% if fw.is_shared %}Shared Library{% else %}Your Organization{% endif %}</span></div>
             </div>
             <div class="fw-icon stat-icon {% if fw.category == 'Security' %}blue{% elif fw.category == 'Privacy' %}purple{% elif fw.category == 'Healthcare' %}green{% else %}orange{% endif %}">
                 <i class="fas fa-{{ fw.icon }}"></i>

@@ -1,4 +1,5 @@
 from datetime import datetime, date
+from flask import g
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -114,8 +115,14 @@ class OrganizationMembership(db.Model):
 
 
 class Framework(db.Model):
+    """A compliance framework's DEFINITION (name, controls, descriptions) lives in one of two
+    places: organization_id IS NULL means it's part of the shared reference library (same for
+    every org, like an industry standard, e.g. the seeded ISO 27001/SOC 2); organization_id set
+    means an org added their own framework, visible only to them. Either way, each org's actual
+    pass/fail progress against a framework's controls is tracked separately via ControlStatus."""
     __tablename__ = 'frameworks'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     category = db.Column(db.String(50))
@@ -129,29 +136,60 @@ class Framework(db.Model):
 
     controls = db.relationship('Control', backref='framework', lazy='dynamic', cascade='all, delete-orphan')
 
+    @staticmethod
+    def visible_to(org_id):
+        """Frameworks an org can see: the shared library (organization_id IS NULL) plus
+        whatever that org added privately for itself."""
+        return Framework.query.filter(
+            db.or_(Framework.organization_id.is_(None), Framework.organization_id == org_id))
+
+    @property
+    def is_shared(self):
+        return self.organization_id is None
+
+    @staticmethod
+    def _current_org_id():
+        org = getattr(g, 'current_org', None)
+        return org.id if org else None
+
+    def _status_count(self, status):
+        org_id = self._current_org_id()
+        if not org_id:
+            return 0
+        return (ControlStatus.query
+            .join(Control, ControlStatus.control_id == Control.id)
+            .filter(Control.framework_id == self.id, ControlStatus.organization_id == org_id, ControlStatus.status == status)
+            .count())
+
     @property
     def total_controls(self):
         return self.controls.count()
 
     @property
     def passing(self):
-        return self.controls.filter_by(status='Passing').count()
+        return self._status_count('Passing')
 
     @property
     def failing(self):
-        return self.controls.filter_by(status='Failing').count()
+        return self._status_count('Failing')
 
     @property
     def not_applicable(self):
-        return self.controls.filter_by(status='Not Applicable').count()
+        return self._status_count('Not Applicable')
 
     @property
     def not_assessed(self):
-        return self.controls.filter_by(status='Not Assessed').count()
+        """Controls with no explicit org status yet default to Not Assessed, same as
+        controls explicitly marked that way."""
+        org_id = self._current_org_id()
+        if not org_id:
+            return self.total_controls
+        assessed = self.passing + self.failing + self.not_applicable
+        return self.total_controls - assessed
 
     @property
     def compliance_score(self):
-        """Passing / (Total - N/A) × 100"""
+        """Passing / (Total - N/A) × 100, for the current organization."""
         applicable = self.total_controls - self.not_applicable
         if applicable == 0:
             return 0.0
@@ -176,6 +214,9 @@ class Framework(db.Model):
 
 
 class Control(db.Model):
+    """A control's DEFINITION (code, title, description, test criteria) is shared across every
+    organization, same as its parent Framework. Each org's actual assessment status and
+    ownership is tracked separately via ControlStatus (see org_status/org_owner below)."""
     __tablename__ = 'controls'
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(20), nullable=False)
@@ -183,19 +224,51 @@ class Control(db.Model):
     description = db.Column(db.Text)
     category = db.Column(db.String(100))
     framework_id = db.Column(db.Integer, db.ForeignKey('frameworks.id'), nullable=False)
-    status = db.Column(db.String(30), default='Not Assessed')
-    owner = db.Column(db.String(100))
+    status = db.Column(db.String(30), default='Not Assessed')  # legacy/unused now — see ControlStatus
+    owner = db.Column(db.String(100))  # legacy/unused now — see ControlStatus
     test_criteria = db.Column(db.Text)
     evidence_requirement = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     evidence_mappings = db.relationship('EvidenceMapping', backref='control', lazy='dynamic', cascade='all, delete-orphan')
+    control_statuses = db.relationship('ControlStatus', backref='control', lazy='dynamic', cascade='all, delete-orphan')
+
+    def _org_status_row(self, org_id=None):
+        org_id = org_id or (g.current_org.id if getattr(g, 'current_org', None) else None)
+        if not org_id:
+            return None
+        return ControlStatus.query.filter_by(control_id=self.id, organization_id=org_id).first()
+
+    @property
+    def org_status(self):
+        row = self._org_status_row()
+        return row.status if row else 'Not Assessed'
+
+    @property
+    def org_owner(self):
+        row = self._org_status_row()
+        return row.owner if row else None
+
+
+class ControlStatus(db.Model):
+    """Per-organization tracking of a shared Control's assessment: pass/fail status and owner.
+    One row per (organization, control); absence of a row means 'Not Assessed'."""
+    __tablename__ = 'control_statuses'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=False)
+    status = db.Column(db.String(30), default='Not Assessed')
+    owner = db.Column(db.String(100))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('organization_id', 'control_id', name='uq_org_control_status'),)
 
 
 class Evidence(db.Model):
     __tablename__ = 'evidence'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     file_path = db.Column(db.String(500))
@@ -242,6 +315,7 @@ risk_controls = db.Table(
 class Risk(db.Model):
     __tablename__ = 'risks'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     category = db.Column(db.String(50))
@@ -335,6 +409,7 @@ policy_controls = db.Table(
 class Policy(db.Model):
     __tablename__ = 'policies'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text)
     version = db.Column(db.String(20), default='1.0')
@@ -374,6 +449,8 @@ class Policy(db.Model):
 
     @property
     def total_employees(self):
+        if self.organization_id:
+            return Employee.query.filter_by(organization_id=self.organization_id).count()
         return Employee.query.count()
 
     @property
@@ -477,6 +554,7 @@ class PolicyApproval(db.Model):
 class Audit(db.Model):
     __tablename__ = 'audits'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     framework = db.Column(db.String(100))
     auditor = db.Column(db.String(100))
@@ -577,6 +655,7 @@ VENDOR_REASSESSMENT_DAYS = 180
 class Vendor(db.Model):
     __tablename__ = 'vendors'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(100), nullable=False)
     category = db.Column(db.String(50))
     status = db.Column(db.String(30), default='Under Review')
@@ -608,6 +687,7 @@ class Vendor(db.Model):
 class QuestionnaireTemplate(db.Model):
     __tablename__ = 'questionnaire_templates'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -654,14 +734,18 @@ class SetupTask(db.Model):
     are marked done automatically and never get a row here."""
     __tablename__ = 'setup_tasks'
     id = db.Column(db.Integer, primary_key=True)
-    task_key = db.Column(db.String(50), unique=True, nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    task_key = db.Column(db.String(50), nullable=False)
     completed = db.Column(db.Boolean, default=False)
     completed_at = db.Column(db.DateTime)
+
+    __table_args__ = (db.UniqueConstraint('organization_id', 'task_key', name='uq_org_setup_task'),)
 
 
 class Asset(db.Model):
     __tablename__ = 'assets'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     type = db.Column(db.String(50))
     resource_id = db.Column(db.String(300))
@@ -694,8 +778,9 @@ class Asset(db.Model):
 class Employee(db.Model):
     __tablename__ = 'employees'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), nullable=False)
     department = db.Column(db.String(50))
     source = db.Column(db.String(50), default='Manual')
     status = db.Column(db.String(30), default='Active')
@@ -704,6 +789,8 @@ class Employee(db.Model):
     policy_acknowledged = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     offboarded_at = db.Column(db.DateTime)
+
+    __table_args__ = (db.UniqueConstraint('organization_id', 'email', name='uq_org_employee_email'),)
 
     enrollments = db.relationship('TrainingCampaignEnrollment', backref='employee', lazy='dynamic', cascade='all, delete-orphan')
     access_grants = db.relationship('EmployeeAccess', backref='employee', lazy='dynamic', cascade='all, delete-orphan')
@@ -747,6 +834,7 @@ campaign_materials = db.Table(
 class TrainingMaterial(db.Model):
     __tablename__ = 'training_materials'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     type = db.Column(db.String(20), default='Document')  # Document, Link, Video
     file_path = db.Column(db.String(500))
@@ -764,6 +852,7 @@ class TrainingMaterial(db.Model):
 class TrainingCampaign(db.Model):
     __tablename__ = 'training_campaigns'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.String(500))
     status = db.Column(db.String(30), default='Draft')
@@ -821,6 +910,7 @@ access_review_applications = db.Table(
 class AccessReview(db.Model):
     __tablename__ = 'access_reviews'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     owner = db.Column(db.String(100))
     status = db.Column(db.String(30), default='Created')
@@ -847,6 +937,7 @@ class AccessReview(db.Model):
 class ComplianceSnapshot(db.Model):
     __tablename__ = 'compliance_snapshots'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     framework_id = db.Column(db.Integer, db.ForeignKey('frameworks.id'), nullable=False)
     score = db.Column(db.Float, default=0.0)
     passing = db.Column(db.Integer, default=0)
@@ -857,22 +948,28 @@ class ComplianceSnapshot(db.Model):
     snapshot_date = db.Column(db.Date, default=date.today)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    __table_args__ = (db.UniqueConstraint('organization_id', 'framework_id', 'snapshot_date', name='uq_org_framework_snapshot_date'),)
+
     framework = db.relationship('Framework', backref='snapshots')
 
 
 class DashboardSnapshot(db.Model):
     __tablename__ = 'dashboard_snapshots'
     id = db.Column(db.Integer, primary_key=True)
-    snapshot_date = db.Column(db.Date, default=date.today, unique=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    snapshot_date = db.Column(db.Date, default=date.today)
     open_risks = db.Column(db.Integer, default=0)
     active_policies = db.Column(db.Integer, default=0)
     pending_evidence = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    __table_args__ = (db.UniqueConstraint('organization_id', 'snapshot_date', name='uq_org_dashboard_snapshot_date'),)
+
 
 class ActivityLog(db.Model):
     __tablename__ = 'activity_log'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     action = db.Column(db.String(30), nullable=False)
     entity_type = db.Column(db.String(30), nullable=False)
@@ -897,6 +994,7 @@ class NDAAcceptance(db.Model):
 class Notification(db.Model):
     __tablename__ = 'notifications'
     id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     type = db.Column(db.String(30), nullable=False)
     # deadline_approaching, evidence_rejected, risk_escalated, policy_review_due, finding_assigned

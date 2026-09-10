@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import db, Audit, AuditEvidence, AuditFinding, Remediation, Framework, Control, Evidence, EvidenceMapping
@@ -19,9 +19,14 @@ FINDING_SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 @audits_bp.route('/audits')
 @login_required
 def audits():
-    all_audits = Audit.query.all()
-    frameworks = Framework.query.order_by(Framework.name).all()
-    all_controls = Control.query.order_by(Control.code).all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    all_audits = Audit.query.filter_by(organization_id=g.current_org.id).all()
+    # Frameworks/controls visible to this org: shared library + their own private additions.
+    frameworks = Framework.visible_to(g.current_org.id).order_by(Framework.name).all()
+    visible_fw_ids = [fw.id for fw in frameworks]
+    all_controls = Control.query.filter(Control.framework_id.in_(visible_fw_ids)).order_by(Control.code).all()
     return render_template('audits.html', page='audits', audits=all_audits,
         frameworks=frameworks, all_controls=all_controls)
 
@@ -30,6 +35,10 @@ def audits():
 @login_required
 @require_permission('audit_write')
 def add_audit():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     framework_id = request.form.get('framework_id')
     control_ids = request.form.getlist('control_ids')
@@ -38,7 +47,7 @@ def add_audit():
         flash('Audit name and framework are required.', 'error')
         return redirect(url_for('audits.audits'))
 
-    framework = Framework.query.get(int(framework_id))
+    framework = Framework.visible_to(g.current_org.id).filter_by(id=int(framework_id)).first()
     if not framework:
         flash('Invalid framework selected.', 'error')
         return redirect(url_for('audits.audits'))
@@ -50,12 +59,13 @@ def add_audit():
         status='Scheduled',
         start_date=request.form.get('start_date', ''),
         end_date=request.form.get('end_date', ''),
+        organization_id=g.current_org.id,
     )
     db.session.add(audit)
     db.session.flush()
 
     scope_controls = (
-        [Control.query.get(int(cid)) for cid in control_ids] if control_ids
+        [Control.query.filter_by(id=int(cid), framework_id=framework.id).first() for cid in control_ids] if control_ids
         else list(framework.controls)
     )
     for control in scope_controls:
@@ -71,7 +81,7 @@ def add_audit():
 @audits_bp.route('/audits/<int:audit_id>')
 @login_required
 def audit_detail(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     evidence_items = audit.evidence_items.order_by(AuditEvidence.id).all()
 
     # For each in-scope control, find already-uploaded Evidence mapped to it (for the "link existing" dropdown)
@@ -81,7 +91,8 @@ def audit_detail(audit_id):
         existing_evidence_by_control[item.control_id] = [m.evidence for m in mappings]
 
     findings = audit.finding_items.order_by(AuditFinding.created_at.desc()).all()
-    all_controls = Control.query.order_by(Control.code).all()
+    visible_fw_ids = [fw.id for fw in Framework.visible_to(g.current_org.id).all()]
+    all_controls = Control.query.filter(Control.framework_id.in_(visible_fw_ids)).order_by(Control.code).all()
 
     return render_template('audit_detail.html', page='audits',
         audit=audit, evidence_items=evidence_items,
@@ -94,7 +105,7 @@ def audit_detail(audit_id):
 @login_required
 @require_permission('audit_write')
 def update_audit_status(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     target = request.form.get('status')
 
     if target != audit.next_status:
@@ -112,7 +123,8 @@ def update_audit_status(audit_id):
 @login_required
 @require_permission('audit_write')
 def toggle_evidence(audit_id, evidence_id):
-    evidence = AuditEvidence.query.filter_by(id=evidence_id, audit_id=audit_id).first_or_404()
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    evidence = audit.evidence_items.filter_by(id=evidence_id).first_or_404()
     if evidence.status == 'Collected':
         evidence.status = 'Missing'
         evidence.collected_at = None
@@ -132,10 +144,11 @@ def toggle_evidence(audit_id, evidence_id):
 @login_required
 @require_permission('audit_write')
 def link_evidence(audit_id, evidence_id):
-    audit_evidence = AuditEvidence.query.filter_by(id=evidence_id, audit_id=audit_id).first_or_404()
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    audit_evidence = audit.evidence_items.filter_by(id=evidence_id).first_or_404()
     source_evidence_id = request.form.get('evidence_id')
 
-    evidence = Evidence.query.get(int(source_evidence_id)) if source_evidence_id else None
+    evidence = Evidence.query.filter_by(id=int(source_evidence_id), organization_id=g.current_org.id).first() if source_evidence_id else None
     if not evidence:
         flash('Please select an evidence file to link.', 'error')
         return redirect(url_for('audits.audit_detail', audit_id=audit_id))
@@ -155,7 +168,8 @@ def link_evidence(audit_id, evidence_id):
 @login_required
 @require_permission('audit_write')
 def upload_audit_evidence(audit_id, evidence_id):
-    audit_evidence = AuditEvidence.query.filter_by(id=evidence_id, audit_id=audit_id).first_or_404()
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    audit_evidence = audit.evidence_items.filter_by(id=evidence_id).first_or_404()
     file = request.files.get('file')
     title = request.form.get('title', '').strip() or f'Evidence for {audit_evidence.control.code}'
 
@@ -174,6 +188,7 @@ def upload_audit_evidence(audit_id, evidence_id):
     file.save(file_path)
 
     evidence = Evidence(
+        organization_id=g.current_org.id,
         title=title,
         file_path=unique_filename,
         file_name=filename,
@@ -202,7 +217,7 @@ def upload_audit_evidence(audit_id, evidence_id):
 @login_required
 @require_permission('audit_write')
 def add_finding(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     description = request.form.get('description', '').strip()
     if not description:
         flash('Finding description is required.', 'error')
@@ -229,7 +244,8 @@ def add_finding(audit_id):
 @login_required
 @require_permission('audit_write')
 def save_remediation(audit_id, finding_id):
-    finding = AuditFinding.query.filter_by(id=finding_id, audit_id=audit_id).first_or_404()
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    finding = audit.finding_items.filter_by(id=finding_id).first_or_404()
     status = request.form.get('status', 'Planned')
 
     if finding.remediation:
@@ -258,7 +274,7 @@ def save_remediation(audit_id, finding_id):
 @audits_bp.route('/audits/<int:audit_id>/report')
 @login_required
 def audit_report(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     evidence_items = audit.evidence_items.order_by(AuditEvidence.id).all()
     findings = audit.finding_items.order_by(AuditFinding.created_at).all()
     return render_template('audit_report.html', audit=audit, evidence_items=evidence_items, findings=findings)
@@ -267,7 +283,7 @@ def audit_report(audit_id):
 @audits_bp.route('/audits/<int:audit_id>/report.pdf')
 @login_required
 def audit_report_pdf(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     evidence_items = audit.evidence_items.order_by(AuditEvidence.id).all()
     findings = audit.finding_items.order_by(AuditFinding.created_at).all()
     pdf_bytes = build_audit_report_pdf(audit, evidence_items, findings)
@@ -279,7 +295,10 @@ def audit_report_pdf(audit_id):
 @audits_bp.route('/audits/export')
 @login_required
 def export_audits():
-    rows = [(a.name, a.framework, a.auditor, a.status, a.start_date, a.end_date, a.evidence_collected, a.evidence_total, a.findings) for a in Audit.query.all()]
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    rows = [(a.name, a.framework, a.auditor, a.status, a.start_date, a.end_date, a.evidence_collected, a.evidence_total, a.findings) for a in Audit.query.filter_by(organization_id=g.current_org.id).all()]
     return csv_response('audits.csv', ['Name', 'Framework', 'Auditor', 'Status', 'Start Date', 'End Date', 'Evidence Collected', 'Evidence Total', 'Findings'], rows)
 
 
@@ -287,7 +306,7 @@ def export_audits():
 @login_required
 @require_permission('delete')
 def delete_audit(audit_id):
-    audit = Audit.query.get_or_404(audit_id)
+    audit = Audit.query.filter_by(id=audit_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = audit.name
     db.session.delete(audit)
     log_activity('deleted', 'Audit', name)

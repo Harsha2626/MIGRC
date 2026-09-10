@@ -5,11 +5,17 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>{{ framework.name }}</h1>
+        <h1>{{ framework.name }} <span class="badge {% if framework.is_shared %}badge-info{% else %}badge-neutral{% endif %}" style="font-size:11px;vertical-align:middle;">{% if framework.is_shared %}Shared Library{% else %}Your Organization{% endif %}</span></h1>
         <p>{{ framework.description }}</p>
     </div>
     <div class="page-actions">
         <a href="/compliance/{{ framework.id }}/report.pdf" class="btn btn-secondary"><i class="fas fa-file-pdf"></i> Download Report</a>
+        {% if current_user.can_delete %}
+        <form method="POST" action="/compliance/{{ framework.id }}/delete" style="display:inline;" onsubmit="return confirm('{% if framework.is_shared %}\'{{ framework.name }}\' is part of the shared library used by every organization. Deleting it removes it for everyone. Continue?{% else %}Delete \'{{ framework.name }}\'?{% endif %}');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
+        </form>
+        {% endif %}
         <a href="/compliance" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
@@ -28,21 +34,21 @@
         <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
         <div class="stat-info">
             <div class="stat-label">Passing</div>
-            <div class="stat-value" style="color:var(--accent-success);">{{ controls|selectattr('status','equalto','Passing')|list|length }}</div>
+            <div class="stat-value" style="color:var(--accent-success);">{{ framework.passing }}</div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
         <div class="stat-info">
             <div class="stat-label">Failing</div>
-            <div class="stat-value" style="color:var(--accent-danger);">{{ controls|selectattr('status','equalto','Failing')|list|length }}</div>
+            <div class="stat-value" style="color:var(--accent-danger);">{{ framework.failing }}</div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon gray"><i class="fas fa-question-circle"></i></div>
         <div class="stat-info">
             <div class="stat-label">Not Assessed</div>
-            <div class="stat-value" style="color:var(--text-secondary);">{{ controls|selectattr('status','equalto','Not Assessed')|list|length }}</div>
+            <div class="stat-value" style="color:var(--text-secondary);">{{ framework.not_assessed }}</div>
         </div>
     </div>
 </div>
@@ -89,8 +95,8 @@
                     <td><strong>{{ c.code }}</strong></td>
                     <td>{{ c.title }}</td>
                     <td>
-                        <span class="badge {% if c.status == 'Passing' %}badge-success{% elif c.status == 'Failing' %}badge-danger{% elif c.status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}">
-                            {{ c.status }}
+                        <span class="badge {% if c.org_status == 'Passing' %}badge-success{% elif c.org_status == 'Failing' %}badge-danger{% elif c.org_status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}">
+                            {{ c.org_status }}
                         </span>
                     </td>
                     <td>
@@ -103,7 +109,7 @@
                         <span style="font-size:11px;color:var(--text-muted);">—</span>
                         {% endif %}
                     </td>
-                    <td class="text-muted">{{ c.owner or '—' }}</td>
+                    <td class="text-muted">{{ c.org_owner or '—' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

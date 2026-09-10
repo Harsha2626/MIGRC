@@ -4,7 +4,7 @@ from flask_login import login_required
 from app.models import (
     db, Framework, Risk, Policy, Audit, Vendor, Asset, Control, User,
     Evidence, ComplianceSnapshot, DashboardSnapshot, ActivityLog, TrainingCampaign, NDAAcceptance,
-    OrganizationMembership,
+    OrganizationMembership, Organization,
 )
 from app.services.snapshots import ensure_snapshots_for_today
 from app.services.notifications import ensure_notifications_for_today
@@ -33,7 +33,10 @@ def _weighted_compliance_score(frameworks):
 
 
 def _dashboard_context():
-    frameworks = Framework.query.all()
+    org_id = g.current_org.id if g.current_org else -1
+    # Shared library frameworks + this org's own private ones; each fw's stats (via to_dict())
+    # are computed against the current org's own ControlStatus rows.
+    frameworks = Framework.visible_to(org_id).all()
     framework_dicts = [fw.to_dict() for fw in frameworks]
 
     total_controls = sum(fw.total_controls for fw in frameworks)
@@ -42,14 +45,14 @@ def _dashboard_context():
     na_controls = sum(fw.not_applicable for fw in frameworks)
     compliance_score = _weighted_compliance_score(frameworks)
 
-    risks = Risk.query.all()
+    risks = Risk.query.filter_by(organization_id=org_id).all()
     open_risks = len([r for r in risks if r.status == 'Open'])
     critical_risks = len([r for r in risks if r.impact == 'Critical'])
 
-    policy_count = Policy.query.filter_by(status='Published').count()
-    audits = Audit.query.all()
+    policy_count = Policy.query.filter_by(organization_id=org_id, status='Published').count()
+    audits = Audit.query.filter_by(organization_id=org_id).all()
     pending_audits = len([a for a in audits if a.status in ['In Progress', 'Scheduled']])
-    pending_evidence = Evidence.query.filter_by(status='Pending Review').count()
+    pending_evidence = Evidence.query.filter_by(organization_id=org_id, status='Pending Review').count()
 
     return dict(
         compliance_score=compliance_score,
@@ -65,8 +68,8 @@ def _dashboard_context():
         frameworks=framework_dicts,
         risks=risks[:5],
         audits=audits,
-        vendors_count=Vendor.query.count(),
-        assets_count=Asset.query.count(),
+        vendors_count=Vendor.query.filter_by(organization_id=org_id).count(),
+        assets_count=Asset.query.filter_by(organization_id=org_id).count(),
         kpis=_build_kpis(compliance_score, open_risks, policy_count, pending_evidence),
         risk_levels=RISK_LEVELS,
         risk_level_scores=RISK_LEVEL_SCORES,
@@ -78,12 +81,21 @@ def _dashboard_context():
 @main_bp.route('/')
 @login_required
 def dashboard():
+    if not g.current_org:
+        flash('No active organization. Onboard one from the org switcher to get started.', 'error')
+        return render_template('dashboard.html', page='dashboard', trend_labels=[], trend_data=[],
+            recent_activity=[], compliance_score=0, total_controls=0, passing_controls=0,
+            failing_controls=0, na_controls=0, open_risks=0, critical_risks=0, policy_count=0,
+            pending_evidence=0, pending_audits=0, frameworks=[], risks=[], audits=[],
+            vendors_count=0, assets_count=0, kpis=[], risk_levels=RISK_LEVELS,
+            risk_level_scores=RISK_LEVEL_SCORES, risk_matrix=_build_risk_matrix([]), deadlines=[])
+
     ensure_snapshots_for_today()
     ensure_notifications_for_today()
 
     context = _dashboard_context()
     trend_labels, trend_data = _build_compliance_trend()
-    recent_activity = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(20).all()
+    recent_activity = ActivityLog.query.filter_by(organization_id=g.current_org.id).order_by(ActivityLog.created_at.desc()).limit(20).all()
 
     return render_template('dashboard.html',
         page='dashboard',
@@ -94,23 +106,26 @@ def dashboard():
     )
 
 
-def _closest_snapshot_on_or_before(model, cutoff_date):
-    """Most recent snapshot dated <= cutoff, falling back to the oldest snapshot at all."""
-    row = model.query.filter(model.snapshot_date <= cutoff_date).order_by(model.snapshot_date.desc()).first()
+def _closest_snapshot_on_or_before(query, cutoff_date):
+    """Most recent snapshot dated <= cutoff (from the given org-scoped query),
+    falling back to the oldest snapshot at all."""
+    model = query.column_descriptions[0]['entity']
+    row = query.filter(model.snapshot_date <= cutoff_date).order_by(model.snapshot_date.desc()).first()
     if row:
         return row
-    return model.query.order_by(model.snapshot_date.asc()).first()
+    return query.order_by(model.snapshot_date.asc()).first()
 
 
 def _build_kpis(compliance_score, open_risks, policy_count, pending_evidence):
+    org_id = g.current_org.id if g.current_org else -1
     week_ago = date.today() - timedelta(days=7)
 
-    old_dashboard = _closest_snapshot_on_or_before(DashboardSnapshot, week_ago)
+    old_dashboard = _closest_snapshot_on_or_before(DashboardSnapshot.query.filter_by(organization_id=org_id), week_ago)
 
-    old_compliance_row = _closest_snapshot_on_or_before(ComplianceSnapshot, week_ago)
+    old_compliance_row = _closest_snapshot_on_or_before(ComplianceSnapshot.query.filter_by(organization_id=org_id), week_ago)
     old_compliance_score = None
     if old_compliance_row:
-        peers = ComplianceSnapshot.query.filter_by(snapshot_date=old_compliance_row.snapshot_date).all()
+        peers = ComplianceSnapshot.query.filter_by(organization_id=org_id, snapshot_date=old_compliance_row.snapshot_date).all()
         old_applicable = sum(s.total_controls - s.not_applicable for s in peers)
         old_passing = sum(s.passing for s in peers)
         old_compliance_score = round((old_passing / old_applicable) * 100) if old_applicable else 0
@@ -153,8 +168,10 @@ def _build_risk_matrix(risks):
 
 
 def _build_compliance_trend():
+    org_id = g.current_org.id if g.current_org else -1
     start = date.today() - timedelta(days=30)
     snaps = (ComplianceSnapshot.query
+        .filter_by(organization_id=org_id)
         .filter(ComplianceSnapshot.snapshot_date >= start)
         .order_by(ComplianceSnapshot.snapshot_date)
         .all())
@@ -175,21 +192,22 @@ def _build_compliance_trend():
 
 
 def _build_upcoming_deadlines():
+    org_id = g.current_org.id if g.current_org else -1
     today = date.today()
     horizon = today + timedelta(days=30)
     deadlines = []
 
-    for p in Policy.query.all():
+    for p in Policy.query.filter_by(organization_id=org_id).all():
         d = parse_date_safe(p.next_review)
         if d and today <= d <= horizon:
             deadlines.append({'type': 'Policy Review', 'icon': 'fa-file-shield', 'name': p.name, 'date': d})
 
-    for v in Vendor.query.all():
+    for v in Vendor.query.filter_by(organization_id=org_id).all():
         d = parse_date_safe(v.next_assessment)
         if d and today <= d <= horizon:
             deadlines.append({'type': 'Vendor Assessment', 'icon': 'fa-building', 'name': v.name, 'date': d})
 
-    for a in Audit.query.filter(Audit.status != 'Completed').all():
+    for a in Audit.query.filter_by(organization_id=org_id).filter(Audit.status != 'Completed').all():
         start_d = parse_date_safe(a.start_date)
         end_d = parse_date_safe(a.end_date)
         if start_d and today <= start_d <= horizon:
@@ -197,7 +215,7 @@ def _build_upcoming_deadlines():
         elif end_d and today <= end_d <= horizon:
             deadlines.append({'type': 'Audit Ends', 'icon': 'fa-magnifying-glass-chart', 'name': a.name, 'date': end_d})
 
-    for t in TrainingCampaign.query.filter(TrainingCampaign.status != 'Completed').all():
+    for t in TrainingCampaign.query.filter_by(organization_id=org_id).filter(TrainingCampaign.status != 'Completed').all():
         d = parse_date_safe(t.end_date)
         if d and today <= d <= horizon:
             deadlines.append({'type': 'Training Ends', 'icon': 'fa-graduation-cap', 'name': t.name, 'date': d})
@@ -211,10 +229,21 @@ def _build_upcoming_deadlines():
     return deadlines[:10]
 
 
+def _trust_center_org():
+    """Trust Center is public/unauthenticated, so there's no logged-in user's active org to
+    read from g. It shows the platform's primary organization's compliance posture — the
+    Framework/Control definitions are shared, but the pass/fail numbers still need *an* org
+    to compute against, so we pin one here rather than silently showing zeros."""
+    if not g.current_org:
+        g.current_org = Organization.query.order_by(Organization.id).first()
+    return g.current_org
+
+
 @main_bp.route('/trust-center')
 def trust_center():
-    published_policies = Policy.query.filter_by(status='Published').all()
-    active_frameworks = Framework.query.all()
+    org = _trust_center_org()
+    published_policies = Policy.query.filter_by(status='Published', organization_id=org.id if org else -1).all()
+    active_frameworks = Framework.visible_to(org.id if org else -1).all()
     overall_score = _weighted_compliance_score(active_frameworks)
     return render_template('trust_center.html', page='trust_center',
         policies=published_policies, frameworks=[fw.to_dict() for fw in active_frameworks],
@@ -247,7 +276,8 @@ def trust_center_download(policy_id):
         flash('Please accept the NDA to download this document.', 'error')
         return redirect(url_for('main.trust_center'))
 
-    policy = Policy.query.filter_by(id=policy_id, status='Published').first_or_404()
+    org = _trust_center_org()
+    policy = Policy.query.filter_by(id=policy_id, status='Published', organization_id=org.id if org else -1).first_or_404()
 
     if policy.content_state == 'file':
         upload_folder = current_app.config['UPLOAD_FOLDER']
@@ -264,7 +294,8 @@ def trust_center_download(policy_id):
 
 @main_bp.route('/trust-center/certificate/<int:framework_id>')
 def trust_center_certificate(framework_id):
-    framework = Framework.query.get_or_404(framework_id)
+    org = _trust_center_org()
+    framework = Framework.visible_to(org.id if org else -1).filter_by(id=framework_id).first_or_404()
     pdf_bytes = build_trust_certificate_pdf(framework)
     return Response(pdf_bytes, mimetype='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="{framework.name.replace(" ", "_")}_Attestation.pdf"'
@@ -273,15 +304,16 @@ def trust_center_certificate(framework_id):
 
 @main_bp.route('/trust-center/badge.svg')
 def trust_center_badge():
+    org = _trust_center_org()
     framework_id = request.args.get('framework', type=int)
     if framework_id:
-        fw = Framework.query.get_or_404(framework_id)
+        fw = Framework.visible_to(org.id if org else -1).filter_by(id=framework_id).first_or_404()
         applicable = fw.total_controls - fw.not_applicable
         score = round((fw.passing / applicable) * 100) if applicable else 0
         label = fw.name
     else:
         label = 'Compliance'
-        score = _weighted_compliance_score(Framework.query.all())
+        score = _weighted_compliance_score(Framework.visible_to(org.id if org else -1).all())
 
     svg = build_badge_svg(label, f'{score}%')
     return Response(svg, mimetype='image/svg+xml', headers={'Cache-Control': 'public, max-age=3600'})
@@ -304,7 +336,7 @@ def activity_log():
     page = max(int(request.args.get('page', 1)), 1)
     per_page = 50
 
-    query = ActivityLog.query
+    query = ActivityLog.query.filter_by(organization_id=g.current_org.id if g.current_org else -1)
     if entity_type:
         query = query.filter_by(entity_type=entity_type)
     if action:
@@ -316,9 +348,10 @@ def activity_log():
     total = query.count()
     entries = query.offset((page - 1) * per_page).limit(per_page).all()
 
-    entity_types = [row[0] for row in db.session.query(ActivityLog.entity_type).distinct().order_by(ActivityLog.entity_type).all()]
-    actions = [row[0] for row in db.session.query(ActivityLog.action).distinct().order_by(ActivityLog.action).all()]
-    users = User.query.order_by(User.name).all()
+    org_id = g.current_org.id if g.current_org else -1
+    entity_types = [row[0] for row in db.session.query(ActivityLog.entity_type).filter_by(organization_id=org_id).distinct().order_by(ActivityLog.entity_type).all()]
+    actions = [row[0] for row in db.session.query(ActivityLog.action).filter_by(organization_id=org_id).distinct().order_by(ActivityLog.action).all()]
+    users = User.query.join(OrganizationMembership, OrganizationMembership.user_id == User.id).filter(OrganizationMembership.organization_id == org_id).order_by(User.name).all()
 
     return render_template('activity_log.html', page='settings',
         entries=entries, total=total, current_page=page, per_page=per_page,
@@ -330,7 +363,7 @@ def activity_log():
 @login_required
 def export_activity_log():
     rows = [(e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '', e.user.name if e.user else '-', e.action, e.entity_type, e.entity_name or '', e.description or '')
-            for e in ActivityLog.query.order_by(ActivityLog.created_at.desc()).all()]
+            for e in ActivityLog.query.filter_by(organization_id=g.current_org.id if g.current_org else -1).order_by(ActivityLog.created_at.desc()).all()]
     return csv_response('activity_log.csv', ['When', 'User', 'Action', 'Entity Type', 'Entity Name', 'Description'], rows)
 
 
@@ -339,7 +372,7 @@ def export_activity_log():
 @main_bp.route('/api/dashboard/stats')
 @login_required
 def api_dashboard_stats():
-    frameworks = Framework.query.all()
+    frameworks = Framework.visible_to(g.current_org.id if g.current_org else -1).all()
     total_controls = sum(fw.total_controls for fw in frameworks)
     passing = sum(fw.passing for fw in frameworks)
     failing = sum(fw.failing for fw in frameworks)
@@ -348,7 +381,7 @@ def api_dashboard_stats():
         'total_controls': total_controls,
         'passing': passing,
         'failing': failing,
-        'open_risks': Risk.query.filter_by(status='Open').count(),
-        'critical_risks': Risk.query.filter_by(impact='Critical').count(),
+        'open_risks': Risk.query.filter_by(organization_id=org_id, status='Open').count(),
+        'critical_risks': Risk.query.filter_by(organization_id=org_id, impact='Critical').count(),
         'frameworks': [fw.to_dict() for fw in frameworks],
     })

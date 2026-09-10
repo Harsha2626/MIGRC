@@ -1,6 +1,6 @@
 from datetime import date, timedelta
-from flask import current_app
-from app.models import db, User, Notification, Policy, Vendor, Audit
+from flask import current_app, g
+from app.models import db, User, Notification, Policy, Vendor, Audit, OrganizationMembership
 
 TYPE_ICONS = {
     'deadline_approaching': 'fa-clock',
@@ -11,10 +11,11 @@ TYPE_ICONS = {
 }
 
 
-def _create_if_new(user_id, type_, title, message, link, dedupe_key):
+def _create_if_new(user_id, type_, title, message, link, dedupe_key, organization_id=None):
     if dedupe_key and Notification.query.filter_by(user_id=user_id, dedupe_key=dedupe_key).first():
         return None
-    notif = Notification(user_id=user_id, type=type_, title=title, message=message, link=link, dedupe_key=dedupe_key)
+    notif = Notification(organization_id=organization_id, user_id=user_id, type=type_, title=title,
+        message=message, link=link, dedupe_key=dedupe_key)
     db.session.add(notif)
     return notif
 
@@ -31,12 +32,20 @@ def _maybe_email(notifications):
 
 
 def notify_all_users(type_, title, message, link=None, dedupe_key=None):
-    """One notification per active user. dedupe_key (if given) is scoped per-user so re-running a
-    daily check never double-notifies the same person about the same underlying event."""
+    """One notification per active member of the current organization. dedupe_key (if given)
+    is scoped per-user so re-running a daily check never double-notifies the same person
+    about the same underlying event."""
+    org = getattr(g, 'current_org', None)
+    if not org:
+        return []
+
+    member_ids = [m.user_id for m in OrganizationMembership.query.filter_by(organization_id=org.id).all()]
+    users = User.query.filter(User.id.in_(member_ids), User.is_active_user == True).all() if member_ids else []
+
     created = []
-    for user in User.query.filter_by(is_active_user=True).all():
+    for user in users:
         per_user_key = f'{dedupe_key}:{user.id}' if dedupe_key else None
-        n = _create_if_new(user.id, type_, title, message, link, per_user_key)
+        n = _create_if_new(user.id, type_, title, message, link, per_user_key, organization_id=org.id)
         if n:
             created.append(n)
     if created:
@@ -57,6 +66,7 @@ def notify_evidence_rejected(evidence):
         evidence.review_notes or 'Your uploaded evidence was rejected during review.',
         link,
         dedupe_key=f'evidence_rejected:{evidence.id}:{evidence.reviewed_at}',
+        organization_id=evidence.organization_id,
     )
     db.session.commit()
 
@@ -84,12 +94,16 @@ def notify_finding_assigned(finding):
 def ensure_notifications_for_today():
     """Lazy daily check for deadlines approaching within 7 days — policy reviews, vendor
     reassessments, audits wrapping up. Safe to call on every dashboard load (dedupe_key guards it)."""
+    org = getattr(g, 'current_org', None)
+    if not org:
+        return
+    org_id = org.id
     today = date.today()
     horizon = today + timedelta(days=7)
 
     from app.utils import parse_date_safe
 
-    for policy in Policy.query.filter(Policy.status == 'Published').all():
+    for policy in Policy.query.filter_by(organization_id=org_id).filter(Policy.status == 'Published').all():
         d = parse_date_safe(policy.next_review)
         if d and today <= d <= horizon:
             notify_all_users(
@@ -99,7 +113,7 @@ def ensure_notifications_for_today():
                 dedupe_key=f'policy_review_due:{policy.id}:{d}',
             )
 
-    for vendor in Vendor.query.all():
+    for vendor in Vendor.query.filter_by(organization_id=org_id).all():
         d = parse_date_safe(vendor.next_assessment)
         if d and today <= d <= horizon:
             notify_all_users(
@@ -109,7 +123,7 @@ def ensure_notifications_for_today():
                 dedupe_key=f'vendor_assessment_due:{vendor.id}:{d}',
             )
 
-    for audit in Audit.query.filter(Audit.status != 'Completed').all():
+    for audit in Audit.query.filter_by(organization_id=org_id).filter(Audit.status != 'Completed').all():
         d = parse_date_safe(audit.end_date)
         if d and today <= d <= horizon:
             notify_all_users(

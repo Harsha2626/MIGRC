@@ -61,7 +61,8 @@ def create_app():
         if not current_user.is_authenticated:
             return {}
         from app.models import Notification
-        unread = Notification.query.filter_by(user_id=current_user.id, is_read=False)
+        org_id = g.current_org.id if g.current_org else -1
+        unread = Notification.query.filter_by(user_id=current_user.id, organization_id=org_id, is_read=False)
         return {
             'unread_notification_count': unread.count(),
             'recent_notifications': unread.order_by(Notification.created_at.desc()).limit(8).all(),

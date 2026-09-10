@@ -45,7 +45,7 @@
             <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;cursor:pointer;" onclick="toggleEl('task-{{ t.key }}')">
                 <i class="fas {{ 'fa-circle-check' if t.completed else 'fa-circle' }}" style="color:{{ 'var(--accent-success)' if t.completed else 'var(--text-muted)' }};font-size:16px;"></i>
                 <div style="flex:1;">
-                    <div class="font-semibold" style="{{ 'text-decoration:line-through;color:var(--text-muted);' if t.completed }}">{{ t.title }}</div>
+                    <div class="font-semibold">{{ t.title }}</div>
                     <div class="text-sm text-muted">{{ t.description }}</div>
                 </div>
                 <i class="fas fa-chevron-down text-muted" style="font-size:11px;"></i>

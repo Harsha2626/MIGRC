@@ -1,15 +1,24 @@
 from datetime import date
+from flask import g
 from app.models import db, Framework, Risk, Policy, Evidence, ComplianceSnapshot, DashboardSnapshot
 
 
 def ensure_snapshots_for_today():
-    """Idempotently record today's compliance/dashboard/vendor snapshot rows, once per day."""
+    """Idempotently record today's compliance/dashboard snapshot rows for the current
+    organization, once per day."""
+    org = getattr(g, 'current_org', None)
+    if not org:
+        return
+    org_id = org.id
     today = date.today()
 
-    for framework in Framework.query.all():
-        exists = ComplianceSnapshot.query.filter_by(framework_id=framework.id, snapshot_date=today).first()
+    # Snapshot progress for every framework this org can see (shared library + their own
+    # private ones); framework.compliance_score etc. read g.current_org internally.
+    for framework in Framework.visible_to(org_id).all():
+        exists = ComplianceSnapshot.query.filter_by(organization_id=org_id, framework_id=framework.id, snapshot_date=today).first()
         if not exists:
             db.session.add(ComplianceSnapshot(
+                organization_id=org_id,
                 framework_id=framework.id,
                 score=framework.compliance_score,
                 passing=framework.passing,
@@ -20,12 +29,13 @@ def ensure_snapshots_for_today():
                 snapshot_date=today,
             ))
 
-    if not DashboardSnapshot.query.filter_by(snapshot_date=today).first():
+    if not DashboardSnapshot.query.filter_by(organization_id=org_id, snapshot_date=today).first():
         db.session.add(DashboardSnapshot(
+            organization_id=org_id,
             snapshot_date=today,
-            open_risks=Risk.query.filter_by(status='Open').count(),
-            active_policies=Policy.query.filter_by(status='Published').count(),
-            pending_evidence=Evidence.query.filter_by(status='Pending Review').count(),
+            open_risks=Risk.query.filter_by(organization_id=org_id, status='Open').count(),
+            active_policies=Policy.query.filter_by(organization_id=org_id, status='Published').count(),
+            pending_evidence=Evidence.query.filter_by(organization_id=org_id, status='Pending Review').count(),
         ))
 
     db.session.commit()

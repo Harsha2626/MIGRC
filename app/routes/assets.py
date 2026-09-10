@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, g
 from flask_login import login_required
 from app.models import db, Asset
 from app.services.activity import log_activity
@@ -19,7 +19,10 @@ ASSET_TYPES = [
 @assets_bp.route('/assets')
 @login_required
 def assets():
-    all_assets = Asset.query.all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    all_assets = Asset.query.filter_by(organization_id=g.current_org.id).all()
 
     type_counts = {t: 0 for t in ASSET_TYPES}
     for a in all_assets:
@@ -44,6 +47,9 @@ def assets():
 @login_required
 @require_permission('write')
 def add_asset():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
     name = request.form.get('name', '').strip()
     asset_type = request.form.get('type', ASSET_TYPES[0])
     if not name:
@@ -61,6 +67,7 @@ def add_asset():
         classification=request.form.get('classification', ''),
         status='Active',
         cloud_provider=request.form.get('cloud_provider', ''),
+        organization_id=g.current_org.id,
     )
     db.session.add(asset)
     log_activity('created', 'Asset', name)
@@ -74,7 +81,7 @@ def add_asset():
 @login_required
 @require_permission('write')
 def edit_asset(asset_id):
-    asset = Asset.query.get_or_404(asset_id)
+    asset = Asset.query.filter_by(id=asset_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = request.form.get('name', '').strip()
     if not name:
         flash('Asset name is required.', 'error')
@@ -100,8 +107,12 @@ def edit_asset(asset_id):
 @assets_bp.route('/assets/export')
 @login_required
 def export_assets():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
     rows = [(a.name, a.type, a.resource_id, a.region, a.risk_associated, a.environment,
-              a.owner, a.classification, a.status, a.cloud_provider) for a in Asset.query.all()]
+              a.owner, a.classification, a.status, a.cloud_provider)
+             for a in Asset.query.filter_by(organization_id=g.current_org.id).all()]
     return csv_response('assets.csv', ['Name', 'Type', 'Resource ID', 'Region', 'Risk Associated',
         'Environment', 'Owner', 'Classification', 'Status', 'Cloud Provider'], rows)
 
@@ -110,7 +121,7 @@ def export_assets():
 @login_required
 @require_permission('delete')
 def delete_asset(asset_id):
-    asset = Asset.query.get_or_404(asset_id)
+    asset = Asset.query.filter_by(id=asset_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = asset.name
     asset_type = asset.type
     db.session.delete(asset)
@@ -126,9 +137,10 @@ def delete_asset(asset_id):
 def bulk_delete_assets():
     ids = request.form.getlist('asset_ids')
     asset_type = request.form.get('type', ASSET_TYPES[0])
+    org_id = g.current_org.id if g.current_org else -1
     count = 0
     for aid in ids:
-        asset = Asset.query.get(int(aid))
+        asset = Asset.query.filter_by(id=int(aid), organization_id=org_id).first()
         if asset:
             db.session.delete(asset)
             count += 1

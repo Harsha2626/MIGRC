@@ -27,7 +27,10 @@ def switch_organization(org_id):
 
     session['current_org_id'] = org_id
     flash(f'Switched to {membership.organization.name}.', 'success')
-    return redirect(request.referrer or url_for('main.dashboard'))
+    # Always land on the dashboard rather than the referring page: the page the user was
+    # on may reference a record (e.g. /compliance/<id>) that belongs to the org they just
+    # switched away from, which would now 404.
+    return redirect(url_for('main.dashboard'))
 
 
 @organizations_bp.route('/organizations/create', methods=['POST'])

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, Response
+from flask import Blueprint, render_template, Response, g, flash, redirect, url_for
 from flask_login import login_required
 from app.models import Framework
 from app.routes.main import _dashboard_context
@@ -10,7 +10,10 @@ reports_bp = Blueprint('reports', __name__)
 @reports_bp.route('/reports')
 @login_required
 def reports():
-    frameworks = Framework.query.order_by(Framework.name).all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    frameworks = Framework.visible_to(g.current_org.id).order_by(Framework.name).all()
     soc2 = next((fw for fw in frameworks if 'soc 2' in fw.name.lower() or 'soc2' in fw.name.lower()), None)
     return render_template('reports.html', page='reports', frameworks=frameworks, soc2=soc2)
 
@@ -27,7 +30,7 @@ def dashboard_pdf():
 @reports_bp.route('/reports/soc2-readiness.pdf')
 @login_required
 def soc2_readiness_pdf():
-    frameworks = Framework.query.all()
+    frameworks = Framework.visible_to(g.current_org.id if g.current_org else -1).all()
     soc2 = next((fw for fw in frameworks if 'soc 2' in fw.name.lower() or 'soc2' in fw.name.lower()), None)
     if not soc2:
         return Response('SOC 2 framework has not been configured yet. Add it under Compliance first.',

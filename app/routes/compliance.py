@@ -1,10 +1,11 @@
 import os
 import re
 from datetime import datetime, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from app.models import db, Framework, Control, Evidence, EvidenceMapping, ComplianceSnapshot, Policy
+from sqlalchemy.exc import IntegrityError
+from app.models import db, Framework, Control, ControlStatus, Evidence, EvidenceMapping, ComplianceSnapshot, Policy
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
@@ -22,9 +23,13 @@ def _code_sort_key(code):
 @compliance_bp.route('/compliance')
 @login_required
 def compliance():
-    frameworks = Framework.query.all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    # Shared library frameworks + whatever this org added privately for itself.
+    frameworks = Framework.visible_to(g.current_org.id).order_by(Framework.name).all()
     return render_template('compliance.html', page='compliance',
-        frameworks=[fw.to_dict() for fw in frameworks])
+        frameworks=[dict(fw.to_dict(), is_shared=fw.is_shared) for fw in frameworks])
 
 
 @compliance_bp.route('/tests')
@@ -32,23 +37,31 @@ def compliance():
 def tests():
     """A unified checklist of every ongoing compliance check: control
     assessments and policy publication status, in one filterable list."""
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    org_id = g.current_org.id
     rows = []
 
-    for c in Control.query.all():
-        if c.status == 'Passing':
+    # Controls belong to frameworks visible to this org (shared library + their own private ones);
+    # each org's status for a control comes from its own ControlStatus row.
+    visible_fw_ids = {fw.id for fw in Framework.visible_to(org_id).all()}
+    for c in Control.query.filter(Control.framework_id.in_(visible_fw_ids)).all():
+        status = c.org_status
+        if status == 'Passing':
             display_status = 'Passing'
-        elif c.status == 'Not Applicable':
+        elif status == 'Not Applicable':
             display_status = 'Ignored'
         else:  # Failing, Not Assessed
             display_status = 'Fix Required'
         rows.append({
             'name': c.title, 'type': 'Control', 'status': display_status,
-            'assignee': c.owner or None,
+            'assignee': c.org_owner or None,
             'framework': c.framework.name if c.framework else None,
             'link': url_for('compliance.control_detail', framework_id=c.framework_id, control_id=c.id),
         })
 
-    for p in Policy.query.all():
+    for p in Policy.query.filter_by(organization_id=org_id).all():
         if p.status in ('Approved', 'Published'):
             display_status = 'Passing'
         elif p.status == 'Retired':
@@ -74,6 +87,10 @@ def tests():
 @login_required
 @require_permission('write')
 def add_framework():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     if name == '__custom__':
         name = request.form.get('custom_name', '').strip()
@@ -82,7 +99,7 @@ def add_framework():
         flash('Please select or name a framework.', 'error')
         return redirect(url_for('compliance.compliance'))
 
-    if Framework.query.filter_by(name=name).first():
+    if Framework.visible_to(g.current_org.id).filter_by(name=name).first():
         flash(f'A framework named "{name}" already exists.', 'error')
         return redirect(url_for('compliance.compliance'))
 
@@ -90,7 +107,10 @@ def add_framework():
     owner = request.form.get('owner', '').strip()
     target_date = request.form.get('target_date')
 
+    # Frameworks added here are private to this org — the shared library (seeded standards
+    # like ISO 27001/SOC 2) stays common to everyone and isn't touched by this route.
     fw = Framework(
+        organization_id=g.current_org.id,
         name=name,
         category=category,
         owner=owner,
@@ -106,10 +126,35 @@ def add_framework():
     return redirect(url_for('compliance.compliance'))
 
 
+@compliance_bp.route('/compliance/<int:framework_id>/delete', methods=['POST'])
+@login_required
+@require_permission('delete')
+def delete_framework(framework_id):
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    fw = Framework.visible_to(g.current_org.id).filter_by(id=framework_id).first_or_404()
+    name = fw.name
+
+    try:
+        db.session.delete(fw)
+        log_activity('deleted', 'Framework', name)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash(f'Can\'t delete "{name}" — one or more of its controls are still referenced by '
+              'an existing audit\'s scope. Remove that scope first.', 'error')
+        return redirect(url_for('compliance.compliance'))
+
+    flash(f'Framework "{name}" deleted.', 'success')
+    return redirect(url_for('compliance.compliance'))
+
+
 @compliance_bp.route('/compliance/<int:framework_id>')
 @login_required
 def framework_detail(framework_id):
-    fw = Framework.query.get_or_404(framework_id)
+    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
     controls = Control.query.filter_by(framework_id=fw.id).all()
     controls.sort(key=lambda c: _code_sort_key(c.code))
 
@@ -134,8 +179,8 @@ def framework_detail(framework_id):
 @compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>')
 @login_required
 def control_detail(framework_id, control_id):
-    fw = Framework.query.get_or_404(framework_id)
-    ctrl = Control.query.get_or_404(control_id)
+    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
+    ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
 
     # Get all evidence mapped to this control
     mappings = EvidenceMapping.query.filter_by(control_id=ctrl.id).all()
@@ -176,8 +221,11 @@ def control_detail(framework_id, control_id):
 @login_required
 @require_permission('write')
 def upload_evidence(framework_id, control_id):
-    fw = Framework.query.get_or_404(framework_id)
-    ctrl = Control.query.get_or_404(control_id)
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    fw = Framework.visible_to(g.current_org.id).filter_by(id=framework_id).first_or_404()
+    ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
 
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()
@@ -214,6 +262,7 @@ def upload_evidence(framework_id, control_id):
 
     # Create Evidence record
     evidence = Evidence(
+        organization_id=g.current_org.id,
         title=title,
         description=description,
         file_path=unique_filename,
@@ -280,7 +329,7 @@ def upload_evidence(framework_id, control_id):
 @login_required
 @require_permission('review_evidence')
 def review_evidence(evidence_id):
-    evidence = Evidence.query.get_or_404(evidence_id)
+    evidence = Evidence.query.filter_by(id=evidence_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     action = request.form.get('action')
     review_notes = request.form.get('review_notes', '').strip()
 
@@ -324,7 +373,7 @@ def review_evidence(evidence_id):
 @login_required
 @require_permission('delete')
 def delete_evidence(evidence_id):
-    evidence = Evidence.query.get_or_404(evidence_id)
+    evidence = Evidence.query.filter_by(id=evidence_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     affected_control_ids = [m.control_id for m in evidence.evidence_mappings]
 
     # Delete the file from disk
@@ -357,17 +406,28 @@ def delete_evidence(evidence_id):
 
 
 def _recalculate_control_status(control_id):
-    """Recalculate a control's status based on its mapped evidence."""
+    """Recalculate the current organization's status for a (shared) control, based on that
+    org's own mapped evidence — other orgs' evidence on the same control doesn't affect this."""
+    org = g.current_org
+    if not org:
+        return
     ctrl = Control.query.get(control_id)
     if not ctrl:
         return
 
     mappings = EvidenceMapping.query.filter_by(control_id=control_id).all()
-    if not mappings:
-        ctrl.status = 'Not Assessed'
+    org_mappings = [m for m in mappings if m.evidence and m.evidence.organization_id == org.id]
+
+    row = ControlStatus.query.filter_by(control_id=control_id, organization_id=org.id).first()
+    if not row:
+        row = ControlStatus(control_id=control_id, organization_id=org.id)
+        db.session.add(row)
+
+    if not org_mappings:
+        row.status = 'Not Assessed'
         return
 
-    statuses = [m.evidence.status for m in mappings]
+    statuses = [m.evidence.status for m in org_mappings]
 
     # If any evidence is approved and none are rejected → Passing
     # If any evidence is rejected → Failing
@@ -376,15 +436,19 @@ def _recalculate_control_status(control_id):
     has_rejected = 'Rejected' in statuses
 
     if has_rejected:
-        ctrl.status = 'Failing'
+        row.status = 'Failing'
     elif has_approved:
-        ctrl.status = 'Passing'
+        row.status = 'Passing'
     else:
-        ctrl.status = 'Not Assessed'
+        row.status = 'Not Assessed'
 
 
 def _take_compliance_snapshot(framework_id):
-    """Create or update today's compliance snapshot for a framework."""
+    """Create or update today's compliance snapshot of the current organization's progress
+    against a (shared) framework."""
+    org = g.current_org
+    if not org:
+        return
     fw = Framework.query.get(framework_id)
     if not fw:
         return
@@ -393,11 +457,11 @@ def _take_compliance_snapshot(framework_id):
 
     # Upsert: update today's snapshot if it exists, otherwise create new
     snapshot = ComplianceSnapshot.query.filter_by(
-        framework_id=fw.id, snapshot_date=today
+        organization_id=org.id, framework_id=fw.id, snapshot_date=today
     ).first()
 
     if not snapshot:
-        snapshot = ComplianceSnapshot(framework_id=fw.id, snapshot_date=today)
+        snapshot = ComplianceSnapshot(organization_id=org.id, framework_id=fw.id, snapshot_date=today)
         db.session.add(snapshot)
 
     snapshot.score = fw.compliance_score
@@ -411,7 +475,7 @@ def _take_compliance_snapshot(framework_id):
 @compliance_bp.route('/compliance/<int:framework_id>/report.pdf')
 @login_required
 def framework_report_pdf(framework_id):
-    fw = Framework.query.get_or_404(framework_id)
+    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
     pdf_bytes = build_compliance_report_pdf(fw)
     filename = f"{fw.name.replace(' ', '_')}_compliance_report.pdf"
     return Response(pdf_bytes, mimetype='application/pdf',

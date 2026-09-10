@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, g
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
@@ -47,19 +47,23 @@ def vendor_icon(name):
 @people_bp.route('/people/employees')
 @login_required
 def employees():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     tab = request.args.get('tab', 'overview')
     department = request.args.get('department', '')
     task_status = request.args.get('task_status', '')
     group_id = request.args.get('group', '')
     search = request.args.get('q', '')
 
-    all_employees = Employee.query.order_by(Employee.name).all()
-    campaigns = TrainingCampaign.query.order_by(TrainingCampaign.name).all()
+    all_employees = Employee.query.filter_by(organization_id=g.current_org.id).order_by(Employee.name).all()
+    campaigns = TrainingCampaign.query.filter_by(organization_id=g.current_org.id).order_by(TrainingCampaign.name).all()
 
     # ---- Overview tab ----
     overview_employees = all_employees
     if group_id:
-        campaign = TrainingCampaign.query.get(int(group_id))
+        campaign = TrainingCampaign.query.filter_by(id=int(group_id), organization_id=g.current_org.id).first()
         if campaign:
             enrolled_ids = {e.employee_id for e in campaign.enrollments}
             overview_employees = [e for e in all_employees if e.id in enrolled_ids]
@@ -84,7 +88,7 @@ def employees():
     elif task_status == 'clear':
         filtered = [e for e in filtered if not e.has_pending_tasks]
     if group_id:
-        campaign = TrainingCampaign.query.get(int(group_id))
+        campaign = TrainingCampaign.query.filter_by(id=int(group_id), organization_id=g.current_org.id).first()
         if campaign:
             enrolled_ids = {e.employee_id for e in campaign.enrollments}
             filtered = [e for e in filtered if e.id in enrolled_ids]
@@ -125,27 +129,34 @@ def employees():
 @login_required
 @require_permission('write')
 def create_employee():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     email = request.form.get('email', '').strip().lower()
     department = request.form.get('department', '').strip()
     source = request.form.get('source', 'Manual')
     status = request.form.get('status', 'Active')
-    campaign_ids = request.form.getlist('campaign_ids')
+    campaign_ids = {int(cid) for cid in request.form.getlist('campaign_ids')}
 
     if not name or not email:
         flash('Name and email are required.', 'error')
         return redirect(url_for('people.employees', tab='all'))
 
-    if Employee.query.filter_by(email=email).first():
+    if Employee.query.filter_by(email=email, organization_id=g.current_org.id).first():
         flash('An employee with that email already exists.', 'error')
         return redirect(url_for('people.employees', tab='all'))
 
-    employee = Employee(name=name, email=email, department=department, source=source, status=status)
+    employee = Employee(name=name, email=email, department=department, source=source, status=status,
+        organization_id=g.current_org.id)
     db.session.add(employee)
     db.session.flush()
 
-    for cid in campaign_ids:
-        db.session.add(TrainingCampaignEnrollment(campaign_id=int(cid), employee_id=employee.id))
+    valid_campaign_ids = {c.id for c in TrainingCampaign.query.filter(
+        TrainingCampaign.id.in_(campaign_ids), TrainingCampaign.organization_id == g.current_org.id).all()} if campaign_ids else set()
+    for cid in valid_campaign_ids:
+        db.session.add(TrainingCampaignEnrollment(campaign_id=cid, employee_id=employee.id))
 
     log_activity('created', 'Employee', name)
     db.session.commit()
@@ -158,10 +169,13 @@ def create_employee():
 @login_required
 @require_permission('write')
 def edit_employee(employee_id):
-    employee = Employee.query.get_or_404(employee_id)
+    employee = Employee.query.filter_by(
+        id=employee_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     status = request.form.get('status', employee.status)
     department = request.form.get('department', employee.department)
     campaign_ids = {int(cid) for cid in request.form.getlist('campaign_ids')}
+    campaign_ids = {c.id for c in TrainingCampaign.query.filter(
+        TrainingCampaign.id.in_(campaign_ids), TrainingCampaign.organization_id == employee.organization_id).all()} if campaign_ids else set()
 
     employee.status = status
     employee.department = department
@@ -186,7 +200,8 @@ def edit_employee(employee_id):
 @login_required
 @require_permission('delete')
 def delete_employee(employee_id):
-    employee = Employee.query.get_or_404(employee_id)
+    employee = Employee.query.filter_by(
+        id=employee_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = employee.name
     db.session.delete(employee)
     log_activity('deleted', 'Employee', name)
@@ -202,7 +217,11 @@ def delete_employee(employee_id):
 @people_bp.route('/people/training-campaigns')
 @login_required
 def training_campaigns():
-    campaigns = TrainingCampaign.query.order_by(TrainingCampaign.created_at.desc()).all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    campaigns = TrainingCampaign.query.filter_by(organization_id=g.current_org.id).order_by(TrainingCampaign.created_at.desc()).all()
     drafts = [c for c in campaigns if c.status == 'Draft']
     upcoming = [c for c in campaigns if c.status == 'Upcoming']
     in_progress = [c for c in campaigns if c.status == 'In Progress']
@@ -216,8 +235,8 @@ def training_campaigns():
         upcoming_count=len(upcoming),
         in_progress_count=len(in_progress),
         completed_count=len(completed),
-        employee_count=Employee.query.count(),
-        materials=TrainingMaterial.query.order_by(TrainingMaterial.created_at.desc()).all(),
+        employee_count=Employee.query.filter_by(organization_id=g.current_org.id).count(),
+        materials=TrainingMaterial.query.filter_by(organization_id=g.current_org.id).order_by(TrainingMaterial.created_at.desc()).all(),
         timezones=CAMPAIGN_TIMEZONES,
     )
 
@@ -226,6 +245,10 @@ def training_campaigns():
 @login_required
 @require_permission('write')
 def create_training_material():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     title = request.form.get('title', '').strip()
     material_type = request.form.get('type', 'Document')
 
@@ -233,7 +256,7 @@ def create_training_material():
         flash('Training title is required.', 'error')
         return redirect(url_for('people.training_campaigns'))
 
-    material = TrainingMaterial(title=title, type=material_type)
+    material = TrainingMaterial(title=title, type=material_type, organization_id=g.current_org.id)
 
     if material_type == 'Document':
         file = request.files.get('file')
@@ -267,7 +290,8 @@ def create_training_material():
 @login_required
 @require_permission('delete')
 def delete_training_material(material_id):
-    material = TrainingMaterial.query.get_or_404(material_id)
+    material = TrainingMaterial.query.filter_by(
+        id=material_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     title = material.title
     if material.file_path:
         file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], material.file_path)
@@ -284,6 +308,10 @@ def delete_training_material(material_id):
 @login_required
 @require_permission('write')
 def create_training_campaign():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     description = request.form.get('description', '').strip()
     launch_date = request.form.get('launch_date', '')
@@ -309,14 +337,16 @@ def create_training_campaign():
         name=name, description=description or None, status=status,
         launch_date=launch_date, end_date=None if no_end_date else end_date,
         no_end_date=no_end_date, timezone=timezone, sla_days=sla_days,
+        organization_id=g.current_org.id,
     )
     if material_ids:
-        campaign.materials = TrainingMaterial.query.filter(TrainingMaterial.id.in_(material_ids)).all()
+        campaign.materials = TrainingMaterial.query.filter(
+            TrainingMaterial.id.in_(material_ids), TrainingMaterial.organization_id == g.current_org.id).all()
     db.session.add(campaign)
     db.session.flush()
 
     if assign_to == 'all':
-        for employee in Employee.query.all():
+        for employee in Employee.query.filter_by(organization_id=g.current_org.id).all():
             db.session.add(TrainingCampaignEnrollment(campaign_id=campaign.id, employee_id=employee.id))
 
     log_activity('created', 'TrainingCampaign', name, f'{current_user.name} launched campaign "{name}"')
@@ -328,7 +358,8 @@ def create_training_campaign():
 @people_bp.route('/people/training-campaigns/<int:campaign_id>')
 @login_required
 def campaign_detail(campaign_id):
-    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    campaign = TrainingCampaign.query.filter_by(
+        id=campaign_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     tab = request.args.get('tab', 'overview')
 
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
@@ -355,7 +386,7 @@ def campaign_detail(campaign_id):
         completed_within_sla = round((on_time / campaign.total_enrolled) * 100)
 
     audit_logs = ActivityLog.query.filter_by(entity_type='TrainingCampaign', entity_name=campaign.name).order_by(ActivityLog.created_at.desc()).all()
-    all_employees = Employee.query.order_by(Employee.name).all()
+    all_employees = Employee.query.filter_by(organization_id=campaign.organization_id).order_by(Employee.name).all()
     enrolled_ids = {e.employee_id for e in enrollments}
 
     return render_template('campaign_detail.html', page='training_campaigns',
@@ -369,7 +400,8 @@ def campaign_detail(campaign_id):
 @login_required
 @require_permission('write')
 def edit_training_campaign(campaign_id):
-    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    campaign = TrainingCampaign.query.filter_by(
+        id=campaign_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = request.form.get('name', '').strip()
     if not name:
         flash('Campaign name is required.', 'error')
@@ -385,7 +417,8 @@ def edit_training_campaign(campaign_id):
     sla_enabled = request.form.get('sla_enabled') == 'on'
     campaign.sla_days = request.form.get('sla_days', type=int) if sla_enabled else None
     material_ids = [int(mid) for mid in request.form.getlist('material_ids') if mid]
-    campaign.materials = TrainingMaterial.query.filter(TrainingMaterial.id.in_(material_ids)).all() if material_ids else []
+    campaign.materials = TrainingMaterial.query.filter(
+        TrainingMaterial.id.in_(material_ids), TrainingMaterial.organization_id == campaign.organization_id).all() if material_ids else []
 
     log_activity('updated', 'TrainingCampaign', name, f'{current_user.name} updated campaign "{name}" settings')
     db.session.commit()
@@ -397,8 +430,11 @@ def edit_training_campaign(campaign_id):
 @login_required
 @require_permission('write')
 def update_campaign_employees(campaign_id):
-    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    campaign = TrainingCampaign.query.filter_by(
+        id=campaign_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     employee_ids = {int(eid) for eid in request.form.getlist('employee_ids')}
+    employee_ids = {e.id for e in Employee.query.filter(
+        Employee.id.in_(employee_ids), Employee.organization_id == campaign.organization_id).all()} if employee_ids else set()
     current_ids = {e.employee_id for e in campaign.enrollments}
 
     for eid in employee_ids - current_ids:
@@ -416,7 +452,9 @@ def update_campaign_employees(campaign_id):
 @login_required
 @require_permission('write')
 def toggle_enrollment_completed(campaign_id, enrollment_id):
-    enrollment = TrainingCampaignEnrollment.query.filter_by(id=enrollment_id, campaign_id=campaign_id).first_or_404()
+    campaign = TrainingCampaign.query.filter_by(
+        id=campaign_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    enrollment = TrainingCampaignEnrollment.query.filter_by(id=enrollment_id, campaign_id=campaign.id).first_or_404()
     enrollment.completed = not enrollment.completed
     enrollment.completed_at = datetime.utcnow() if enrollment.completed else None
     db.session.commit()
@@ -427,7 +465,8 @@ def toggle_enrollment_completed(campaign_id, enrollment_id):
 @login_required
 @require_permission('delete')
 def delete_training_campaign(campaign_id):
-    campaign = TrainingCampaign.query.get_or_404(campaign_id)
+    campaign = TrainingCampaign.query.filter_by(
+        id=campaign_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = campaign.name
     db.session.delete(campaign)
     log_activity('deleted', 'TrainingCampaign', name)
@@ -443,9 +482,13 @@ def delete_training_campaign(campaign_id):
 @people_bp.route('/people/access-reviews')
 @login_required
 def access_reviews():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     tab = request.args.get('tab', 'reviews')
-    reviews = AccessReview.query.order_by(AccessReview.created_at.desc()).all()
-    vendors = Vendor.query.order_by(Vendor.name).all()
+    reviews = AccessReview.query.filter_by(organization_id=g.current_org.id).order_by(AccessReview.created_at.desc()).all()
+    vendors = Vendor.query.filter_by(organization_id=g.current_org.id).order_by(Vendor.name).all()
 
     access_by_vendor = {}
     for vendor in vendors:
@@ -477,6 +520,10 @@ def access_reviews():
 @login_required
 @require_permission('write')
 def create_access_review():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     name = request.form.get('name', '').strip()
     owner = request.form.get('owner', '').strip()
     review_period_start = request.form.get('review_period_start', '')
@@ -492,10 +539,11 @@ def create_access_review():
     review = AccessReview(
         name=name, owner=owner, status=status,
         review_period_start=review_period_start, review_period_end=review_period_end,
-        recurrence=recurrence,
+        recurrence=recurrence, organization_id=g.current_org.id,
     )
     if vendor_ids:
-        review.applications = Vendor.query.filter(Vendor.id.in_(vendor_ids)).all()
+        review.applications = Vendor.query.filter(
+            Vendor.id.in_(vendor_ids), Vendor.organization_id == g.current_org.id).all()
 
     db.session.add(review)
     log_activity('created', 'AccessReview', name)
@@ -509,7 +557,8 @@ def create_access_review():
 @login_required
 @require_permission('write')
 def update_access_review_status(review_id):
-    review = AccessReview.query.get_or_404(review_id)
+    review = AccessReview.query.filter_by(
+        id=review_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     review.status = request.form.get('status', review.status)
     log_activity('status_changed', 'AccessReview', review.name,
         f'{current_user.name} marked access review "{review.name}" as {review.status}')
@@ -522,7 +571,8 @@ def update_access_review_status(review_id):
 @login_required
 @require_permission('delete')
 def delete_access_review(review_id):
-    review = AccessReview.query.get_or_404(review_id)
+    review = AccessReview.query.filter_by(
+        id=review_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = review.name
     db.session.delete(review)
     log_activity('deleted', 'AccessReview', name)

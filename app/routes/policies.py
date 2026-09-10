@@ -1,7 +1,7 @@
 import os
 import difflib
 from datetime import datetime, date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory, g
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
@@ -31,7 +31,10 @@ STATUS_BADGE = {
 @policies_bp.route('/policies')
 @login_required
 def policies():
-    all_policies = Policy.query.all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    all_policies = Policy.query.filter_by(organization_id=g.current_org.id).all()
     all_employees = Employee.query.order_by(Employee.name).all()
     all_users = User.query.order_by(User.name).all()
     all_frameworks = Framework.query.order_by(Framework.name).all()
@@ -114,6 +117,9 @@ def policies():
 @login_required
 @require_permission('write')
 def add_policy():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
     name = request.form.get('name', '').strip()
     if not name:
         flash('Policy name is required.', 'error')
@@ -133,6 +139,7 @@ def add_policy():
         review_cycle_days=review_cycle_days,
         last_reviewed=today.strftime('%Y-%m-%d'),
         next_review=(today + timedelta(days=review_cycle_days)).strftime('%Y-%m-%d'),
+        organization_id=g.current_org.id,
     )
     db.session.add(policy)
     log_activity('created', 'Policy', name)
@@ -145,7 +152,7 @@ def add_policy():
 @policies_bp.route('/policies/<int:policy_id>')
 @login_required
 def policy_detail(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     users = User.query.order_by(User.name).all()
     versions = policy.versions.all()
     reviews = policy.reviews.all()
@@ -157,8 +164,11 @@ def policy_detail(policy_id):
     approvals = policy.approvals.all()
     linked_controls = policy.controls
     linked_control_ids = {c.id for c in linked_controls}
-    linkable_controls = [c for c in Control.query.order_by(Control.code).all() if c.id not in linked_control_ids]
-    audit_logs = ActivityLog.query.filter_by(entity_type='Policy', entity_name=policy.name).order_by(ActivityLog.created_at.desc()).all()
+    visible_fw_ids = [fw.id for fw in Framework.visible_to(policy.organization_id).all()]
+    linkable_controls = [c for c in Control.query.filter(Control.framework_id.in_(visible_fw_ids)).order_by(Control.code).all()
+                          if c.id not in linked_control_ids]
+    audit_logs = ActivityLog.query.filter_by(entity_type='Policy', entity_name=policy.name,
+        organization_id=policy.organization_id).order_by(ActivityLog.created_at.desc()).all()
 
     return render_template('policy_detail.html', page='policies',
         policy=policy, users=users, versions=versions, reviews=reviews,
@@ -172,7 +182,7 @@ def policy_detail(policy_id):
 @login_required
 @require_permission('write')
 def edit_policy(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = request.form.get('name', '').strip()
     if not name:
         flash('Policy name is required.', 'error')
@@ -221,7 +231,7 @@ def edit_policy(policy_id):
 @login_required
 @require_permission('write')
 def submit_for_review(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.status != 'Draft':
         flash('Only Draft policies can be submitted for review.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -251,7 +261,7 @@ def submit_for_review(policy_id):
 @login_required
 @require_permission('write')
 def review_policy(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.status != 'Needs Review':
         flash('This policy is not awaiting review.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -284,7 +294,7 @@ def review_policy(policy_id):
 @login_required
 @require_permission('write')
 def advance_status(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     target = request.form.get('status')
 
     if target != policy.next_status or policy.status not in ('Approved', 'Published'):
@@ -301,7 +311,7 @@ def advance_status(policy_id):
 @policies_bp.route('/policies/<int:policy_id>/diff/<int:version_id>')
 @login_required
 def policy_diff(policy_id, version_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     old_version = PolicyVersion.query.filter_by(id=version_id, policy_id=policy_id).first_or_404()
 
     diff = difflib.HtmlDiff(wrapcolumn=80).make_table(
@@ -317,7 +327,7 @@ def policy_diff(policy_id, version_id):
 @login_required
 @require_permission('write')
 def acknowledge_policy(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.status != 'Published':
         flash('Only Published policies can be acknowledged.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -343,12 +353,15 @@ def acknowledge_policy(policy_id):
 @policies_bp.route('/policies/export')
 @login_required
 def export_policies():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
     rows = [(
         p.name, p.version, p.owner, p.status, p.framework, p.department or '', p.recurrence,
         p.effort_estimate, ', '.join(u.name for u in p.assignees), ', '.join(u.name for u in p.approvers),
         p.last_reviewed, p.next_review, p.acknowledgements, p.total_employees,
         p.created_at.strftime('%Y-%m-%d') if p.created_at else '',
-    ) for p in Policy.query.all()]
+    ) for p in Policy.query.filter_by(organization_id=g.current_org.id).all()]
     return csv_response('policies.csv', [
         'Name', 'Version', 'Owner', 'Status', 'Framework', 'Department', 'Recurrence', 'Effort Estimate',
         'Assignees', 'Approvers', 'Last Reviewed', 'Next Review', 'Acknowledgements', 'Total Employees', 'Added On',
@@ -359,7 +372,7 @@ def export_policies():
 @login_required
 @require_permission('delete')
 def delete_policy(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     name = policy.name
     db.session.delete(policy)
     log_activity('deleted', 'Policy', name)
@@ -372,10 +385,13 @@ def delete_policy(policy_id):
 @login_required
 @require_permission('delete')
 def bulk_delete_policies():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
     policy_ids = request.form.getlist('policy_ids')
     count = 0
     for pid in policy_ids:
-        p = Policy.query.get(int(pid))
+        p = Policy.query.filter_by(id=int(pid), organization_id=g.current_org.id).first()
         if p:
             db.session.delete(p)
             count += 1
@@ -392,7 +408,7 @@ def bulk_delete_policies():
 @login_required
 @require_permission('write')
 def upload_policy_file(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.content or policy.external_url:
         flash('This policy already has content or a linked URL.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -424,7 +440,7 @@ def upload_policy_file(policy_id):
 @login_required
 @require_permission('write')
 def link_policy_url(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.content or policy.file_path:
         flash('This policy already has content or an uploaded document.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -446,7 +462,7 @@ def link_policy_url(policy_id):
 @login_required
 @require_permission('write')
 def start_blank_policy(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.file_path or policy.external_url:
         flash('This policy already has an uploaded document or linked URL.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -462,7 +478,7 @@ def start_blank_policy(policy_id):
 @policies_bp.route('/policies/<int:policy_id>/file')
 @login_required
 def download_policy_file(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if not policy.file_path:
         abort(404)
     upload_folder = current_app.config['UPLOAD_FOLDER']
@@ -476,7 +492,7 @@ def download_policy_file(policy_id):
 @login_required
 @require_permission('write')
 def sign_off_approval(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.status != 'Pending Approval':
         flash('This policy is not awaiting approval sign-off.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -511,7 +527,7 @@ def sign_off_approval(policy_id):
 @login_required
 @require_permission('write')
 def update_assignees(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     user_ids = request.form.getlist('user_ids')
     policy.assignees = User.query.filter(User.id.in_([int(i) for i in user_ids])).all() if user_ids else []
     log_activity('updated', 'Policy', policy.name, f'{current_user.name} updated assignees for policy "{policy.name}"')
@@ -524,7 +540,7 @@ def update_assignees(policy_id):
 @login_required
 @require_permission('write')
 def update_approvers(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     if policy.status == 'Pending Approval':
         flash('Cannot change approvers while a sign-off is in progress — reject it back to Draft first.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
@@ -542,7 +558,7 @@ def update_approvers(policy_id):
 @login_required
 @require_permission('write')
 def add_comment(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     body = request.form.get('body', '').strip()
     if not body:
         flash('Comment cannot be empty.', 'error')
@@ -556,7 +572,8 @@ def add_comment(policy_id):
 @login_required
 @require_permission('delete')
 def delete_comment(policy_id, comment_id):
-    comment = PolicyComment.query.filter_by(id=comment_id, policy_id=policy_id).first_or_404()
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    comment = policy.comments.filter_by(id=comment_id).first_or_404()
     db.session.delete(comment)
     db.session.commit()
     flash('Comment deleted.', 'info')
@@ -569,14 +586,15 @@ def delete_comment(policy_id, comment_id):
 @login_required
 @require_permission('write')
 def link_controls(policy_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     control_ids = request.form.getlist('control_ids')
     existing_ids = {c.id for c in policy.controls}
+    visible_fw_ids = [fw.id for fw in Framework.visible_to(policy.organization_id).all()]
     added = 0
     for cid in control_ids:
         cid_int = int(cid)
         if cid_int not in existing_ids:
-            control = Control.query.get(cid_int)
+            control = Control.query.filter_by(id=cid_int).filter(Control.framework_id.in_(visible_fw_ids)).first()
             if control:
                 policy.controls.append(control)
                 added += 1
@@ -591,7 +609,7 @@ def link_controls(policy_id):
 @login_required
 @require_permission('write')
 def unlink_control(policy_id, control_id):
-    policy = Policy.query.get_or_404(policy_id)
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     control = Control.query.get_or_404(control_id)
     if control in policy.controls:
         policy.controls.remove(control)

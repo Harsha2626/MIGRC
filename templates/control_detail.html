@@ -15,8 +15,8 @@
         <p>{{ control.category }} Control &middot; {{ framework.name }}</p>
     </div>
     <div class="page-actions">
-        <span class="badge {% if control.status == 'Passing' %}badge-success{% elif control.status == 'Failing' %}badge-danger{% elif control.status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}" style="font-size:14px;padding:8px 16px;">
-            {{ control.status }}
+        <span class="badge {% if control.org_status == 'Passing' %}badge-success{% elif control.org_status == 'Failing' %}badge-danger{% elif control.org_status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}" style="font-size:14px;padding:8px 16px;">
+            {{ control.org_status }}
         </span>
         <a href="/compliance/{{ framework.id }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>

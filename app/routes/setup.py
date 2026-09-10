@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app.models import (
-    db, SetupTask, Framework, Policy, Employee, Vendor, Risk, Audit, Evidence,
+    db, SetupTask, Framework, Policy, Employee, Vendor, Risk, Audit, Evidence, ControlStatus,
     Organization, OrganizationMembership, DepartmentOwner,
 )
 from app.routes.policies import POLICY_DEPARTMENTS
@@ -85,22 +85,32 @@ SETUP_PHASES = [
 
 
 def _auto_completion(org):
-    """Tasks backed by real MIGRC data — done the moment the underlying record exists."""
-    dept_owners_assigned = False
-    if org:
-        dept_owners_assigned = DepartmentOwner.query.filter_by(organization_id=org.id) \
-            .filter(DepartmentOwner.owner_id.isnot(None)).count() > 0
+    """Tasks backed by real MIGRC data — done the moment the underlying record exists
+    for the given organization."""
+    if not org:
+        return {
+            'org_details': False, 'assign_department_owners': False, 'choose_frameworks': False,
+            'add_policies': False, 'add_employees': False, 'upload_evidence': False,
+            'log_risk': False, 'add_vendors': False, 'schedule_audit': False,
+        }
+
+    dept_owners_assigned = DepartmentOwner.query.filter_by(organization_id=org.id) \
+        .filter(DepartmentOwner.owner_id.isnot(None)).count() > 0
+
+    # Framework/Control definitions are a shared library available to every org from day
+    # one, so "choose frameworks" is now signaled by having started assessing a control.
+    started_assessing = ControlStatus.query.filter_by(organization_id=org.id).count() > 0
 
     return {
-        'org_details': bool(org and org.legal_name),
+        'org_details': bool(org.legal_name),
         'assign_department_owners': dept_owners_assigned,
-        'choose_frameworks': Framework.query.count() > 0,
-        'add_policies': Policy.query.count() > 0,
-        'add_employees': Employee.query.count() > 0,
-        'upload_evidence': Evidence.query.count() > 0,
-        'log_risk': Risk.query.count() > 0,
-        'add_vendors': Vendor.query.count() > 0,
-        'schedule_audit': Audit.query.count() > 0,
+        'choose_frameworks': started_assessing,
+        'add_policies': Policy.query.filter_by(organization_id=org.id).count() > 0,
+        'add_employees': Employee.query.filter_by(organization_id=org.id).count() > 0,
+        'upload_evidence': Evidence.query.filter_by(organization_id=org.id).count() > 0,
+        'log_risk': Risk.query.filter_by(organization_id=org.id).count() > 0,
+        'add_vendors': Vendor.query.filter_by(organization_id=org.id).count() > 0,
+        'schedule_audit': Audit.query.filter_by(organization_id=org.id).count() > 0,
     }
 
 
@@ -109,7 +119,7 @@ def _auto_completion(org):
 def setup_wizard():
     org = g.current_org
     auto_done = _auto_completion(org)
-    manual_done = {t.task_key: t.completed for t in SetupTask.query.all()}
+    manual_done = {t.task_key: t.completed for t in SetupTask.query.filter_by(organization_id=org.id if org else -1).all()}
 
     org_members = []
     dept_owner_map = {}
@@ -118,7 +128,7 @@ def setup_wizard():
         dept_owner_map = {d.department: d.owner_id for d in DepartmentOwner.query.filter_by(organization_id=org.id).all()}
     departments = sorted(set(POLICY_DEPARTMENTS) | set(dept_owner_map.keys()))
 
-    scheduled_audits = {a.framework: a.start_date for a in Audit.query.all()}
+    scheduled_audits = {a.framework: a.start_date for a in Audit.query.filter_by(organization_id=org.id if org else -1).all()}
 
     phases = []
     total_tasks = 0
@@ -145,7 +155,7 @@ def setup_wizard():
     return render_template('setup_wizard.html', page='setup', phases=phases,
         total_tasks=total_tasks, total_done=total_done, first_incomplete_key=first_incomplete_key,
         org=org, org_members=org_members, departments=departments, dept_owner_map=dept_owner_map,
-        frameworks=Framework.query.order_by(Framework.name).all(), scheduled_audits=scheduled_audits,
+        frameworks=Framework.visible_to(org.id if org else -1).order_by(Framework.name).all(), scheduled_audits=scheduled_audits,
         WORK_ARRANGEMENTS=WORK_ARRANGEMENTS, INDUSTRIES=INDUSTRIES, GEOGRAPHIC_SCOPES=GEOGRAPHIC_SCOPES,
         IDENTITY_PROVIDERS=IDENTITY_PROVIDERS, CLOUD_PROVIDERS=CLOUD_PROVIDERS)
 
@@ -158,9 +168,14 @@ def toggle_task(task_key):
         flash('This task tracks itself automatically based on your data.', 'error')
         return redirect(url_for('setup.setup_wizard'))
 
-    task = SetupTask.query.filter_by(task_key=task_key).first()
+    org = g.current_org
+    if not org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('setup.setup_wizard'))
+
+    task = SetupTask.query.filter_by(task_key=task_key, organization_id=org.id).first()
     if not task:
-        task = SetupTask(task_key=task_key)
+        task = SetupTask(task_key=task_key, organization_id=org.id)
         db.session.add(task)
 
     task.completed = not task.completed
@@ -204,7 +219,11 @@ def save_organization():
 @setup_bp.route('/setup/organization/<int:org_id>/logo')
 @login_required
 def organization_logo(org_id):
-    org = Organization.query.get_or_404(org_id)
+    from flask_login import current_user
+    membership = OrganizationMembership.query.filter_by(user_id=current_user.id, organization_id=org_id).first()
+    if not membership:
+        abort(404)
+    org = membership.organization
     if not org.logo_path:
         abort(404)
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], org.logo_path)
@@ -241,6 +260,11 @@ def save_department_owners():
 @login_required
 @require_permission('audit_write')
 def schedule_audits():
+    org = g.current_org
+    if not org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('setup.setup_wizard'))
+
     framework_ids = request.form.getlist('framework_id')
     dates = request.form.getlist('audit_date')
 
@@ -248,14 +272,15 @@ def schedule_audits():
         audit_date = audit_date.strip()
         if not audit_date or not framework_id:
             continue
-        framework = Framework.query.get(int(framework_id))
+        framework = Framework.visible_to(org.id).filter_by(id=int(framework_id)).first()
         if not framework:
             continue
-        existing = Audit.query.filter_by(framework=framework.name).first()
+        existing = Audit.query.filter_by(framework=framework.name, organization_id=org.id).first()
         if existing:
             existing.start_date = audit_date
         else:
             db.session.add(Audit(
+                organization_id=org.id,
                 name=f'{framework.name} Audit', framework=framework.name,
                 status='Scheduled', start_date=audit_date,
             ))

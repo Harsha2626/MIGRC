@@ -1,7 +1,7 @@
 from datetime import datetime, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from flask_login import login_required, current_user
-from app.models import db, Risk, RiskTreatment, TreatmentMilestone, Control
+from app.models import db, Risk, RiskTreatment, TreatmentMilestone, Control, Framework
 from app.services.activity import log_activity
 from app.services.notifications import notify_risk_escalated
 from app.services.csv_export import csv_response
@@ -62,11 +62,17 @@ def _is_overdue(treatment):
 @risks_bp.route('/risks')
 @login_required
 def risks():
-    all_risks = Risk.query.order_by(Risk.score.desc()).all()
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    org_id = g.current_org.id
+
+    all_risks = Risk.query.filter_by(organization_id=org_id).order_by(Risk.score.desc()).all()
     # Template uses {{ risks|tojson }} for JS risk matrix, so pass dicts
     risk_dicts = [r.to_dict() for r in all_risks]
 
-    all_treatments = RiskTreatment.query.order_by(RiskTreatment.deadline.asc()).all()
+    all_treatments = RiskTreatment.query.join(Risk).filter(
+        Risk.organization_id == org_id).order_by(RiskTreatment.deadline.asc()).all()
     tasks = []
     task_counts = {'open': 0, 'overdue': 0, 'needs_attention': 0, 'completed': 0}
     for t in all_treatments:
@@ -97,6 +103,10 @@ def risks():
 @login_required
 @require_permission('write')
 def add_risk():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     title = request.form.get('title', '').strip()
     likelihood = request.form.get('likelihood', 'Medium')
     impact = request.form.get('impact', 'Medium')
@@ -110,6 +120,7 @@ def add_risk():
         return redirect(url_for('risks.risks'))
 
     risk = Risk(
+        organization_id=g.current_org.id,
         title=title,
         description=request.form.get('description', ''),
         category=request.form.get('category', ''),
@@ -134,7 +145,7 @@ def add_risk():
 @login_required
 @require_permission('write')
 def edit_risk(risk_id):
-    risk = Risk.query.get_or_404(risk_id)
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     title = request.form.get('title', '').strip()
     likelihood = request.form.get('likelihood', risk.likelihood)
     impact = request.form.get('impact', risk.impact)
@@ -168,7 +179,7 @@ def edit_risk(risk_id):
 @login_required
 @require_permission('delete')
 def delete_risk(risk_id):
-    risk = Risk.query.get_or_404(risk_id)
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     title = risk.title
     db.session.delete(risk)
     log_activity('deleted', 'Risk', title)
@@ -180,8 +191,10 @@ def delete_risk(risk_id):
 @risks_bp.route('/risks/<int:risk_id>')
 @login_required
 def risk_detail(risk_id):
-    risk = Risk.query.get_or_404(risk_id)
-    all_controls = Control.query.order_by(Control.code).all()
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    # Controls belonging to frameworks visible to this org (shared library + their own private ones).
+    visible_fw_ids = [fw.id for fw in Framework.visible_to(risk.organization_id).all()]
+    all_controls = Control.query.filter(Control.framework_id.in_(visible_fw_ids)).order_by(Control.code).all()
     treatments = risk.treatments.order_by(RiskTreatment.created_at.desc()).all()
     return render_template('risk_detail.html', page='risks', risk=risk,
         all_controls=all_controls, treatments=treatments,
@@ -192,9 +205,11 @@ def risk_detail(risk_id):
 @login_required
 @require_permission('write')
 def update_risk_controls(risk_id):
-    risk = Risk.query.get_or_404(risk_id)
-    control_ids = request.form.getlist('control_ids')
-    risk.mitigating_controls = [Control.query.get(int(cid)) for cid in control_ids if Control.query.get(int(cid))]
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    control_ids = [int(cid) for cid in request.form.getlist('control_ids') if cid.isdigit()]
+    visible_fw_ids = [fw.id for fw in Framework.visible_to(risk.organization_id).all()]
+    risk.mitigating_controls = Control.query.filter(
+        Control.id.in_(control_ids), Control.framework_id.in_(visible_fw_ids)).all()
 
     log_activity('updated', 'Risk', risk.title, f'{current_user.name} updated mitigating controls for risk "{risk.title}"')
     db.session.commit()
@@ -206,7 +221,7 @@ def update_risk_controls(risk_id):
 @login_required
 @require_permission('write')
 def add_treatment(risk_id):
-    risk = Risk.query.get_or_404(risk_id)
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     action = request.form.get('action', '').strip()
     if not action:
         flash('Treatment action is required.', 'error')
@@ -229,7 +244,9 @@ def add_treatment(risk_id):
 @login_required
 @require_permission('write')
 def add_mitigation_task():
-    risk = Risk.query.get_or_404(request.form.get('risk_id', type=int))
+    risk = Risk.query.filter_by(
+        id=request.form.get('risk_id', type=int),
+        organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     action = request.form.get('action', '').strip()
     if not action:
         flash('Task name is required.', 'error')
@@ -252,8 +269,8 @@ def add_mitigation_task():
 @login_required
 @require_permission('write')
 def update_treatment_status(risk_id, treatment_id):
-    treatment = RiskTreatment.query.filter_by(id=treatment_id, risk_id=risk_id).first_or_404()
-    risk = treatment.risk
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    treatment = risk.treatments.filter_by(id=treatment_id).first_or_404()
     status = request.form.get('status', treatment.status)
     treatment.status = status
 
@@ -278,15 +295,22 @@ def update_treatment_status(risk_id, treatment_id):
 @login_required
 @require_permission('write')
 def add_from_catalog():
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     title = request.form.get('title', '').strip()
     if not title:
         return redirect(url_for('risks.risks') + '#discovery')
 
-    if Risk.query.filter(db.func.lower(Risk.title) == title.lower()).first():
+    if Risk.query.filter(
+            Risk.organization_id == g.current_org.id,
+            db.func.lower(Risk.title) == title.lower()).first():
         flash(f'"{title}" is already in your risk register.', 'info')
         return redirect(url_for('risks.risks') + '#discovery')
 
     risk = Risk(
+        organization_id=g.current_org.id,
         title=title,
         description=request.form.get('description', ''),
         category=request.form.get('category', ''),
@@ -310,7 +334,8 @@ def add_from_catalog():
 @login_required
 @require_permission('write')
 def add_milestone(risk_id, treatment_id):
-    treatment = RiskTreatment.query.filter_by(id=treatment_id, risk_id=risk_id).first_or_404()
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    treatment = risk.treatments.filter_by(id=treatment_id).first_or_404()
     title = request.form.get('title', '').strip()
     if not title:
         flash('Milestone title is required.', 'error')
@@ -327,7 +352,9 @@ def add_milestone(risk_id, treatment_id):
 @login_required
 @require_permission('write')
 def toggle_milestone(risk_id, milestone_id):
-    milestone = TreatmentMilestone.query.get_or_404(milestone_id)
+    risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    milestone = TreatmentMilestone.query.join(RiskTreatment).filter(
+        TreatmentMilestone.id == milestone_id, RiskTreatment.risk_id == risk.id).first_or_404()
     milestone.completed = not milestone.completed
     log_activity('status_changed', 'Risk', milestone.treatment.risk.title,
         f'{current_user.name} marked milestone "{milestone.title}" as {"completed" if milestone.completed else "incomplete"}')
@@ -338,7 +365,11 @@ def toggle_milestone(risk_id, milestone_id):
 @risks_bp.route('/risks/export')
 @login_required
 def export_risks():
-    rows = [(r.title, r.category, r.likelihood, r.impact, r.score, r.owner, r.status, r.treatment, r.created) for r in Risk.query.all()]
+    if not g.current_org:
+        flash('No active organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+    org_risks = Risk.query.filter_by(organization_id=g.current_org.id).all()
+    rows = [(r.title, r.category, r.likelihood, r.impact, r.score, r.owner, r.status, r.treatment, r.created) for r in org_risks]
     return csv_response('risks.csv', ['Title', 'Category', 'Likelihood', 'Impact', 'Score', 'Owner', 'Status', 'Treatment', 'Created'], rows)
 
 
@@ -351,7 +382,9 @@ def api_risk_matrix():
         "Medium": {"High": 0, "Medium": 0, "Low": 0},
         "Low": {"High": 0, "Medium": 0, "Low": 0},
     }
-    for r in Risk.query.all():
+    if not g.current_org:
+        return jsonify(matrix)
+    for r in Risk.query.filter_by(organization_id=g.current_org.id).all():
         if r.impact in matrix and r.likelihood in matrix[r.impact]:
             matrix[r.impact][r.likelihood] += 1
     return jsonify(matrix)
