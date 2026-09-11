@@ -100,6 +100,25 @@ class DepartmentOwner(db.Model):
     owner = db.relationship('User')
 
 
+class GoogleWorkspaceConnection(db.Model):
+    """One org's connected Google Workspace account. Tokens are for the Admin SDK
+    Directory API scope granted at connect time - see app/routes/google_oauth.py."""
+    __tablename__ = 'google_workspace_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    google_email = db.Column(db.String(120), nullable=False)
+    domain = db.Column(db.String(120))
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text)
+    token_expiry = db.Column(db.DateTime)
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime)
+
+    organization = db.relationship('Organization', backref=db.backref('google_workspace_connection', uselist=False))
+    connected_by = db.relationship('User')
+
+
 class OrganizationMembership(db.Model):
     __tablename__ = 'organization_memberships'
     id = db.Column(db.Integer, primary_key=True)

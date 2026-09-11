@@ -26,3 +26,9 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'no-reply@migrc.local')
+
+    # Google Workspace integration (SSO login + Admin SDK directory sync). Inert
+    # unless all three are set - see app/routes/google_oauth.py.
+    GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+    GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI')

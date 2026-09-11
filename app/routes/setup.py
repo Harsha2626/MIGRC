@@ -5,7 +5,7 @@ from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app.models import (
     db, SetupTask, Framework, Policy, Employee, Vendor, Risk, Audit, Evidence, ControlStatus,
-    Organization, OrganizationMembership, DepartmentOwner,
+    Organization, OrganizationMembership, DepartmentOwner, GoogleWorkspaceConnection,
 )
 from app.routes.policies import POLICY_DEPARTMENTS
 from app.utils import require_permission, allowed_file
@@ -123,10 +123,17 @@ def setup_wizard():
 
     org_members = []
     dept_owner_map = {}
+    google_connection = None
     if org:
         org_members = [m.user for m in OrganizationMembership.query.filter_by(organization_id=org.id).all()]
         dept_owner_map = {d.department: d.owner_id for d in DepartmentOwner.query.filter_by(organization_id=org.id).all()}
+        google_connection = GoogleWorkspaceConnection.query.filter_by(organization_id=org.id).first()
     departments = sorted(set(POLICY_DEPARTMENTS) | set(dept_owner_map.keys()))
+
+    # Google Workspace is a real, working IDP integration - being connected satisfies
+    # this task even if it was never manually marked done.
+    if google_connection:
+        manual_done['connect_identity_provider'] = True
 
     scheduled_audits = {a.framework: a.start_date for a in Audit.query.filter_by(organization_id=org.id if org else -1).all()}
 
@@ -157,7 +164,7 @@ def setup_wizard():
         org=org, org_members=org_members, departments=departments, dept_owner_map=dept_owner_map,
         frameworks=Framework.visible_to(org.id if org else -1).order_by(Framework.name).all(), scheduled_audits=scheduled_audits,
         WORK_ARRANGEMENTS=WORK_ARRANGEMENTS, INDUSTRIES=INDUSTRIES, GEOGRAPHIC_SCOPES=GEOGRAPHIC_SCOPES,
-        IDENTITY_PROVIDERS=IDENTITY_PROVIDERS, CLOUD_PROVIDERS=CLOUD_PROVIDERS)
+        IDENTITY_PROVIDERS=IDENTITY_PROVIDERS, CLOUD_PROVIDERS=CLOUD_PROVIDERS, google_connection=google_connection)
 
 
 @setup_bp.route('/setup/tasks/<task_key>/toggle', methods=['POST'])

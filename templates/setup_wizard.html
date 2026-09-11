@@ -125,7 +125,26 @@
                         {% for idp in IDENTITY_PROVIDERS %}
                         <div class="card" style="padding:14px;">
                             <div class="flex-center gap-8" style="margin-bottom:10px;"><i class="{{ idp.icon }}"></i> <span class="font-semibold">{{ idp.name }}</span></div>
+                            {% if idp.name == 'Google Workspace' %}
+                                {% if google_connection %}
+                                <div class="text-sm text-muted" style="margin-bottom:8px;"><i class="fas fa-circle-check" style="color:var(--accent-success);"></i> Connected as {{ google_connection.google_email }}</div>
+                                <div class="flex gap-8">
+                                    <form method="POST" action="{{ url_for('google_oauth.sync_employees') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-primary">Sync Employees</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('google_oauth.disconnect') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                                    </form>
+                                </div>
+                                {% if google_connection.last_synced_at %}<div class="text-sm text-muted" style="margin-top:6px;">Last synced {{ google_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }}</div>{% endif %}
+                                {% else %}
+                                <a href="{{ url_for('google_oauth.connect') }}" class="btn btn-sm btn-primary">Integrate</a>
+                                {% endif %}
+                            {% else %}
                             <button type="button" class="btn btn-sm btn-primary" onclick="showToast('{{ idp.name }} integration coming soon.', 'info')">Integrate</button>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
