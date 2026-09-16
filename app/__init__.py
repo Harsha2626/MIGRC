@@ -101,4 +101,12 @@ def create_app():
     app.register_blueprint(organizations_bp)
     app.register_blueprint(google_oauth_bp)
 
+    with app.app_context():
+        try:
+            db.create_all()
+            from app.services.deduplication import cleanup_duplicate_frameworks
+            cleanup_duplicate_frameworks()
+        except Exception as e:
+            app.logger.warning(f"Database initialization/deduplication warning: {e}")
+
     return app

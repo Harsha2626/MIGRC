@@ -158,9 +158,15 @@ class Framework(db.Model):
     @staticmethod
     def visible_to(org_id):
         """Frameworks an org can see: the shared library (organization_id IS NULL) plus
-        whatever that org added privately for itself."""
-        return Framework.query.filter(
-            db.or_(Framework.organization_id.is_(None), Framework.organization_id == org_id))
+        whatever that org added privately for itself, minus any frameworks that this org
+        explicitly removed/excluded."""
+        base_query = Framework.query.filter(
+            db.or_(Framework.organization_id.is_(None), Framework.organization_id == org_id)
+        )
+        if not org_id:
+            return base_query
+        excluded_ids = db.session.query(OrganizationExcludedFramework.framework_id).filter_by(organization_id=org_id)
+        return base_query.filter(~Framework.id.in_(excluded_ids))
 
     @property
     def is_shared(self):
@@ -230,6 +236,22 @@ class Framework(db.Model):
             'compliance_score': self.compliance_score,
             'status': self.status,
         }
+
+
+class OrganizationExcludedFramework(db.Model):
+    """Tracks frameworks (especially from the shared reference library) that a specific organization
+    has removed/excluded from its active compliance tracking. Allows an org to delete/remove a
+    shared framework from its workspace without affecting other organizations."""
+    __tablename__ = 'organization_excluded_frameworks'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    framework_id = db.Column(db.Integer, db.ForeignKey('frameworks.id'), nullable=False)
+    excluded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('organization_id', 'framework_id', name='uq_org_excluded_fw'),)
+
+    organization = db.relationship('Organization', backref=db.backref('excluded_frameworks', lazy='dynamic', cascade='all, delete-orphan'))
+    framework = db.relationship('Framework', backref=db.backref('org_exclusions', lazy='dynamic', cascade='all, delete-orphan'))
 
 
 class Control(db.Model):

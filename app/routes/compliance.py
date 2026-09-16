@@ -5,7 +5,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
-from app.models import db, Framework, Control, ControlStatus, Evidence, EvidenceMapping, ComplianceSnapshot, Policy
+from app.models import (
+    db, Framework, Control, ControlStatus, Evidence, EvidenceMapping,
+    ComplianceSnapshot, Policy, OrganizationExcludedFramework, Audit,
+)
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
@@ -28,6 +31,13 @@ def compliance():
         return redirect(url_for('main.dashboard'))
     # Shared library frameworks + whatever this org added privately for itself.
     frameworks = Framework.visible_to(g.current_org.id).order_by(Framework.name).all()
+    # Deduplicate by name if duplicates exist (prefer the one with controls)
+    fws_by_name = {}
+    for fw in frameworks:
+        if fw.name not in fws_by_name or fw.controls.count() > fws_by_name[fw.name].controls.count():
+            fws_by_name[fw.name] = fw
+    frameworks = sorted(fws_by_name.values(), key=lambda f: f.name)
+
     return render_template('compliance.html', page='compliance',
         frameworks=[dict(fw.to_dict(), is_shared=fw.is_shared) for fw in frameworks])
 
@@ -99,16 +109,41 @@ def add_framework():
         flash('Please select or name a framework.', 'error')
         return redirect(url_for('compliance.compliance'))
 
-    if Framework.visible_to(g.current_org.id).filter_by(name=name).first():
-        flash(f'A framework named "{name}" already exists.', 'error')
+    # 1. Check if this framework exists in the shared reference library
+    shared_fw = Framework.query.filter(
+        Framework.organization_id.is_(None),
+        Framework.name == name
+    ).first()
+
+    if shared_fw:
+        # Check if it was previously excluded/removed by this organization
+        exclusion = OrganizationExcludedFramework.query.filter_by(
+            organization_id=g.current_org.id,
+            framework_id=shared_fw.id
+        ).first()
+
+        if exclusion:
+            db.session.delete(exclusion)
+            log_activity('added', 'Framework', f'{name} re-added to organization')
+            db.session.commit()
+            flash(f'Framework "{name}" has been added back to your organization.', 'success')
+            return redirect(url_for('compliance.compliance'))
+
+        # If it's already active in this organization
+        if Framework.visible_to(g.current_org.id).filter_by(id=shared_fw.id).first():
+            flash(f'Framework "{name}" is already active in your organization.', 'error')
+            return redirect(url_for('compliance.compliance'))
+
+    # 2. Check if a custom framework already exists with this name in this organization
+    if Framework.query.filter_by(organization_id=g.current_org.id, name=name).first():
+        flash(f'A framework named "{name}" already exists in your organization.', 'error')
         return redirect(url_for('compliance.compliance'))
 
     category = request.form.get('category', 'Security')
     owner = request.form.get('owner', '').strip()
     target_date = request.form.get('target_date')
 
-    # Frameworks added here are private to this org — the shared library (seeded standards
-    # like ISO 27001/SOC 2) stays common to everyone and isn't touched by this route.
+    # Frameworks added here are private to this org
     fw = Framework(
         organization_id=g.current_org.id,
         name=name,
@@ -136,18 +171,58 @@ def delete_framework(framework_id):
 
     fw = Framework.visible_to(g.current_org.id).filter_by(id=framework_id).first_or_404()
     name = fw.name
+    org_id = g.current_org.id
 
     try:
-        db.session.delete(fw)
-        log_activity('deleted', 'Framework', name)
-        db.session.commit()
-    except IntegrityError:
+        # Delete org-related components for this framework
+        # 1. Org-specific assessment statuses for controls in this framework
+        control_ids = [c.id for c in fw.controls]
+        if control_ids:
+            ControlStatus.query.filter(
+                ControlStatus.organization_id == org_id,
+                ControlStatus.control_id.in_(control_ids)
+            ).delete(synchronize_session=False)
+
+        # 2. Org-specific compliance score snapshots for this framework
+        ComplianceSnapshot.query.filter_by(
+            organization_id=org_id,
+            framework_id=fw.id
+        ).delete(synchronize_session=False)
+
+        # 3. Org-scoped audits for this framework
+        audits = Audit.query.filter_by(organization_id=org_id, framework=name).all()
+        for audit in audits:
+            db.session.delete(audit)
+
+        if fw.is_shared:
+            # Shared library framework: DO NOT delete the shared framework record or controls!
+            # Instead, record the exclusion for this organization so it is removed only from this org.
+            existing_exclusion = OrganizationExcludedFramework.query.filter_by(
+                organization_id=org_id,
+                framework_id=fw.id
+            ).first()
+            if not existing_exclusion:
+                exclusion = OrganizationExcludedFramework(
+                    organization_id=org_id,
+                    framework_id=fw.id
+                )
+                db.session.add(exclusion)
+
+            log_activity('removed', 'Framework', f'{name} removed from organization')
+            db.session.commit()
+            flash(f'Framework "{name}" removed from your organization. It remains available in the shared library.', 'success')
+        else:
+            # Custom framework owned privately by this organization: permanently delete it
+            db.session.delete(fw)
+            log_activity('deleted', 'Framework', name)
+            db.session.commit()
+            flash(f'Framework "{name}" deleted.', 'success')
+
+    except IntegrityError as e:
         db.session.rollback()
-        flash(f'Can\'t delete "{name}" — one or more of its controls are still referenced by '
-              'an existing audit\'s scope. Remove that scope first.', 'error')
+        flash(f'Can\'t delete "{name}" — one or more of its controls are still referenced by an existing audit or component: {e}', 'error')
         return redirect(url_for('compliance.compliance'))
 
-    flash(f'Framework "{name}" deleted.', 'success')
     return redirect(url_for('compliance.compliance'))
 
 
