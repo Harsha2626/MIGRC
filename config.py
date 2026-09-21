@@ -4,6 +4,11 @@ from dotenv import load_dotenv
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
 
+# Allow OAuth token exchange over plain HTTP in local dev.
+# google-auth-oauthlib refuses http:// redirect URIs unless this is set.
+if os.environ.get('OAUTHLIB_INSECURE_TRANSPORT', '1') == '1':
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'migrc-dev-secret-key-change-in-production')

@@ -58,7 +58,6 @@ def connect():
 
 
 @google_oauth_bp.route('/integrations/google/callback')
-@login_required
 def callback():
     state = session.pop('google_oauth_state', None)
     if not state or state != request.args.get('state'):
@@ -73,7 +72,8 @@ def callback():
     flow = _flow()
     try:
         flow.fetch_token(authorization_response=request.url)
-    except Exception:
+    except Exception as e:
+        current_app.logger.exception("Google OAuth token fetch failed: %s", e)
         flash('Google authorization was cancelled or failed.', 'error')
         return redirect(url_for('setup.setup_wizard'))
 

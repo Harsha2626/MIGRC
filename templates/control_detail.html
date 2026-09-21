@@ -126,11 +126,17 @@
                         {% if ev.description %}
                         <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">{{ ev.description[:100] }}{% if ev.description|length > 100 %}...{% endif %}</div>
                         {% endif %}
-                        {% if ev.ai_suggested_status %}
-                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--accent-primary-light);color:var(--accent-primary);" title="{{ ev.ai_rationale }}">
-                            <i class="fas fa-wand-magic-sparkles"></i>
-                            AI suggests <strong>{{ ev.ai_suggested_status }}</strong>
-                            {% if ev.ai_confidence %}({{ (ev.ai_confidence * 100)|round|int }}% confidence){% endif %}
+                        {% if ev.ai_reviewed_at and ev.ai_suggested_status %}
+                        <div style="font-size:11px;margin-top:4px;padding:6px 8px;border-radius:4px;background:var(--accent-primary-light);color:var(--accent-primary);">
+                            <div><i class="fas fa-wand-magic-sparkles"></i>
+                                AI validation: <strong>{{ ev.ai_suggested_status }}</strong>
+                                {% if ev.ai_confidence %}({{ (ev.ai_confidence * 100)|round|int }}% confidence){% endif %}
+                            </div>
+                            {% if ev.ai_rationale %}<div style="margin-top:2px;color:var(--text-secondary);">{{ ev.ai_rationale }}</div>{% endif %}
+                        </div>
+                        {% elif ev.status == 'Pending Review' %}
+                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--accent-warning-light,rgba(255,159,10,0.1));color:var(--accent-warning);">
+                            <i class="fas fa-hourglass-half"></i> AI validation pending — AI integration coming soon
                         </div>
                         {% endif %}
                     </td>
