@@ -8,7 +8,7 @@ from app.models import (
     Organization, OrganizationMembership, DepartmentOwner, GoogleWorkspaceConnection,
 )
 from app.routes.policies import POLICY_DEPARTMENTS
-from app.utils import require_permission, allowed_file
+from app.utils import require_permission, allowed_file, IMAGE_EXTENSIONS
 
 setup_bp = Blueprint('setup', __name__)
 
@@ -211,12 +211,15 @@ def save_organization():
     org.geographic_scope = request.form.getlist('geographic_scope')
 
     file = request.files.get('logo')
-    if file and file.filename and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-        unique_filename = f'org{org.id}_{timestamp}_{filename}'
-        file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
-        org.logo_path = unique_filename
+    if file and file.filename:
+        if allowed_file(file.filename, IMAGE_EXTENSIONS):
+            filename = secure_filename(file.filename)
+            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+            unique_filename = f'org{org.id}_{timestamp}_{filename}'
+            file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
+            org.logo_path = unique_filename
+        else:
+            flash('Logo not saved — use PNG, JPG, GIF, WEBP, or SVG.', 'error')
 
     db.session.commit()
     flash('Organization details saved.', 'success')

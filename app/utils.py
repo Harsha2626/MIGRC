@@ -26,9 +26,13 @@ def require_permission(perm):
     return decorator
 
 
-def allowed_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in current_app.config.get('ALLOWED_EXTENSIONS', set())
+IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+
+
+def allowed_file(filename, extensions=None):
+    if extensions is None:
+        extensions = current_app.config.get('ALLOWED_EXTENSIONS', set())
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in extensions
 
 
 def parse_date_safe(value):
