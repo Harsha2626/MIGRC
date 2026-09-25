@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
     db, Employee, TrainingCampaign, TrainingCampaignEnrollment, TrainingMaterial,
-    EmployeeAccess, AccessReview, Vendor, ActivityLog,
+    EmployeeAccess, AccessReview, Vendor, ActivityLog, GoogleWorkspaceConnection,
 )
 from app.services.activity import log_activity
 from app.utils import allowed_file, require_permission
@@ -97,10 +97,12 @@ def employees():
         filtered = [e for e in filtered if s in e.name.lower() or s in e.email.lower()]
 
     departments = sorted({e.department for e in all_employees if e.department})
+    google_connection = GoogleWorkspaceConnection.query.filter_by(organization_id=g.current_org.id).first()
 
     return render_template('people_employees.html',
         page='employees',
         tab=tab,
+        google_connection=google_connection,
         employees=filtered,
         all_employees_count=len(all_employees),
         active_count=len([e for e in all_employees if e.status == 'Active']),

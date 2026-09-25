@@ -15,35 +15,35 @@ RISK_LEVEL_SCORES = {'Critical': 5, 'High': 4, 'Medium': 3, 'Low': 2, 'Negligibl
 # register instead of writing every risk from scratch. Categories match the
 # RISK_CATEGORIES options already used on the Add/Edit Risk form.
 RISK_CATALOG = [
-    {'title': 'Departing Employee Access Retention', 'category': 'Access Control',
+    {'title': 'Departing Employee Access Retention', 'category': 'People',
      'description': 'Access for employees who have left the organization is not revoked promptly, allowing continued system access after departure.'},
-    {'title': 'Weak or Shared Credentials', 'category': 'Access Control',
+    {'title': 'Weak or Shared Credentials', 'category': 'Technology',
      'description': 'Use of shared accounts or weak password policies increases the likelihood of unauthorized access to sensitive systems.'},
-    {'title': 'Unencrypted Sensitive Data at Rest', 'category': 'Data Protection',
+    {'title': 'Unencrypted Sensitive Data at Rest', 'category': 'Technology',
      'description': 'Databases or storage volumes containing sensitive data without encryption increase exposure if the underlying media is lost or compromised.'},
-    {'title': 'Cross-Border Data Transfer Non-Compliance', 'category': 'Data Protection',
+    {'title': 'Cross-Border Data Transfer Non-Compliance', 'category': 'Regulatory',
      'description': 'Transferring personal data across jurisdictions without appropriate safeguards may violate data protection regulations.'},
-    {'title': 'Expired or Missing Data Processing Agreements', 'category': 'Vendor Risk',
+    {'title': 'Expired or Missing Data Processing Agreements', 'category': 'Governance',
      'description': 'Working with vendors that process personal data without a current, signed DPA in place creates regulatory exposure.'},
-    {'title': 'Unmanaged Shadow IT', 'category': 'Vendor Risk',
+    {'title': 'Unmanaged Shadow IT', 'category': 'Vendor Management',
      'description': 'Employees adopting unsanctioned SaaS tools outside of procurement and security review introduces unassessed third-party risk.'},
-    {'title': 'Misconfigured Cloud Storage Permissions', 'category': 'Cloud Security',
+    {'title': 'Misconfigured Cloud Storage Permissions', 'category': 'Technology',
      'description': 'Publicly accessible or overly permissive cloud storage buckets may expose sensitive data to the internet.'},
-    {'title': 'Missing Cloud Activity Logging', 'category': 'Cloud Security',
+    {'title': 'Missing Cloud Activity Logging', 'category': 'Operations',
      'description': 'Lack of centralized logging across cloud accounts limits visibility into suspicious or unauthorized activity.'},
-    {'title': 'Single Point of Failure in Critical Infrastructure', 'category': 'Business Continuity',
+    {'title': 'Single Point of Failure in Critical Infrastructure', 'category': 'Resilience',
      'description': 'Reliance on a single server, data center, or vendor for a critical service could cause extended downtime if that component fails.'},
-    {'title': 'Untested Backup and Recovery Process', 'category': 'Business Continuity',
+    {'title': 'Untested Backup and Recovery Process', 'category': 'Resilience',
      'description': 'Backups exist but recovery procedures have not been tested, risking data loss if a restore is required during an actual incident.'},
-    {'title': 'Office or Facility Disruption', 'category': 'Business Continuity',
+    {'title': 'Office or Facility Disruption', 'category': 'Resilience',
      'description': 'Natural disasters, utility outages, or civil disruption could make primary work locations inaccessible for staff.'},
-    {'title': 'Phishing and Social Engineering Campaigns', 'category': 'Social Engineering',
+    {'title': 'Phishing and Social Engineering Campaigns', 'category': 'People',
      'description': 'Employees may be targeted by phishing emails or calls designed to steal credentials or install malware.'},
-    {'title': 'Impersonation of IT Support', 'category': 'Social Engineering',
+    {'title': 'Impersonation of IT Support', 'category': 'People',
      'description': 'Attackers posing as internal IT or helpdesk staff may trick employees into resetting credentials or granting remote access.'},
-    {'title': 'Outdated Software and Missing Patches', 'category': 'Vulnerability Mgmt',
+    {'title': 'Outdated Software and Missing Patches', 'category': 'Technology',
      'description': 'Systems running unsupported or unpatched software versions are more susceptible to known, publicly documented exploits.'},
-    {'title': 'Unremediated Critical Vulnerabilities', 'category': 'Vulnerability Mgmt',
+    {'title': 'Unremediated Critical Vulnerabilities', 'category': 'Technology',
      'description': 'Critical vulnerabilities identified in scans remain open past their remediation SLA, leaving a known window of exposure.'},
 ]
 
@@ -193,12 +193,25 @@ def delete_risk(risk_id):
 def risk_detail(risk_id):
     risk = Risk.query.filter_by(id=risk_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     # Controls belonging to frameworks visible to this org (shared library + their own private ones).
-    visible_fw_ids = [fw.id for fw in Framework.visible_to(risk.organization_id).all()]
-    all_controls = Control.query.filter(Control.framework_id.in_(visible_fw_ids)).order_by(Control.code).all()
+    visible_fws = Framework.visible_to(risk.organization_id).order_by(Framework.name).all()
+    all_controls = Control.query.filter(
+        Control.framework_id.in_([fw.id for fw in visible_fws])).order_by(Control.code).all()
     treatments = risk.treatments.order_by(RiskTreatment.created_at.desc()).all()
+
+    linked_ids = {c.id for c in risk.mitigating_controls}
+    controls_by_fw = {}
+    for c in all_controls:
+        controls_by_fw.setdefault(c.framework_id, []).append(
+            {'id': c.id, 'code': c.code, 'title': c.title, 'linked': c.id in linked_ids})
+    frameworks_json = [
+        {'id': fw.id, 'name': fw.name, 'controls': controls_by_fw[fw.id]}
+        for fw in visible_fws if fw.id in controls_by_fw
+    ]
+
     return render_template('risk_detail.html', page='risks', risk=risk,
         all_controls=all_controls, treatments=treatments,
-        risk_levels=list(RISK_LEVEL_SCORES.keys()))
+        risk_levels=list(RISK_LEVEL_SCORES.keys()),
+        frameworks_json=frameworks_json)
 
 
 @risks_bp.route('/risks/<int:risk_id>/controls', methods=['POST'])

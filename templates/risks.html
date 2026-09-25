@@ -276,7 +276,7 @@
         </div>
         <select class="filter-select" id="discoveryCategoryFilter" onchange="filterDiscovery()">
             <option value="">All Categories</option>
-            {% for c in ['Access Control','Data Protection','Vendor Risk','Cloud Security','Business Continuity','Social Engineering','Vulnerability Mgmt'] %}
+            {% for c in ['Customer','Governance','Operations','Others','People','Regulatory','Reporting','Resilience','Technology','Vendor Management'] %}
             <option value="{{ c }}">{{ c }}</option>
             {% endfor %}
         </select>
@@ -445,7 +445,7 @@ function showAddTaskModal() {
 }
 
 const RISK_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];
-const RISK_CATEGORIES = ['Access Control', 'Data Protection', 'Vendor Risk', 'Cloud Security', 'Business Continuity', 'Social Engineering', 'Vulnerability Mgmt'];
+const RISK_CATEGORIES = ['Customer', 'Governance', 'Operations', 'Others', 'People', 'Regulatory', 'Reporting', 'Resilience', 'Technology', 'Vendor Management'];
 
 function levelOptions(selected) {
     return RISK_LEVELS.map(l => `<option ${l === selected ? 'selected' : ''}>${l}</option>`).join('');

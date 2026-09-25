@@ -189,17 +189,26 @@
                 </button>
                 {% if current_user.is_authenticated %}
                 <div class="dropdown-panel-wrapper">
-                    <button class="btn btn-secondary btn-sm" onclick="toggleDropdownPanel('orgSwitcherPanel')" title="Switch organization">
+                    <button class="btn btn-secondary btn-sm" onclick="toggleDropdownPanel('orgSwitcherPanel')" title="Switch organization" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;">
+                        {% if current_org and current_org.logo_path %}
+                        <img src="{{ url_for('setup.organization_logo', org_id=current_org.id) }}" alt="{{ current_org.name }} logo" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0;">
+                        {% else %}
                         <i class="fas fa-building"></i>
-                        <span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;">{{ current_org.name if current_org else 'No Organization' }}</span>
+                        {% endif %}
+                        <span style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;font-size:14px;">{{ current_org.name if current_org else 'No Organization' }}</span>
                         <i class="fas fa-chevron-down" style="font-size:10px;"></i>
                     </button>
-                    <div class="dropdown-panel" id="orgSwitcherPanel" style="min-width:240px;">
+                    <div class="dropdown-panel" id="orgSwitcherPanel" style="min-width:260px;">
                         {% for org in user_organizations %}
                         <form method="POST" action="{{ url_for('organizations.switch_organization', org_id=org.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;{{ 'font-weight:600;color:var(--accent-primary);' if current_org and org.id == current_org.id }}">
-                                <i class="fas {{ 'fa-check' if current_org and org.id == current_org.id else 'fa-building' }}"></i> {{ org.name }}
+                            <button type="submit" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;{{ 'font-weight:600;color:var(--accent-primary);' if current_org and org.id == current_org.id }}">
+                                {% if org.logo_path %}
+                                <img src="{{ url_for('setup.organization_logo', org_id=org.id) }}" alt="{{ org.name }} logo" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;">
+                                {% else %}
+                                <i class="fas {{ 'fa-check' if current_org and org.id == current_org.id else 'fa-building' }}" style="width:20px;text-align:center;flex-shrink:0;"></i>
+                                {% endif %}
+                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ org.name }}</span>
                             </button>
                         </form>
                         {% endfor %}

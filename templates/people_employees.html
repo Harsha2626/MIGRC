@@ -251,38 +251,70 @@ function groupCheckboxes(selectedIds) {
         `).join('') + `</div>`;
 }
 
+const GOOGLE_CONNECTED = {{ 'true' if google_connection else 'false' }};
+const GOOGLE_EMAIL = {{ (google_connection.google_email if google_connection else '')|tojson }};
+
+function toggleEmployeeSourceUI(source) {
+    const manualFields = document.getElementById('manualEmployeeFields');
+    const workspaceNotice = document.getElementById('workspaceSyncNotice');
+    const submitBtn = document.getElementById('addEmployeeSubmitBtn');
+    if (source === 'Google Workspace') {
+        manualFields.style.display = 'none';
+        manualFields.querySelectorAll('[required]').forEach(el => el.removeAttribute('required'));
+        workspaceNotice.style.display = '';
+        workspaceNotice.innerHTML = GOOGLE_CONNECTED
+            ? `<p class="text-sm text-muted">Google Workspace is connected as <strong>${GOOGLE_EMAIL}</strong>. Employees are pulled in automatically from your directory — click below to sync now instead of adding them one by one.</p>`
+            : `<p class="text-sm text-muted">Google Workspace isn't connected yet. Connect it from the Setup Wizard to pull all your employees in automatically instead of adding them one by one.</p>`;
+        submitBtn.textContent = GOOGLE_CONNECTED ? 'Sync Employees Now' : 'Go to Setup Wizard';
+        submitBtn.onclick = GOOGLE_CONNECTED
+            ? function() { document.getElementById('workspaceSyncForm').submit(); }
+            : function() { window.location.href = "{{ url_for('setup.setup_wizard') }}"; };
+    } else {
+        manualFields.style.display = '';
+        manualFields.querySelector('input[name="name"]').setAttribute('required', 'required');
+        manualFields.querySelector('input[name="email"]').setAttribute('required', 'required');
+        workspaceNotice.style.display = 'none';
+        submitBtn.textContent = 'Add Employee';
+        submitBtn.onclick = function() { document.getElementById('addEmployeeForm').submit(); };
+    }
+}
+
 function showAddEmployeeModal() {
     openModal('Add Employee', `
+        <form id="workspaceSyncForm" method="POST" action="{{ url_for('google_oauth.sync_employees') }}" style="display:none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        </form>
         <form id="addEmployeeForm" method="POST" action="{{ url_for('people.create_employee') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" name="name" class="form-control" placeholder="e.g. Priya Sharma" required>
+                <label>Source</label>
+                <select name="source" class="form-control" onchange="toggleEmployeeSourceUI(this.value)">
+                    <option>Manual</option>
+                    <option>Google Workspace</option>
+                    <option>HRIS</option>
+                </select>
             </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" name="email" class="form-control" placeholder="e.g. priya@midevops.io" required>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div id="manualEmployeeFields">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" name="name" class="form-control" placeholder="e.g. Priya Sharma" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="e.g. priya@midevops.io" required>
+                </div>
                 <div class="form-group">
                     <label>Department</label>
                     <input type="text" name="department" class="form-control" placeholder="e.g. Engineering">
                 </div>
                 <div class="form-group">
-                    <label>Source</label>
-                    <select name="source" class="form-control">
-                        <option>Manual</option>
-                        <option>Google Workspace</option>
-                        <option>HRIS</option>
-                    </select>
+                    <label>Groups</label>
+                    ${groupCheckboxes()}
                 </div>
             </div>
-            <div class="form-group">
-                <label>Groups</label>
-                ${groupCheckboxes()}
-            </div>
+            <div id="workspaceSyncNotice" style="display:none;"></div>
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'addEmployeeForm\').submit()">Add Employee</button>');
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" id="addEmployeeSubmitBtn" class="btn btn-primary" onclick="document.getElementById(\'addEmployeeForm\').submit()">Add Employee</button>');
 }
 
 function showEditEmployeeModal(id, name, status, department, campaignIds) {

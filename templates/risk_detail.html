@@ -7,6 +7,47 @@
 {% endblock %}
 
 {% block content %}
+<style>
+.lc-modal { background: var(--bg-secondary); border-radius: var(--radius-xl); width: 95%; max-width: 1000px; height: 85vh; display: flex; overflow: hidden; box-shadow: var(--shadow-lg); position: relative; animation: modalIn 0.2s ease; }
+.lc-modal-close { position: absolute; top: 16px; right: 16px; z-index: 2; }
+.lc-sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border-color); padding: 20px 12px; overflow-y: auto; }
+.lc-sidebar-title { font-size: 16px; font-weight: 600; padding: 0 8px 16px; }
+.lc-framework-nav { display: flex; flex-direction: column; gap: 2px; }
+.lc-framework-tab { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: none; border: none; text-align: left; cursor: pointer; padding: 10px 8px; border-radius: 6px; color: var(--text-secondary); font-size: 13px; font-weight: 500; width: 100%; }
+.lc-framework-tab:hover { background: var(--bg-tertiary); }
+.lc-framework-tab.active { color: var(--accent-primary); background: var(--bg-tertiary); }
+.lc-count-badge { background: var(--text-muted); color: var(--bg-secondary); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; flex-shrink: 0; }
+.lc-framework-tab.active .lc-count-badge { background: var(--accent-primary); color: #fff; }
+.lc-main { flex: 1; padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+.lc-main form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.lc-framework-title { font-size: 20px; font-weight: 700; margin: 0 0 14px; }
+.lc-ai-box { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+.lc-ai-box-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--accent-primary); }
+.lc-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.lc-search-wrapper { position: relative; flex: 1; min-width: 220px; }
+.lc-search-wrapper i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; }
+.lc-search-wrapper input { width: 100%; padding: 9px 12px 9px 32px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; }
+.lc-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.lc-toggle input { display: none; }
+.lc-toggle-track { width: 34px; height: 18px; border-radius: 999px; background: var(--bg-tertiary); border: 1px solid var(--border-color); position: relative; transition: var(--transition); flex-shrink: 0; }
+.lc-toggle-thumb { position: absolute; top: 1px; left: 1px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); transition: var(--transition); }
+.lc-toggle input:checked + .lc-toggle-track { background: var(--accent-primary); }
+.lc-toggle input:checked + .lc-toggle-track .lc-toggle-thumb { transform: translateX(16px); background: #fff; }
+.lc-control-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.lc-control-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; cursor: pointer; }
+.lc-control-row:hover { background: var(--bg-tertiary); }
+.lc-control-row input { margin-top: 2px; flex-shrink: 0; }
+.lc-empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+.lc-footer { display: flex; align-items: center; gap: 16px; padding-top: 16px; margin-top: 14px; border-top: 1px solid var(--border-color); }
+.lc-pager-wrapper { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.lc-pager { display: flex; gap: 4px; }
+.lc-page-btn { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+.lc-page-btn.active { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
+@media (max-width: 720px) {
+    .lc-modal { flex-direction: column; height: 90vh; }
+    .lc-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); max-height: 140px; }
+}
+</style>
 <div class="page-header">
     <div>
         <h1>{{ risk.title }}</h1>
@@ -56,22 +97,79 @@
 
 <!-- Mitigating Controls -->
 <div class="card" style="margin-bottom:20px;">
-    <div class="card-header"><h3>Mitigating Controls</h3></div>
+    <div class="card-header">
+        <h3>Mitigating Controls</h3>
+        {% if current_user.can_write %}
+        <button type="button" class="btn btn-sm btn-primary" onclick="openLinkControlsModal()"><i class="fas fa-link"></i> Link / Unlink Controls</button>
+        {% endif %}
+    </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('risks.update_risk_controls', risk_id=risk.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;padding:10px 14px;margin-bottom:12px;">
-                {% set linked_ids = risk.mitigating_controls|map(attribute='id')|list %}
-                {% for c in all_controls %}
-                <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:400;padding:3px 0;">
-                    <input type="checkbox" name="control_ids" value="{{ c.id }}" {% if c.id in linked_ids %}checked{% endif %}> {{ c.code }} &ndash; {{ c.title }}
-                </label>
-                {% endfor %}
-            </div>
-            <button type="submit" class="btn btn-sm btn-primary">Save Controls</button>
-        </form>
+        {% if risk.mitigating_controls %}
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            {% for c in risk.mitigating_controls %}
+            <a href="{{ url_for('compliance.control_detail', framework_id=c.framework_id, control_id=c.id) }}" class="badge badge-neutral" style="text-decoration:none;" title="{{ c.title }}">{{ c.code }}</a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-muted" style="margin:0;">No controls linked yet.</p>
+        {% endif %}
     </div>
 </div>
+
+{% if current_user.can_write %}
+<!-- Link / Unlink Controls modal -->
+<div class="modal-overlay" id="linkControlsOverlay">
+    <div class="lc-modal">
+        <button type="button" class="modal-close lc-modal-close" onclick="closeLinkControlsModal()"><i class="fas fa-times"></i></button>
+        <div class="lc-sidebar">
+            <h3 class="lc-sidebar-title">Link / Unlink Controls</h3>
+            <div id="lcFrameworkNav" class="lc-framework-nav"></div>
+        </div>
+        <div class="lc-main">
+            <form id="linkControlsForm" method="POST" action="{{ url_for('risks.update_risk_controls', risk_id=risk.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div id="lcHiddenInputs"></div>
+
+                <h2 id="lcFrameworkTitle" class="lc-framework-title"></h2>
+
+                <div class="lc-ai-box">
+                    <div class="lc-ai-box-header">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                        <span>AI Suggestions</span>
+                        <span class="badge badge-neutral" style="margin-left:auto;font-size:10px;">Coming soon</span>
+                    </div>
+                    <p class="text-sm text-muted" style="margin:6px 0 0;">
+                        AI integration is pending. Once enabled, MIGRC will analyze this risk and suggest the most relevant controls from your connected frameworks here &mdash; as suggestions only, for you to review and select below.
+                    </p>
+                </div>
+
+                <div class="lc-toolbar">
+                    <div class="lc-search-wrapper">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="lcSearchInput" placeholder="Search by control code / control name" oninput="onLcSearch(this.value)">
+                    </div>
+                    <label class="lc-toggle">
+                        <input type="checkbox" onchange="toggleShowLinkedOnly(this.checked)">
+                        <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
+                        <span id="lcLinkedToggleLabel" class="text-sm"></span>
+                    </label>
+                </div>
+
+                <div id="lcControlList" class="lc-control-list"></div>
+
+                <div class="lc-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeLinkControlsModal()">Cancel</button>
+                    <div class="lc-pager-wrapper">
+                        <span id="lcPageInfo" class="text-sm text-muted"></span>
+                        <div id="lcPager" class="lc-pager"></div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="saveLinkedControls()">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Treatment Plans -->
 <div class="card">
@@ -181,6 +279,136 @@
 function toggleEl(id) {
     const el = document.getElementById(id);
     el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+// ============================================================
+// LINK / UNLINK CONTROLS MODAL
+// ============================================================
+const LC_FRAMEWORKS = {{ frameworks_json|tojson }};
+let lcSelectedIds = new Set();
+LC_FRAMEWORKS.forEach(fw => fw.controls.forEach(c => { if (c.linked) lcSelectedIds.add(c.id); }));
+
+let lcActiveFrameworkId = LC_FRAMEWORKS.length ? LC_FRAMEWORKS[0].id : null;
+let lcPage = 1;
+const LC_PAGE_SIZE = 10;
+let lcSearch = '';
+let lcShowLinkedOnly = false;
+
+function openLinkControlsModal() {
+    document.getElementById('linkControlsOverlay').classList.add('active');
+    lcRenderFrameworkTabs();
+    lcRenderControlList();
+}
+
+function closeLinkControlsModal() {
+    document.getElementById('linkControlsOverlay').classList.remove('active');
+}
+
+function lcRenderFrameworkTabs() {
+    const nav = document.getElementById('lcFrameworkNav');
+    nav.innerHTML = LC_FRAMEWORKS.map(fw => {
+        const linkedCount = fw.controls.filter(c => lcSelectedIds.has(c.id)).length;
+        const active = fw.id === lcActiveFrameworkId;
+        return `<button type="button" class="lc-framework-tab ${active ? 'active' : ''}" onclick="lcSelectFramework(${fw.id})">
+            <span>${fw.name}</span>
+            <span class="lc-count-badge">${linkedCount}</span>
+        </button>`;
+    }).join('');
+}
+
+function lcSelectFramework(fwId) {
+    lcActiveFrameworkId = fwId;
+    lcPage = 1;
+    lcSearch = '';
+    document.getElementById('lcSearchInput').value = '';
+    lcRenderFrameworkTabs();
+    lcRenderControlList();
+}
+
+function lcCurrentFramework() {
+    return LC_FRAMEWORKS.find(f => f.id === lcActiveFrameworkId);
+}
+
+function lcFilteredControls() {
+    const fw = lcCurrentFramework();
+    if (!fw) return [];
+    let list = fw.controls;
+    if (lcSearch) {
+        const q = lcSearch.toLowerCase();
+        list = list.filter(c => c.code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q));
+    }
+    if (lcShowLinkedOnly) {
+        list = list.filter(c => lcSelectedIds.has(c.id));
+    }
+    return list;
+}
+
+function lcRenderControlList() {
+    const fw = lcCurrentFramework();
+    document.getElementById('lcFrameworkTitle').textContent = fw ? fw.name : 'No frameworks available';
+
+    const linkedInFw = fw ? fw.controls.filter(c => lcSelectedIds.has(c.id)).length : 0;
+    document.getElementById('lcLinkedToggleLabel').textContent = `Show ${linkedInFw} Linked Control${linkedInFw === 1 ? '' : 's'}`;
+
+    const list = lcFilteredControls();
+    const totalPages = Math.max(1, Math.ceil(list.length / LC_PAGE_SIZE));
+    if (lcPage > totalPages) lcPage = totalPages;
+    const start = (lcPage - 1) * LC_PAGE_SIZE;
+    const pageItems = list.slice(start, start + LC_PAGE_SIZE);
+
+    const container = document.getElementById('lcControlList');
+    if (!pageItems.length) {
+        container.innerHTML = `<div class="lc-empty">No controls match your search.</div>`;
+    } else {
+        container.innerHTML = pageItems.map(c => `
+            <label class="lc-control-row">
+                <input type="checkbox" ${lcSelectedIds.has(c.id) ? 'checked' : ''} onchange="lcToggleControl(${c.id}, this.checked)">
+                <span><strong>${c.code}</strong> &ndash; ${c.title}</span>
+            </label>
+        `).join('');
+    }
+
+    document.getElementById('lcPageInfo').textContent = list.length
+        ? `${start + 1}-${Math.min(start + LC_PAGE_SIZE, list.length)}/${list.length}` : '0/0';
+    lcRenderPager(totalPages);
+}
+
+function lcRenderPager(totalPages) {
+    const pager = document.getElementById('lcPager');
+    let html = '';
+    for (let p = 1; p <= totalPages; p++) {
+        html += `<button type="button" class="lc-page-btn ${p === lcPage ? 'active' : ''}" onclick="lcGoToPage(${p})">${p}</button>`;
+    }
+    pager.innerHTML = html;
+}
+
+function lcGoToPage(p) {
+    lcPage = p;
+    lcRenderControlList();
+}
+
+function lcToggleControl(id, checked) {
+    if (checked) lcSelectedIds.add(id); else lcSelectedIds.delete(id);
+    lcRenderFrameworkTabs();
+    lcRenderControlList();
+}
+
+function onLcSearch(value) {
+    lcSearch = value;
+    lcPage = 1;
+    lcRenderControlList();
+}
+
+function toggleShowLinkedOnly(checked) {
+    lcShowLinkedOnly = checked;
+    lcPage = 1;
+    lcRenderControlList();
+}
+
+function saveLinkedControls() {
+    document.getElementById('lcHiddenInputs').innerHTML =
+        Array.from(lcSelectedIds).map(id => `<input type="hidden" name="control_ids" value="${id}">`).join('');
+    document.getElementById('linkControlsForm').submit();
 }
 </script>
 {% endblock %}
