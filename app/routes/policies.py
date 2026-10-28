@@ -1,15 +1,17 @@
 import os
 import difflib
 from datetime import datetime, date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory, g, Response, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
     db, Policy, PolicyAcknowledgement, PolicyVersion, PolicyReview, PolicyComment, PolicyApproval,
-    Employee, User, Control, Framework, ActivityLog,
+    Employee, User, Control, Framework, ActivityLog, PolicyEvaluation,
 )
 from app.services.activity import log_activity
 from app.services.csv_export import csv_response
+from app.services.pdf_reports import build_policy_evaluation_pdf
+from app.services.ai_opencode_policy_evaluation import evaluate_policy as ai_evaluate_policy
 from app.utils import parse_date_safe, require_permission, allowed_file
 
 policies_bp = Blueprint('policies', __name__)
@@ -578,6 +580,67 @@ def delete_comment(policy_id, comment_id):
     db.session.commit()
     flash('Comment deleted.', 'info')
     return redirect(url_for('policies.policy_detail', policy_id=policy_id))
+
+
+# ---- AI EVALUATION (local OpenCode compliance-auditor agent) ----
+
+@policies_bp.route('/policies/<int:policy_id>/evaluate', methods=['POST'])
+@login_required
+@require_permission('write')
+def evaluate_policy_route(policy_id):
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+
+    result = ai_evaluate_policy(policy)
+    if result is None:
+        flash('Evaluation unavailable - the local AI auditor isn\'t reachable right now, or its '
+              'response couldn\'t be understood. Nothing was changed.', 'error')
+        return redirect(request.referrer or url_for('policies.policies'))
+
+    evaluation = PolicyEvaluation(
+        policy_id=policy.id,
+        organization_id=policy.organization_id,
+        verdict=result.get('verdict'),
+        summary=result.get('summary'),
+        missing_items=result.get('missing_items') or [],
+        updated_policy_content=result.get('updated_policy_content') or None,
+        evaluated_by_id=current_user.id,
+    )
+    db.session.add(evaluation)
+    log_activity('evaluated', 'Policy', policy.name,
+        f'{current_user.name} ran an AI evaluation on policy "{policy.name}" - verdict: {evaluation.verdict}')
+    db.session.commit()
+    flash(f'Evaluation complete - verdict: {evaluation.verdict}.', 'success')
+    return redirect(request.referrer or url_for('policies.policies'))
+
+
+@policies_bp.route('/policies/<int:policy_id>/evaluation/latest')
+@login_required
+def latest_policy_evaluation(policy_id):
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    evaluation = policy.evaluations.first()
+    if not evaluation:
+        return jsonify({'error': 'No evaluation yet.'}), 404
+    return jsonify({
+        'verdict': evaluation.verdict,
+        'summary': evaluation.summary,
+        'missing_items': evaluation.missing_items or [],
+        'updated_policy_content': evaluation.updated_policy_content,
+        'created_at': evaluation.created_at.strftime('%d %b %Y %H:%M'),
+        'evaluated_by': evaluation.evaluated_by.name if evaluation.evaluated_by else None,
+    })
+
+
+@policies_bp.route('/policies/<int:policy_id>/evaluation/download')
+@login_required
+def download_policy_evaluation(policy_id):
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    evaluation = policy.evaluations.first()
+    if not evaluation:
+        abort(404)
+    pdf_bytes = build_policy_evaluation_pdf(policy, evaluation)
+    filename = f"{policy.name.replace(' ', '_')}_evaluation.pdf"
+    return Response(pdf_bytes, mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'})
 
 
 # ---- CONTROLS & REQUIREMENTS LINKING ----

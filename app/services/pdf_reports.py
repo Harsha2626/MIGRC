@@ -191,6 +191,45 @@ def build_policy_document_pdf(policy):
     return bytes(pdf.output())
 
 
+def build_policy_evaluation_pdf(policy, evaluation):
+    pdf = Report(f'{policy.name} - Evidence Evaluation')
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(*MUTED)
+    evaluated_by = evaluation.evaluated_by.name if evaluation.evaluated_by else '-'
+    pdf.cell(0, 6, _safe(
+        f'Version {policy.version}   Evaluated {evaluation.created_at.strftime("%d %b %Y %H:%M UTC")}   By {evaluated_by}'
+    ), ln=True)
+    pdf.ln(2)
+
+    pdf.section('Verdict')
+    color = GREEN if evaluation.verdict == 'Sufficient' else RED if evaluation.verdict == 'Insufficient' else AMBER
+    pdf.set_font('Helvetica', 'B', 13)
+    pdf.set_text_color(*color)
+    pdf.cell(0, 8, _safe(evaluation.verdict or 'Unknown'), ln=True)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(*INK)
+    pdf.multi_cell(0, 6, _safe(evaluation.summary or ''))
+
+    items = evaluation.missing_items or []
+    pdf.section(f'Gaps Identified ({len(items)})')
+    if items:
+        rows = [(i.get('control_code', ''), (i.get('control_title') or '')[:40],
+                  i.get('severity', ''), (i.get('issue') or '')[:60]) for i in items]
+        pdf.table(['Control', 'Title', 'Severity', 'Issue'], rows, [22, 60, 25, 83])
+    else:
+        pdf.set_font('Helvetica', 'I', 9)
+        pdf.set_text_color(*MUTED)
+        pdf.cell(0, 6, 'No gaps identified.', ln=True)
+
+    if evaluation.updated_policy_content:
+        pdf.section('AI-Proposed Updated Policy Text')
+        pdf.set_font('Helvetica', '', 9)
+        pdf.set_text_color(*INK)
+        pdf.multi_cell(0, 5.5, _safe(evaluation.updated_policy_content))
+
+    return bytes(pdf.output())
+
+
 def build_trust_certificate_pdf(framework, org_name='Midevops Services Pvt Ltd'):
     applicable = framework.total_controls - framework.not_applicable
     score = round((framework.passing / applicable) * 100) if applicable else 0

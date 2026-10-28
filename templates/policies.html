@@ -247,6 +247,17 @@
                                 <td>
                                     <div class="flex gap-8">
                                         <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Open"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                                        {% if current_user.can_write %}
+                                        <form method="POST" action="{{ url_for('policies.evaluate_policy_route', policy_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Run an AI evidence-sufficiency evaluation for \'{{ p.name }}\'? This can take a minute or two.');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Evaluate evidence sufficiency"><i class="fas fa-wand-magic-sparkles"></i></button>
+                                        </form>
+                                        {% endif %}
+                                        {% set latest_eval = p.evaluations.first() %}
+                                        {% if latest_eval %}
+                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="View evaluation" onclick="viewPolicyEvaluation({{ p.id }}, {{ p.name|tojson }})"><i class="fas fa-eye"></i></button>
+                                        <a href="{{ url_for('policies.download_policy_evaluation', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Download evaluation PDF"><i class="fas fa-download"></i></a>
+                                        {% endif %}
                                         {% if current_user.can_delete %}
                                         <form method="POST" action="{{ url_for('policies.delete_policy', policy_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ p.name }}?');">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -389,6 +400,55 @@ function showAddPolicyModal() {
             <p class="text-sm text-muted">You'll choose how to start the policy content (blank, upload, or link) on the next screen.</p>
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'policyForm\').submit()">Create Policy</button>');
+}
+
+// ---- Policy evaluation (AI auditor) ----
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+
+const SEVERITY_BADGE = { High: 'badge-danger', Medium: 'badge-warning', Low: 'badge-neutral' };
+
+async function viewPolicyEvaluation(policyId, policyName) {
+    let evaluation;
+    try {
+        const resp = await fetch(`/policies/${policyId}/evaluation/latest`);
+        if (!resp.ok) { showToast('No evaluation found for this policy.', 'error'); return; }
+        evaluation = await resp.json();
+    } catch (err) {
+        showToast('Could not load the evaluation.', 'error');
+        return;
+    }
+
+    const verdictClass = evaluation.verdict === 'Sufficient' ? 'badge-success'
+        : evaluation.verdict === 'Insufficient' ? 'badge-danger' : 'badge-warning';
+
+    const items = (evaluation.missing_items || []).map(i => `
+        <div style="padding:10px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:8px;">
+            <div class="flex-between">
+                <strong>${escapeHtml(i.control_code)} - ${escapeHtml(i.control_title)}</strong>
+                <span class="badge ${SEVERITY_BADGE[i.severity] || 'badge-neutral'}">${escapeHtml(i.severity)}</span>
+            </div>
+            <div class="text-sm text-muted" style="margin-top:4px;">${escapeHtml(i.issue)}</div>
+        </div>`).join('') || '<p class="text-sm text-muted">No gaps identified.</p>';
+
+    const updatedContent = evaluation.updated_policy_content ? `
+        <h4 style="font-size:13px;margin:16px 0 8px;">AI-Proposed Updated Policy Text</h4>
+        <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-tertiary);padding:12px;border-radius:8px;max-height:260px;overflow-y:auto;">${escapeHtml(evaluation.updated_policy_content)}</div>
+    ` : '';
+
+    openModal(`Evaluation: ${policyName}`, `
+        <div style="margin-bottom:16px;">
+            <span class="badge ${verdictClass}" style="font-size:13px;">${escapeHtml(evaluation.verdict) || 'Unknown'}</span>
+            <p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">${escapeHtml(evaluation.summary)}</p>
+            <p class="text-sm text-muted" style="margin-top:4px;">Evaluated ${escapeHtml(evaluation.created_at)} by ${escapeHtml(evaluation.evaluated_by) || '-'}</p>
+        </div>
+        <h4 style="font-size:13px;margin-bottom:8px;">Gaps Identified</h4>
+        ${items}
+        ${updatedContent}
+    `, `<a href="/policies/${policyId}/evaluation/download" class="btn btn-secondary"><i class="fas fa-download"></i> Download PDF</a><button class="btn btn-primary" onclick="closeModal()">Close</button>`);
 }
 </script>
 {% endblock %}

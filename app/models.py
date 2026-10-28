@@ -592,6 +592,27 @@ class PolicyApproval(db.Model):
     approver = db.relationship('User')
 
 
+class PolicyEvaluation(db.Model):
+    """One AI-assisted evidence-sufficiency check of a policy, run via the local
+    OpenCode compliance-auditor agent (see app/services/ai_opencode_policy_evaluation.py).
+    Advisory only - never changes the policy's own content or status by itself."""
+    __tablename__ = 'policy_evaluations'
+    id = db.Column(db.Integer, primary_key=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    verdict = db.Column(db.String(30))  # Sufficient, Partially Sufficient, Insufficient
+    summary = db.Column(db.Text)
+    missing_items = db.Column(db.JSON, default=list)
+    updated_policy_content = db.Column(db.Text)
+    evaluated_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    policy = db.relationship('Policy', backref=db.backref(
+        'evaluations', lazy='dynamic', cascade='all, delete-orphan',
+        order_by='PolicyEvaluation.created_at.desc()'))
+    evaluated_by = db.relationship('User')
+
+
 class Audit(db.Model):
     __tablename__ = 'audits'
     id = db.Column(db.Integer, primary_key=True)
