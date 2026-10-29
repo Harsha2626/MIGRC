@@ -8,7 +8,7 @@
         <h1>Setup Wizard</h1>
         <p>Get MIGRC configured and your compliance program up and running.</p>
     </div>
-    <div class="page-actions" style="min-width:220px;flex-direction:column;align-items:stretch;gap:6px;">
+    <div class="page-actions wizard-progress-box">
         <div class="flex-between">
             <span class="text-sm font-semibold">Progress</span>
             <span class="text-sm font-semibold" style="color:var(--accent-success);">{{ total_done }}/{{ total_tasks }}</span>
@@ -20,7 +20,7 @@
 </div>
 
 <!-- Phase summary strip -->
-<div class="stats-grid" style="margin-bottom:20px;">
+<div class="stats-grid mb-24">
     {% for phase in phases %}
     <div class="stat-card">
         <div class="stat-icon {% if phase.done == phase.total %}green{% else %}blue{% endif %}"><i class="fas {{ phase.icon }}"></i></div>
@@ -34,30 +34,33 @@
 
 <!-- Task list -->
 {% for phase in phases %}
-<div class="card" style="margin-bottom:16px;">
+<div class="card mb-16">
     <div class="card-header">
         <h3>{{ phase.title }}</h3>
         <span class="badge {% if phase.done == phase.total %}badge-success{% else %}badge-neutral{% endif %}">{{ phase.done }}/{{ phase.total }}</span>
     </div>
     <div class="card-body no-padding">
         {% for t in phase.tasks %}
-        <div style="border-bottom:1px solid var(--border-color);{{ 'border-bottom:none;' if loop.last }}">
-            <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;cursor:pointer;" onclick="toggleEl('task-{{ t.key }}')">
-                <i class="fas {{ 'fa-circle-check' if t.completed else 'fa-circle' }}" style="color:{{ 'var(--accent-success)' if t.completed else 'var(--text-muted)' }};font-size:16px;"></i>
-                <div style="flex:1;">
+        <div class="task-row{{ ' expanded' if t.key == first_incomplete_key else '' }}">
+            <div class="task-row-header" role="button" tabindex="0" aria-expanded="{{ 'true' if t.key == first_incomplete_key else 'false' }}" aria-controls="task-{{ t.key }}" onclick="toggleTaskRow(this.parentElement)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleTaskRow(this.parentElement); }">
+                <i class="fas {{ 'fa-circle-check' if t.completed else 'fa-circle' }} task-row-status-icon{{ ' completed' if t.completed else '' }}" aria-hidden="true"></i>
+                <div class="task-row-text">
                     <div class="font-semibold">{{ t.title }}</div>
                     <div class="text-sm text-muted">{{ t.description }}</div>
                 </div>
-                <i class="fas fa-chevron-down text-muted" style="font-size:11px;"></i>
+                <i class="fas fa-chevron-down task-row-chevron" aria-hidden="true"></i>
             </div>
-            <div id="task-{{ t.key }}" style="display:{{ '' if t.key == first_incomplete_key else 'none' }};padding:0 22px 20px 54px;">
+            <div class="task-row-content" id="task-{{ t.key }}">
 
                 {# ---- ORGANIZATION DETAILS ---- #}
                 {% if t.key == 'org_details' %}
                     {% if t.completed %}
-                    <div style="background:var(--accent-success-light);border:1px solid var(--accent-success);border-radius:8px;padding:14px 16px;margin-bottom:16px;">
-                        <div class="font-semibold" style="color:var(--accent-success);margin-bottom:2px;">Organization Details Saved</div>
-                        <div class="text-sm text-muted">Manage and update these details any time from this task.</div>
+                    <div class="info-banner info-banner-success mb-16">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                        <div>
+                            <div class="font-semibold">Organization Details Saved</div>
+                            <div class="text-sm">Manage and update these details any time from this task.</div>
+                        </div>
                     </div>
                     {% endif %}
                     <form method="POST" action="{{ url_for('setup.save_organization') }}" enctype="multipart/form-data">
@@ -121,13 +124,13 @@
 
                 {# ---- IDENTITY PROVIDER ---- #}
                 {% elif t.key == 'connect_identity_provider' %}
-                    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:14px;">
+                    <div class="stats-grid mb-16">
                         {% for idp in IDENTITY_PROVIDERS %}
-                        <div class="card" style="padding:14px;">
-                            <div class="flex-center gap-8" style="margin-bottom:10px;"><i class="{{ idp.icon }}"></i> <span class="font-semibold">{{ idp.name }}</span></div>
+                        <div class="card card-compact">
+                            <div class="flex-center gap-8 mb-8"><i class="{{ idp.icon }}" aria-hidden="true"></i> <span class="font-semibold">{{ idp.name }}</span></div>
                             {% if idp.name == 'Google Workspace' %}
                                 {% if google_connection %}
-                                <div class="text-sm text-muted" style="margin-bottom:8px;"><i class="fas fa-circle-check" style="color:var(--accent-success);"></i> Connected as {{ google_connection.google_email }}</div>
+                                <div class="text-sm text-muted mb-8"><i class="fas fa-circle-check" aria-hidden="true" style="color:var(--accent-success);"></i> Connected as {{ google_connection.google_email }}</div>
                                 <div class="flex gap-8">
                                     <form method="POST" action="{{ url_for('google_oauth.sync_employees') }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -138,7 +141,7 @@
                                         <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
                                     </form>
                                 </div>
-                                {% if google_connection.last_synced_at %}<div class="text-sm text-muted" style="margin-top:6px;">Last synced {{ google_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }}</div>{% endif %}
+                                {% if google_connection.last_synced_at %}<div class="text-sm text-muted mt-4">Last synced {{ google_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }}</div>{% endif %}
                                 {% else %}
                                 <a href="{{ url_for('google_oauth.connect') }}" class="btn btn-sm btn-primary">Integrate</a>
                                 {% endif %}
@@ -162,10 +165,10 @@
                 {% elif t.key == 'assign_department_owners' %}
                     <form method="POST" action="{{ url_for('setup.save_department_owners') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div id="deptOwnerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+                        <div id="deptOwnerGrid" class="grid-2 mb-16">
                             {% for dept in departments %}
-                            <div class="card" style="padding:14px;">
-                                <div class="font-semibold text-sm" style="text-transform:uppercase;margin-bottom:8px;">{{ dept }}</div>
+                            <div class="card card-compact">
+                                <div class="font-semibold text-sm mb-8" style="text-transform:uppercase;">{{ dept }}</div>
                                 <input type="hidden" name="department" value="{{ dept }}">
                                 <label class="text-sm text-muted">Owner</label>
                                 <select name="owner_id" class="form-control">
@@ -184,14 +187,14 @@
 
                 {# ---- CLOUD PROVIDERS ---- #}
                 {% elif t.key == 'connect_cloud_providers' %}
-                    <div class="text-sm" style="background:var(--accent-primary-light);border:1px solid var(--accent-primary);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
-                        <i class="fas fa-wand-magic-sparkles" style="color:var(--accent-primary);margin-right:6px;"></i>
+                    <div class="info-banner info-banner-info mb-16">
+                        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
                         Once connected, MIGRC AI will automatically scan these accounts for security misconfigurations and vulnerabilities.
                     </div>
-                    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:14px;">
+                    <div class="stats-grid mb-16">
                         {% for cp in CLOUD_PROVIDERS %}
-                        <div class="card" style="padding:14px;">
-                            <div class="flex-center gap-8" style="margin-bottom:10px;"><i class="{{ cp.icon }}"></i> <span class="font-semibold">{{ cp.name }}</span></div>
+                        <div class="card card-compact">
+                            <div class="flex-center gap-8 mb-8"><i class="{{ cp.icon }}" aria-hidden="true"></i> <span class="font-semibold">{{ cp.name }}</span></div>
                             <button type="button" class="btn btn-sm btn-primary" onclick="showToast('{{ cp.name }} integration coming soon.', 'info')">Integrate</button>
                         </div>
                         {% endfor %}
@@ -206,15 +209,42 @@
                         {% endif %}
                     </div>
 
+                {# ---- AI ASSIST (local OpenCode server) ---- #}
+                {% elif t.key == 'enable_ai_assist' %}
+                    {% if ai_assist_status == 'connected' %}
+                    <div class="info-banner info-banner-success mb-16">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                        <span><strong>AI Assist: Connected</strong> — a local OpenCode server responded on this machine. Policy evaluation will use it automatically.</span>
+                    </div>
+                    {% elif ai_assist_status == 'unreachable' %}
+                    <div class="info-banner info-banner-warning mb-16">
+                        <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                        <span><strong>AI Assist: Not Running</strong> — <code class="mono">OPENCODE_SERVER_PASSWORD</code> is set, but no OpenCode server answered on this machine. Start your local OpenCode server to enable AI-assisted policy evaluation.</span>
+                    </div>
+                    {% else %}
+                    <div class="info-banner info-banner-info mb-16">
+                        <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        <span><strong>AI Assist: Not Configured</strong> — this is optional and runs entirely on your own machine; it never requires a shared/hosted credential. See <code class="mono">docs/local-ai-setup.md</code> for setup steps, then set <code class="mono">OPENCODE_SERVER_PASSWORD</code> and start your local OpenCode server.</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex gap-8">
+                        {% if current_user.can_write %}
+                        <form method="POST" action="{{ url_for('setup.toggle_task', task_key=t.key) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-secondary">{{ 'Undo' if t.completed else "I Don't Need This" }}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+
                 {# ---- SCHEDULE AUDITS ---- #}
                 {% elif t.key == 'schedule_audit' %}
                     <form method="POST" action="{{ url_for('setup.schedule_audits') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         {% if frameworks %}
-                        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px;">
+                        <div class="flex gap-12 mb-16" style="flex-direction:column;">
                             {% for fw in frameworks %}
-                            <div class="card" style="padding:14px;">
-                                <div class="flex-between" style="margin-bottom:8px;">
+                            <div class="card card-compact">
+                                <div class="flex-between mb-8">
                                     <span class="font-semibold">{{ fw.name }} Audit</span>
                                 </div>
                                 <input type="hidden" name="framework_id" value="{{ fw.id }}">
@@ -248,9 +278,10 @@
 
 {% block scripts %}
 <script>
-function toggleEl(id) {
-    const el = document.getElementById(id);
-    el.style.display = el.style.display === 'none' ? '' : 'none';
+function toggleTaskRow(row) {
+    const expanded = row.classList.toggle('expanded');
+    const header = row.querySelector('.task-row-header');
+    if (header) header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 }
 
 function addGeoScopeTag(select) {
@@ -271,10 +302,9 @@ function addDepartmentCard() {
     if (!name || !name.trim()) return;
     const grid = document.getElementById('deptOwnerGrid');
     const card = document.createElement('div');
-    card.className = 'card';
-    card.style.padding = '14px';
+    card.className = 'card card-compact';
     card.innerHTML = `
-        <div class="font-semibold text-sm" style="text-transform:uppercase;margin-bottom:8px;">${name}</div>
+        <div class="font-semibold text-sm mb-8" style="text-transform:uppercase;">${name}</div>
         <input type="hidden" name="department" value="${name}">
         <label class="text-sm text-muted">Owner</label>
         <select name="owner_id" class="form-control">

@@ -62,6 +62,7 @@
 
 <div class="card">
     <div class="card-body no-padding">
+        {% if reviews %}
         <div class="table-container">
             <table>
                 <thead>
@@ -92,7 +93,7 @@
                         <td>
                             <div class="flex gap-8">
                                 {% for app in r.applications %}
-                                <div class="stat-icon blue" style="width:28px;height:28px;font-size:13px;" title="{{ app.name }}"><i class="fab {{ app.name|vendor_icon }}"></i></div>
+                                <div class="stat-icon stat-icon-xs blue" title="{{ app.name }}"><i class="fab {{ app.name|vendor_icon }}" aria-hidden="true"></i></div>
                                 {% endfor %}
                             </div>
                         </td>
@@ -125,6 +126,14 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-user-lock" aria-hidden="true"></i></div>
+            <h3>No access reviews yet</h3>
+            <p>Create a recurring or one-time access review to validate who has access to your integrated applications.</p>
+            <button class="btn btn-primary btn-sm" onclick="showAddReviewModal()"><i class="fas fa-plus"></i> Add Review</button>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -135,6 +144,7 @@
         <a href="/vendors" class="btn btn-sm btn-secondary">Manage in Vendors</a>
     </div>
     <div class="card-body no-padding">
+        {% if vendors %}
         <div class="table-container">
             <table>
                 <thead>
@@ -151,7 +161,7 @@
                     <tr>
                         <td>
                             <div class="flex-center gap-8">
-                                <div class="stat-icon blue" style="width:30px;height:30px;font-size:13px;"><i class="fab {{ v.name|vendor_icon }}"></i></div>
+                                <div class="stat-icon stat-icon-xs blue"><i class="fab {{ v.name|vendor_icon }}"></i></div>
                                 <span class="font-semibold">{{ v.name }}</span>
                             </div>
                         </td>
@@ -167,6 +177,14 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-building" aria-hidden="true"></i></div>
+            <h3>No integrated applications yet</h3>
+            <p>Add vendors from the Vendors page to track access reviews against them.</p>
+            <a href="/vendors" class="btn btn-primary btn-sm">Go to Vendors</a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -174,9 +192,17 @@
 <div class="card">
     <div class="card-header"><h3>Employee Access per Application</h3></div>
     <div class="card-body">
+        {% if vendors %}
         <div class="chart-container-wide" style="height:320px;">
             <canvas id="accessChart"></canvas>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-chart-column" aria-hidden="true"></i></div>
+            <h3>No data to chart yet</h3>
+            <p>Add vendors and employee access records to see access distribution here.</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -193,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
             datasets: [{
                 label: 'Employees with Access',
                 data: {{ chart_data|tojson }},
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#2748c9',
                 borderRadius: 6,
             }]
         },
@@ -217,7 +243,7 @@ function showAddReviewModal() {
                 <label>Review Name</label>
                 <input type="text" name="name" class="form-control" placeholder="e.g., Q3 2026 Access Review" required>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="grid-2" style="margin-bottom:0;">
                 <div class="form-group">
                     <label>Owner</label>
                     <input type="text" name="owner" class="form-control" placeholder="e.g. Compliance Team">
@@ -233,7 +259,7 @@ function showAddReviewModal() {
                     </select>
                 </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="grid-2" style="margin-bottom:0;">
                 <div class="form-group">
                     <label>Review Period Start</label>
                     <input type="date" name="review_period_start" class="form-control">
@@ -245,13 +271,17 @@ function showAddReviewModal() {
             </div>
             <div class="form-group">
                 <label>Apps in Review</label>
-                <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                {% if vendors %}
+                <div class="flex gap-12" style="flex-wrap:wrap;">
                     {% for v in vendors %}
-                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;">
+                    <label class="form-check" style="width:auto;">
                         <input type="checkbox" name="vendor_ids" value="{{ v.id }}"> {{ v.name }}
                     </label>
                     {% endfor %}
                 </div>
+                {% else %}
+                <p class="text-sm text-muted">No applications yet &mdash; add vendors first to include them in a review.</p>
+                {% endif %}
             </div>
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'addReviewForm\').submit()">Create Review</button>');

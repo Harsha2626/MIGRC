@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-{% set STATUS_COLORS = {'Not Uploaded': '#94a3b8', 'Draft': '#cbd5e1', 'Needs Review': '#f59e0b', 'Pending Approval': '#3b82f6', 'Approved': '#8b5cf6', 'Published': '#10b981', 'Retired': '#64748b'} %}
+{% set STATUS_COLORS = {'Not Uploaded': 'var(--text-muted)', 'Draft': 'var(--border-strong)', 'Needs Review': 'var(--accent-warning)', 'Pending Approval': 'var(--accent-primary)', 'Approved': 'var(--accent-info)', 'Published': 'var(--accent-success)', 'Retired': 'var(--text-secondary)'} %}
 {% set LIFECYCLE_STEPS = ['Not Uploaded', 'Draft', 'Needs Review', 'Pending Approval', 'Approved', 'Published'] %}
 {% set current_index = LIFECYCLE_STEPS.index(policy.status) if policy.status in LIFECYCLE_STEPS else LIFECYCLE_STEPS|length %}
 
@@ -117,6 +117,94 @@
     </div>
 </div>
 
+<!-- AI Evidence-Sufficiency Evaluation -->
+{% if policy.status != 'Not Uploaded' %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <h3><i class="fas fa-wand-magic-sparkles" style="margin-right:8px;color:var(--accent-primary);"></i>AI Evidence-Sufficiency Evaluation</h3>
+        {% if current_user.can_write %}
+        <form method="POST" action="{{ url_for('policies.evaluate_policy_route', policy_id=policy.id) }}" onsubmit="return confirm('Run an AI evidence-sufficiency evaluation for this policy? This can take a minute or two.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-wand-magic-sparkles"></i> {{ 'Re-run Evaluation' if latest_evaluation else 'Run Evaluation' }}</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if latest_evaluation %}
+        <!-- Prominent, can't-miss verdict badge: never color-only, always icon + label, per docs/design-system.md -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+            <span class="badge {{ latest_evaluation.badge_class }}" style="font-size:16px;padding:8px 18px;">
+                {% if latest_evaluation.verdict_code == 'PASS' %}<i class="fas fa-circle-check" aria-hidden="true"></i>
+                {% elif latest_evaluation.verdict_code == 'FAIL' %}<i class="fas fa-circle-xmark" aria-hidden="true"></i>
+                {% else %}<i class="fas fa-magnifying-glass" aria-hidden="true"></i>{% endif %}
+                {{ latest_evaluation.verdict }}
+            </span>
+            <span class="text-sm text-muted">Evaluated {{ latest_evaluation.created_at.strftime('%d %b %Y %H:%M') }} by {{ latest_evaluation.evaluated_by.name if latest_evaluation.evaluated_by else '—' }}</span>
+            <a href="{{ url_for('policies.download_policy_evaluation', policy_id=policy.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Download evaluation PDF"><i class="fas fa-download"></i></a>
+        </div>
+        <p class="text-sm" style="margin-bottom:16px;">{{ latest_evaluation.summary }}</p>
+
+        {% if latest_evaluation.missing_items %}
+        <h4 style="font-size:13px;margin-bottom:8px;">Gaps Identified</h4>
+        {% for item in latest_evaluation.missing_items %}
+        <div style="padding:10px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:8px;">
+            <div class="flex-between">
+                <strong>{{ item.control_code }} - {{ item.control_title }}</strong>
+                <span class="badge {% if item.severity == 'High' %}badge-danger{% elif item.severity == 'Low' %}badge-neutral{% else %}badge-warning{% endif %}">{{ item.severity }}</span>
+            </div>
+            <div class="text-sm text-muted" style="margin-top:4px;">{{ item.issue }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-sm text-muted">No gaps identified.</p>
+        {% endif %}
+
+        {% if latest_evaluation.updated_policy_content %}
+        <details style="margin-top:8px;">
+            <summary class="text-sm" style="cursor:pointer;color:var(--accent-primary);">AI-Proposed Updated Policy Text</summary>
+            <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-tertiary);padding:12px;border-radius:8px;max-height:260px;overflow-y:auto;margin-top:8px;">{{ latest_evaluation.updated_policy_content }}</div>
+        </details>
+        {% endif %}
+
+        {% if latest_evaluation.verdict_code == 'FAIL' %}
+        <!-- Auto-generated remediation task. The AI only opens this task - a human has to pick
+             it up, assign/date it, and mark it resolved; nothing here happens automatically. -->
+        <div style="margin-top:16px;padding:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-tertiary);">
+            <div class="flex-between" style="margin-bottom:8px;">
+                <strong style="font-size:13px;"><i class="fas fa-triangle-exclamation" style="color:var(--accent-danger);"></i> Remediation Task</strong>
+                <span class="badge {% if latest_evaluation.remediation_status == 'Resolved' %}badge-success{% else %}badge-warning{% endif %}">{{ latest_evaluation.remediation_status or 'Open' }}</span>
+            </div>
+            {% if current_user.can_write %}
+            <form method="POST" action="{{ url_for('policies.assign_policy_remediation', policy_id=policy.id, evaluation_id=latest_evaluation.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="text-sm">Assignee</label>
+                    <select name="remediation_assignee_id" class="form-control" style="font-size:12px;padding:6px 8px;">
+                        <option value="">Unassigned</option>
+                        {% for u in users %}<option value="{{ u.id }}" {% if latest_evaluation.remediation_assignee_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="text-sm">Due date</label>
+                    <input type="date" name="remediation_due_date" class="form-control" style="font-size:12px;padding:6px 8px;" value="{{ latest_evaluation.remediation_due_date or '' }}">
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                <button type="submit" name="mark_resolved" value="1" class="btn btn-sm btn-secondary">Mark Resolved</button>
+            </form>
+            {% endif %}
+            {% if latest_evaluation.remediation_assignee %}
+            <p class="text-sm text-muted" style="margin-top:8px;">Assigned to {{ latest_evaluation.remediation_assignee.name }}{% if latest_evaluation.remediation_due_date %} &middot; Due {{ latest_evaluation.remediation_due_date }}{% endif %}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <p class="text-sm text-muted">No AI evaluation has been run yet for this policy.{% if current_user.can_write %} Click "Run Evaluation" to check whether the linked controls' evidence is sufficient.{% endif %}</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Metadata row -->
 <div class="card" style="margin-bottom:20px;">
     <div class="card-body">
@@ -143,8 +231,8 @@
                 <form method="POST" action="{{ url_for('policies.edit_policy', policy_id=policy.id) }}" style="display:flex;gap:6px;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="name" value="{{ policy.name }}">
-                    <input type="text" name="entities" class="form-control" value="{{ policy.entities }}" style="font-size:12px;padding:6px 8px;">
-                    <button type="submit" class="btn btn-sm btn-secondary btn-icon"><i class="fas fa-check"></i></button>
+                    <input type="text" name="entities" class="form-control" aria-label="Entities" value="{{ policy.entities }}" style="font-size:12px;padding:6px 8px;">
+                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" aria-label="Save entities"><i class="fas fa-check" aria-hidden="true"></i></button>
                 </form>
                 {% else %}
                 <span class="text-sm">{{ policy.entities }}</span>

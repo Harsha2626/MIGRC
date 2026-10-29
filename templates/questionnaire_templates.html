@@ -25,7 +25,7 @@
             <h3>{{ t.name }}</h3>
             <form method="POST" action="{{ url_for('vendors.delete_questionnaire', template_id=t.id) }}" onsubmit="return confirm('Delete {{ t.name }}?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-danger btn-icon"><i class="fas fa-trash"></i></button>
+                <button type="submit" class="btn btn-sm btn-danger btn-icon" aria-label="Delete {{ t.name }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
             </form>
         </div>
         <div class="card-body">

@@ -14,6 +14,29 @@
     </div>
 </div>
 
+<!-- Row: KPI summary -->
+{% if kpis %}
+<div class="stats-grid">
+    {% for kpi in kpis %}
+    <div class="stat-card">
+        <div class="stat-icon {{ kpi.color }}"><i class="fas {{ kpi.icon }}"></i></div>
+        <div class="stat-info">
+            <div class="stat-label">{{ kpi.label }}</div>
+            <div class="stat-value">{{ kpi.value }}</div>
+            {% if kpi.direction %}
+            <div class="stat-change {{ 'up' if kpi.is_good else 'down' }}">
+                <i class="fas {{ 'fa-arrow-up' if kpi.direction == 'up' else ('fa-arrow-down' if kpi.direction == 'down' else 'fa-minus') }}"></i>
+                <span>{{ kpi.delta|abs }} vs last week</span>
+            </div>
+            {% else %}
+            <div class="stat-change"><span>No prior data yet</span></div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <!-- Row: Compliance Donut + Framework Progress -->
 <div class="grid-2">
     <!-- Compliance Overview Donut -->
@@ -37,16 +60,16 @@
             </div>
             <div>
                 <div class="legend">
-                    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Passing (<span id="donutPassingCount">{{ passing_controls }}</span>)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-success)"></div> Passing (<span id="donutPassingCount">{{ passing_controls }}</span>)</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Failing (<span id="donutFailingCount">{{ failing_controls }}</span>)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-danger)"></div> Failing (<span id="donutFailingCount">{{ failing_controls }}</span>)</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Not Assessed (<span id="donutNotAssessedCount">{{ total_controls - passing_controls - failing_controls - na_controls }}</span>)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-warning)"></div> Not Assessed (<span id="donutNotAssessedCount">{{ total_controls - passing_controls - failing_controls - na_controls }}</span>)</div>
                 </div>
                 <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> N/A (<span id="donutNaCount">{{ na_controls }}</span>)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--text-muted)"></div> N/A (<span id="donutNaCount">{{ na_controls }}</span>)</div>
                 </div>
             </div>
         </div>
@@ -68,10 +91,10 @@
                 {% set applicable = fw.total_controls - fw.not_applicable %}
                 <div class="progress-stacked">
                     {% if applicable > 0 %}
-                    <div class="segment" style="width:{{ (fw.passing / applicable * 100)|round }}%;background:#10b981;"></div>
-                    <div class="segment" style="width:{{ (fw.failing / applicable * 100)|round }}%;background:#ef4444;"></div>
+                    <div class="segment" style="width:{{ (fw.passing / applicable * 100)|round }}%;background:var(--accent-success);"></div>
+                    <div class="segment" style="width:{{ (fw.failing / applicable * 100)|round }}%;background:var(--accent-danger);"></div>
                     {% set not_assessed = applicable - fw.passing - fw.failing %}
-                    <div class="segment" style="width:{{ (not_assessed / applicable * 100)|round }}%;background:#f59e0b;"></div>
+                    <div class="segment" style="width:{{ (not_assessed / applicable * 100)|round }}%;background:var(--accent-warning);"></div>
                     {% endif %}
                 </div>
                 <div class="progress-label">
@@ -85,6 +108,27 @@
     </div>
 </div>
 
+<!-- 30-Day Compliance Trend -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <h3>Compliance Trend</h3>
+        <span class="text-sm text-muted">Last 30 days</span>
+    </div>
+    <div class="card-body">
+        {% if trend_labels and trend_labels|length > 1 %}
+        <div class="chart-container" style="height:220px;">
+            <canvas id="complianceTrendChart"></canvas>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:32px 20px;">
+            <div class="empty-state-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
+            <h3>Not enough history yet</h3>
+            <p>Trend data builds up as daily compliance snapshots accumulate. Check back after a few days of activity.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <!-- Top Risks -->
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
@@ -92,6 +136,7 @@
         <a href="/risks" class="btn btn-sm btn-secondary">View All Risks</a>
     </div>
     <div class="card-body no-padding">
+        {% if risks %}
         <div class="table-container">
             <table>
                 <thead>
@@ -105,7 +150,7 @@
                 <tbody>
                     {% for r in risks %}
                     <tr onclick="window.location='/risks/{{ r.id }}'" style="cursor:pointer;">
-                        <td class="font-semibold">{{ r.title }}</td>
+                        <td class="font-semibold"><a href="/risks/{{ r.id }}" style="color:inherit;text-decoration:none;">{{ r.title }}</a></td>
                         <td>
                             {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
                             {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
@@ -122,16 +167,25 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
+            <h3>No risks logged yet</h3>
+            <p>Once risks are added to the register, the highest-scoring ones will show up here first.</p>
+            <a href="/risks" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Go to Risk Register</a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
 <!-- Active Audits -->
-<div class="card">
+<div class="card" style="margin-bottom:20px;">
     <div class="card-header">
         <h3>Active Audits</h3>
         <a href="/audits" class="btn btn-sm btn-secondary">View All</a>
     </div>
     <div class="card-body no-padding">
+        {% if audits %}
         <div class="table-container">
             <table>
                 <thead>
@@ -169,6 +223,79 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i></div>
+            <h3>No active audits</h3>
+            <p>Scheduled and in-progress audits will appear here with their evidence collection progress.</p>
+            <a href="/audits" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Go to Audit Center</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Row: Recent Activity + Upcoming Deadlines -->
+<div class="grid-2" style="margin-bottom:0;">
+    <div class="card">
+        <div class="card-header">
+            <h3>Recent Activity</h3>
+            <a href="/settings/activity-log" class="btn btn-sm btn-secondary">View All</a>
+        </div>
+        <div class="card-body{{ ' no-padding' if recent_activity else '' }}">
+            {% if recent_activity %}
+            <div class="activity-list">
+                {% for act in recent_activity[:8] %}
+                <div class="activity-row">
+                    <div class="activity-row-icon"><i class="fas {{ entity_icons.get(act.entity_type, 'fa-circle-info') }}" aria-hidden="true"></i></div>
+                    <div class="activity-row-body">
+                        <div class="activity-row-text">
+                            <span class="font-semibold">{{ act.user.name if act.user else 'System' }}</span>
+                            {{ act.description or (act.action ~ ' ' ~ act.entity_type) }}
+                            {% if act.entity_name %}<span class="font-semibold">{{ act.entity_name }}</span>{% endif %}
+                        </div>
+                        <div class="text-sm text-muted">{{ act.created_at|timesince }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding:36px 16px;">
+                <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
+                <h3>No activity yet</h3>
+                <p>Actions taken across the platform will show up here as an audit trail.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Upcoming Deadlines</h3>
+            <span class="text-sm text-muted">Next 30 days</span>
+        </div>
+        <div class="card-body{{ ' no-padding' if deadlines else '' }}">
+            {% if deadlines %}
+            <div class="activity-list">
+                {% for d in deadlines[:8] %}
+                <div class="activity-row">
+                    <div class="activity-row-icon"><i class="fas {{ d.icon }}" aria-hidden="true"></i></div>
+                    <div class="activity-row-body">
+                        <div class="activity-row-text">
+                            <span class="font-semibold">{{ d.name }}</span> &middot; {{ d.type }}
+                        </div>
+                        <div class="text-sm text-muted">{{ d.date.strftime('%d %b %Y') }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding:36px 16px;">
+                <div class="empty-state-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></div>
+                <h3>Nothing due soon</h3>
+                <p>Policy reviews, vendor assessments, and audit milestones due in the next 30 days will show up here.</p>
+            </div>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -185,6 +312,42 @@ const ALL_FRAMEWORKS_DONUT_DATA = {
 let controlsDonutChart;
 
 document.addEventListener('DOMContentLoaded', function() {
+    const trendCanvas = document.getElementById('complianceTrendChart');
+    if (trendCanvas) {
+        new Chart(trendCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: {{ trend_labels|tojson }},
+                datasets: [{
+                    data: {{ trend_data|tojson }},
+                    borderColor: '#2748c9',
+                    backgroundColor: 'rgba(39,72,201,0.08)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => ctx.parsed.y + '% compliant' } }
+                },
+                scales: {
+                    y: { beginAtZero: false, ticks: { callback: (v) => v + '%' }, grid: { color: 'rgba(148,163,184,0.15)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Read the actual token values (not hardcoded hex) so the donut tracks
+    // the current theme's institutional palette in both light and dark mode.
+    const rootStyles = getComputedStyle(document.documentElement);
+    const tokenColor = (name) => rootStyles.getPropertyValue(name).trim();
     const donutCtx = document.getElementById('controlsDonut').getContext('2d');
     controlsDonutChart = new Chart(donutCtx, {
         type: 'doughnut',
@@ -193,7 +356,8 @@ document.addEventListener('DOMContentLoaded', function() {
             datasets: [{
                 data: [ALL_FRAMEWORKS_DONUT_DATA.passing, ALL_FRAMEWORKS_DONUT_DATA.failing,
                     ALL_FRAMEWORKS_DONUT_DATA.not_assessed, ALL_FRAMEWORKS_DONUT_DATA.not_applicable],
-                backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#94a3b8'],
+                backgroundColor: [tokenColor('--accent-success'), tokenColor('--accent-danger'),
+                    tokenColor('--accent-warning'), tokenColor('--text-muted')],
                 borderWidth: 0,
                 cutout: '75%'
             }]

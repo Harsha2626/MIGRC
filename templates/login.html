@@ -14,7 +14,7 @@
             align-items: center;
             justify-content: center;
             background: var(--bg-primary);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: var(--font-sans);
         }
         .login-container {
             width: 100%;
@@ -38,12 +38,12 @@
         .login-logo-icon {
             width: 44px;
             height: 44px;
-            background: linear-gradient(135deg, #3b82f6, #6366f1);
-            border-radius: 12px;
+            background: var(--accent-primary);
+            border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #fff;
+            color: var(--text-inverse);
             font-size: 20px;
         }
         .login-logo-text {
@@ -82,46 +82,28 @@
         }
         .login-form input:focus {
             border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 0 3px var(--focus-ring-color);
         }
         .login-btn {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(135deg, #3b82f6, #6366f1);
-            color: #fff;
+            background: var(--accent-primary);
+            color: var(--text-inverse);
             border: none;
             border-radius: var(--radius-md);
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: var(--transition);
         }
         .login-btn:hover {
-            opacity: 0.9;
+            background: var(--accent-primary-hover);
+        }
+        .login-btn:active {
+            background: var(--accent-primary-active);
         }
         .flash-messages {
             margin-bottom: 20px;
-        }
-        .flash-msg {
-            padding: 10px 14px;
-            border-radius: var(--radius-md);
-            font-size: 13px;
-            margin-bottom: 8px;
-        }
-        .flash-msg.error {
-            background: var(--accent-danger-light);
-            color: #991b1b;
-            border: 1px solid #fca5a5;
-        }
-        .flash-msg.info {
-            background: var(--accent-info-light);
-            color: #3730a3;
-            border: 1px solid #a5b4fc;
-        }
-        .flash-msg.success {
-            background: var(--accent-success-light);
-            color: #065f46;
-            border: 1px solid #6ee7b7;
         }
     </style>
 </head>
@@ -138,7 +120,11 @@
             {% if messages %}
             <div class="flash-messages">
                 {% for category, message in messages %}
-                <div class="flash-msg {{ category }}">{{ message }}</div>
+                {% set flash_icon = {'error': 'fa-circle-exclamation', 'success': 'fa-circle-check'}.get(category, 'fa-circle-info') %}
+                <div class="flash-message flash-{{ category }}" role="alert">
+                    <i class="fas {{ flash_icon }}" aria-hidden="true"></i>
+                    <span>{{ message }}</span>
+                </div>
                 {% endfor %}
             </div>
             {% endif %}

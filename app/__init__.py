@@ -21,6 +21,13 @@ def create_app():
     app.config.from_object('config.Config')
     app.jinja_env.filters['timesince'] = timesince
 
+    debug_enabled = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    if not debug_enabled and app.config['SECRET_KEY'] == 'migrc-dev-secret-key-change-in-production':
+        app.logger.warning(
+            'SECURITY WARNING: running with debug disabled (prod-like) but SECRET_KEY is still '
+            'the default dev value. Set the SECRET_KEY environment variable before deploying.'
+        )
+
     # Ensure upload folder exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)
 

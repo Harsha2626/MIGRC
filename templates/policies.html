@@ -108,7 +108,7 @@
                     <tbody>
                         {% for p in upcoming_reviews %}
                         <tr onclick="window.location='{{ url_for('policies.policy_detail', policy_id=p.id) }}'" style="cursor:pointer;">
-                            <td class="font-semibold">{{ p.name }}</td>
+                            <td class="font-semibold"><a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" style="color:inherit;text-decoration:none;">{{ p.name }}</a></td>
                             <td class="text-sm">{{ p.next_review }}</td>
                         </tr>
                         {% endfor %}
@@ -149,7 +149,7 @@
                 </select>
 
                 <div class="dropdown-panel-wrapper">
-                    <button class="btn btn-secondary" onclick="toggleDropdownPanel('policyFiltersPanel')"><i class="fas fa-filter"></i> More Filters</button>
+                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('policyFiltersPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="policyFiltersPanel"><i class="fas fa-filter" aria-hidden="true"></i> More Filters</button>
                     <div class="dropdown-panel" id="policyFiltersPanel">
                         <div class="dropdown-panel-grid">
                             <div class="form-group" style="margin-bottom:0;">
@@ -179,7 +179,7 @@
                 </div>
 
                 <div class="dropdown-panel-wrapper" style="margin-left:auto;">
-                    <button class="btn btn-secondary" onclick="toggleDropdownPanel('policyColumnsPanel')">Columns <span class="badge badge-neutral" id="policyColumnsCountBadge">0</span> <i class="fas fa-chevron-down" style="font-size:10px;margin-left:2px;"></i></button>
+                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('policyColumnsPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="policyColumnsPanel">Columns <span class="badge badge-neutral" id="policyColumnsCountBadge">0</span> <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;margin-left:2px;"></i></button>
                     <div class="dropdown-panel" id="policyColumnsPanel">
                         {% for key, label in [('effort','Effort Estimate'), ('assignee','Assignee'), ('approver','Approver'), ('added','Added On'), ('department','Department'), ('recurrence','Recurrence')] %}
                         <label class="dropdown-panel-item">
@@ -231,6 +231,15 @@
                                             <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="font-semibold" style="text-decoration:none;">{{ p.name }}</a>
                                             <div class="text-sm text-muted">{{ p.framework or '—' }} &middot; v{{ p.version }}</div>
                                             {% if review_due_soon.get(p.id) %}<span class="badge badge-warning" style="margin-top:4px;">Review Due Soon</span>{% endif %}
+                                            {% set latest_eval = p.evaluations.first() %}
+                                            {% if latest_eval %}
+                                            <span class="badge {{ latest_eval.badge_class }}" style="margin-top:4px;" title="AI evidence-sufficiency verdict">
+                                                {% if latest_eval.verdict_code == 'PASS' %}<i class="fas fa-circle-check" aria-hidden="true"></i>
+                                                {% elif latest_eval.verdict_code == 'FAIL' %}<i class="fas fa-circle-xmark" aria-hidden="true"></i>
+                                                {% else %}<i class="fas fa-magnifying-glass" aria-hidden="true"></i>{% endif %}
+                                                {{ latest_eval.verdict }}
+                                            </span>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </td>
@@ -253,7 +262,6 @@
                                             <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Evaluate evidence sufficiency"><i class="fas fa-wand-magic-sparkles"></i></button>
                                         </form>
                                         {% endif %}
-                                        {% set latest_eval = p.evaluations.first() %}
                                         {% if latest_eval %}
                                         <button type="button" class="btn btn-sm btn-secondary btn-icon" title="View evaluation" onclick="viewPolicyEvaluation({{ p.id }}, {{ p.name|tojson }})"><i class="fas fa-eye"></i></button>
                                         <a href="{{ url_for('policies.download_policy_evaluation', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Download evaluation PDF"><i class="fas fa-download"></i></a>
@@ -422,8 +430,12 @@ async function viewPolicyEvaluation(policyId, policyName) {
         return;
     }
 
-    const verdictClass = evaluation.verdict === 'Sufficient' ? 'badge-success'
-        : evaluation.verdict === 'Insufficient' ? 'badge-danger' : 'badge-warning';
+    // Prefer the server-normalized badge class (badge-pass/-fail/-review, keyed off verdict_code);
+    // fall back to the old string-matching for evaluations recorded before verdict_code existed.
+    const verdictClass = evaluation.badge_class || (evaluation.verdict === 'Sufficient' ? 'badge-pass'
+        : evaluation.verdict === 'Insufficient' ? 'badge-fail' : 'badge-review');
+    const verdictIcon = evaluation.verdict_code === 'PASS' ? 'fa-circle-check'
+        : evaluation.verdict_code === 'FAIL' ? 'fa-circle-xmark' : 'fa-magnifying-glass';
 
     const items = (evaluation.missing_items || []).map(i => `
         <div style="padding:10px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:8px;">
@@ -439,15 +451,25 @@ async function viewPolicyEvaluation(policyId, policyName) {
         <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-tertiary);padding:12px;border-radius:8px;max-height:260px;overflow-y:auto;">${escapeHtml(evaluation.updated_policy_content)}</div>
     ` : '';
 
+    const remediation = evaluation.verdict_code === 'FAIL' ? `
+        <div style="margin-top:16px;padding:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-tertiary);">
+            <div class="flex-between" style="margin-bottom:4px;">
+                <strong style="font-size:13px;"><i class="fas fa-triangle-exclamation" style="color:var(--accent-danger);"></i> Remediation Task</strong>
+                <span class="badge ${evaluation.remediation_status === 'Resolved' ? 'badge-success' : 'badge-warning'}">${escapeHtml(evaluation.remediation_status || 'Open')}</span>
+            </div>
+            <p class="text-sm text-muted">${evaluation.remediation_assignee ? `Assigned to ${escapeHtml(evaluation.remediation_assignee)}` : 'Not yet assigned'}${evaluation.remediation_due_date ? ` &middot; Due ${escapeHtml(evaluation.remediation_due_date)}` : ''} - <a href="/policies/${policyId}">manage on the policy page</a>.</p>
+        </div>` : '';
+
     openModal(`Evaluation: ${policyName}`, `
         <div style="margin-bottom:16px;">
-            <span class="badge ${verdictClass}" style="font-size:13px;">${escapeHtml(evaluation.verdict) || 'Unknown'}</span>
+            <span class="badge ${verdictClass}" style="font-size:16px;padding:8px 18px;"><i class="fas ${verdictIcon}" aria-hidden="true"></i> ${escapeHtml(evaluation.verdict) || 'Unknown'}</span>
             <p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">${escapeHtml(evaluation.summary)}</p>
             <p class="text-sm text-muted" style="margin-top:4px;">Evaluated ${escapeHtml(evaluation.created_at)} by ${escapeHtml(evaluation.evaluated_by) || '-'}</p>
         </div>
         <h4 style="font-size:13px;margin-bottom:8px;">Gaps Identified</h4>
         ${items}
         ${updatedContent}
+        ${remediation}
     `, `<a href="/policies/${policyId}/evaluation/download" class="btn btn-secondary"><i class="fas fa-download"></i> Download PDF</a><button class="btn btn-primary" onclick="closeModal()">Close</button>`);
 }
 </script>

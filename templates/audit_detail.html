@@ -13,7 +13,7 @@
         <p>{{ audit.framework }} &middot; {{ audit.auditor or 'No auditor assigned' }} &middot; {{ audit.start_date }} to {{ audit.end_date }}</p>
     </div>
     <div class="page-actions">
-        <span class="badge {% if audit.status == 'Completed' %}badge-success{% elif audit.status == 'Under Review' %}badge-warning{% elif audit.status == 'In Progress' %}badge-primary{% else %}badge-neutral{% endif %}" style="font-size:13px;padding:8px 16px;">{{ audit.status }}</span>
+        <span class="badge badge-lg {% if audit.status == 'Completed' %}badge-success{% elif audit.status == 'Under Review' %}badge-warning{% elif audit.status == 'In Progress' %}badge-primary{% else %}badge-neutral{% endif %}">{{ audit.status }}</span>
         {% if audit.next_status %}
         <form method="POST" action="{{ url_for('audits.update_audit_status', audit_id=audit.id) }}" style="display:inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -61,7 +61,7 @@
             <tbody>
                 {% for item in evidence_items %}
                 <tr>
-                    <td><strong>{{ item.control.code }}</strong> &ndash; {{ item.control.title }}</td>
+                    <td><strong class="mono">{{ item.control.code }}</strong> &ndash; {{ item.control.title }}</td>
                     <td>
                         <span class="badge {{ 'badge-success' if item.status == 'Collected' else 'badge-warning' }}">{{ item.status }}</span>
                     </td>
@@ -99,6 +99,16 @@
                                     <button type="submit" class="btn btn-sm btn-primary">Upload</button>
                                 </div>
                             </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" style="padding:0;">
+                        <div class="empty-state">
+                            <div class="empty-state-icon"><i class="fas fa-folder-open" aria-hidden="true"></i></div>
+                            <h3>No controls in scope</h3>
+                            <p>This audit has no controls assigned yet. Edit the audit's scope to add controls for evidence collection.</p>
                         </div>
                     </td>
                 </tr>
@@ -153,7 +163,7 @@
             <div class="flex-between mb-8">
                 <div class="flex gap-8" style="align-items:center;">
                     <span class="badge badge-neutral">{{ f.type }}</span>
-                    <span class="badge {% if f.severity == 'Critical' %}badge-danger{% elif f.severity == 'High' %}badge-warning{% else %}badge-info{% endif %}">{{ f.severity }}</span>
+                    <span class="badge {% if f.severity == 'Critical' %}badge-danger{% elif f.severity == 'High' %}badge-warning{% elif f.severity == 'Medium' %}badge-info{% else %}badge-neutral{% endif %}">{{ f.severity }}</span>
                     {% if f.control %}<span class="text-sm text-muted">{{ f.control.code }}</span>{% endif %}
                 </div>
                 <span class="badge {{ 'badge-success' if f.status == 'Remediated' else 'badge-danger' }}">{{ f.status }}</span>
@@ -192,7 +202,7 @@
         {% endfor %}
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-clipboard-check"></i>
+            <div class="empty-state-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></div>
             <h3>No findings yet</h3>
             <p>Log an observation, non-conformity, or recommendation as you work through the audit.</p>
         </div>

@@ -8,6 +8,7 @@ from app.models import (
     Organization, OrganizationMembership, DepartmentOwner, GoogleWorkspaceConnection,
 )
 from app.routes.policies import POLICY_DEPARTMENTS
+from app.services.ai_opencode_policy_evaluation import check_server_status
 from app.utils import require_permission, allowed_file, IMAGE_EXTENSIONS
 
 setup_bp = Blueprint('setup', __name__)
@@ -35,7 +36,7 @@ CLOUD_PROVIDERS = [
 
 # Tasks with no natural "did the user do this" signal in the data get a manual
 # done/not-done toggle instead of auto-detection.
-MANUAL_TASK_KEYS = {'connect_identity_provider', 'connect_cloud_providers'}
+MANUAL_TASK_KEYS = {'connect_identity_provider', 'connect_cloud_providers', 'enable_ai_assist'}
 
 SETUP_PHASES = [
     {
@@ -62,6 +63,8 @@ SETUP_PHASES = [
             {'key': 'add_policies', 'title': 'Add Your Policies',
              'description': 'Create or upload the policies your organization follows.',
              'link_endpoint': 'policies.policies', 'link_label': 'Go to Policies'},
+            {'key': 'enable_ai_assist', 'title': 'Enable AI-Assisted Policy Evaluation',
+             'description': 'Run a local OpenCode server on this machine so MIGRC can judge whether your policy evidence is sufficient. Optional, and local to your machine only.'},
             {'key': 'add_employees', 'title': 'Add Your Employees',
              'description': 'Bring your workforce into MIGRC to track training and access.',
              'link_endpoint': 'people.employees', 'link_label': 'Go to Employees'},
@@ -135,6 +138,14 @@ def setup_wizard():
     if google_connection:
         manual_done['connect_identity_provider'] = True
 
+    # AI Assist status is a live, per-machine check (not stored in the DB): each
+    # developer has their own local OpenCode server, so "connected" on this
+    # request is only ever true for whoever's machine is making it. A server that
+    # answers satisfies the task even if it was never manually marked done.
+    ai_assist_status = check_server_status()
+    if ai_assist_status == 'connected':
+        manual_done['enable_ai_assist'] = True
+
     scheduled_audits = {a.framework: a.start_date for a in Audit.query.filter_by(organization_id=org.id if org else -1).all()}
 
     phases = []
@@ -164,7 +175,8 @@ def setup_wizard():
         org=org, org_members=org_members, departments=departments, dept_owner_map=dept_owner_map,
         frameworks=Framework.visible_to(org.id if org else -1).order_by(Framework.name).all(), scheduled_audits=scheduled_audits,
         WORK_ARRANGEMENTS=WORK_ARRANGEMENTS, INDUSTRIES=INDUSTRIES, GEOGRAPHIC_SCOPES=GEOGRAPHIC_SCOPES,
-        IDENTITY_PROVIDERS=IDENTITY_PROVIDERS, CLOUD_PROVIDERS=CLOUD_PROVIDERS, google_connection=google_connection)
+        IDENTITY_PROVIDERS=IDENTITY_PROVIDERS, CLOUD_PROVIDERS=CLOUD_PROVIDERS, google_connection=google_connection,
+        ai_assist_status=ai_assist_status)
 
 
 @setup_bp.route('/setup/tasks/<task_key>/toggle', methods=['POST'])

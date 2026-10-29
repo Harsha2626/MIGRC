@@ -27,7 +27,7 @@
         {% endif %}
         <div class="framework-card-header">
             <div>
-                <h4>{{ fw.name }}</h4>
+                <h4><a href="/compliance/{{ fw.id }}" style="color:inherit;text-decoration:none;">{{ fw.name }}</a></h4>
                 <span class="fw-category">{{ fw.category }} &middot; {{ fw.total_controls }} controls</span>
                 <div style="margin-top:6px;"><span class="badge {% if fw.is_shared %}badge-info{% else %}badge-neutral{% endif %}" style="font-size:10px;">{% if fw.is_shared %}Shared Library{% else %}Your Organization{% endif %}</span></div>
             </div>
@@ -44,9 +44,9 @@
                 <span class="font-semibold" style="font-size:15px;color:var(--accent-success);">{{ ((fw.passing / fw.total_controls) * 100)|round|int if has_controls else 0 }}%</span>
             </div>
             <div class="progress-stacked">
-                <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:#10b981;"></div>
-                <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:#ef4444;"></div>
-                <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round if has_controls else 0 }}%;background:#94a3b8;"></div>
+                <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--accent-success);"></div>
+                <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--accent-danger);"></div>
+                <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--text-muted);"></div>
             </div>
         </div>
 
@@ -75,12 +75,12 @@ function showFrameworkDetail(idx) {
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center;margin-bottom:20px;">
             <div style="padding:16px;background:var(--accent-success-light);border-radius:10px;">
-                <div style="font-size:24px;font-weight:700;color:#065f46;">${fw.passing}</div>
-                <div style="font-size:12px;color:#065f46;">Passing</div>
+                <div style="font-size:24px;font-weight:700;color:var(--green-700);">${fw.passing}</div>
+                <div style="font-size:12px;color:var(--green-700);">Passing</div>
             </div>
             <div style="padding:16px;background:var(--accent-danger-light);border-radius:10px;">
-                <div style="font-size:24px;font-weight:700;color:#991b1b;">${fw.failing}</div>
-                <div style="font-size:12px;color:#991b1b;">Failing</div>
+                <div style="font-size:24px;font-weight:700;color:var(--red-700);">${fw.failing}</div>
+                <div style="font-size:12px;color:var(--red-700);">Failing</div>
             </div>
             <div style="padding:16px;background:var(--bg-tertiary);border-radius:10px;">
                 <div style="font-size:24px;font-weight:700;color:var(--text-secondary);">${fw.not_applicable}</div>
@@ -93,14 +93,14 @@ function showFrameworkDetail(idx) {
         </div>
         <h4 style="font-size:13px;margin-bottom:8px;">Total Controls: <strong>${fw.total_controls}</strong></h4>
         <div style="width:100%;height:10px;background:var(--bg-tertiary);border-radius:100px;overflow:hidden;display:flex;">
-            <div style="width:${(fw.passing/fw.total_controls*100).toFixed(1)}%;background:#10b981;"></div>
-            <div style="width:${(fw.failing/fw.total_controls*100).toFixed(1)}%;background:#ef4444;"></div>
-            <div style="width:${(fw.not_applicable/fw.total_controls*100).toFixed(1)}%;background:#94a3b8;"></div>
+            <div style="width:${(fw.passing/fw.total_controls*100).toFixed(1)}%;background:var(--accent-success);"></div>
+            <div style="width:${(fw.failing/fw.total_controls*100).toFixed(1)}%;background:var(--accent-danger);"></div>
+            <div style="width:${(fw.not_applicable/fw.total_controls*100).toFixed(1)}%;background:var(--text-muted);"></div>
         </div>
         <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-secondary);">
-            <span><span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:2px;margin-right:4px;"></span>Passing (${fw.passing})</span>
-            <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px;margin-right:4px;"></span>Failing (${fw.failing})</span>
-            <span><span style="display:inline-block;width:8px;height:8px;background:#94a3b8;border-radius:2px;margin-right:4px;"></span>N/A (${fw.not_applicable})</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent-success);border-radius:2px;margin-right:4px;"></span>Passing (${fw.passing})</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent-danger);border-radius:2px;margin-right:4px;"></span>Failing (${fw.failing})</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:var(--text-muted);border-radius:2px;margin-right:4px;"></span>N/A (${fw.not_applicable})</span>
         </div>
     `);
 }

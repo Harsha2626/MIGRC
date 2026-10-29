@@ -12,22 +12,22 @@
 
 <!-- Stats -->
 <div class="stats-grid">
-    <div class="stat-card stat-card-filter" data-stat-status="Passing" style="cursor:pointer;" onclick="filterByStatCard(this, 'Passing')">
-        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
+    <div class="stat-card stat-card-filter" data-stat-status="Passing" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="false" onclick="filterByStatCard(this, 'Passing')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); filterByStatCard(this, 'Passing'); }">
+        <div class="stat-icon green"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
         <div class="stat-info">
             <div class="stat-label">Passing</div>
             <div class="stat-value">{{ counts.passing }}</div>
         </div>
     </div>
-    <div class="stat-card stat-card-filter" data-stat-status="Fix Required" style="cursor:pointer;" onclick="filterByStatCard(this, 'Fix Required')">
-        <div class="stat-icon red"><i class="fas fa-triangle-exclamation"></i></div>
+    <div class="stat-card stat-card-filter" data-stat-status="Fix Required" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="false" onclick="filterByStatCard(this, 'Fix Required')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); filterByStatCard(this, 'Fix Required'); }">
+        <div class="stat-icon red"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
         <div class="stat-info">
             <div class="stat-label">Fix Required</div>
             <div class="stat-value">{{ counts.fix_required }}</div>
         </div>
     </div>
-    <div class="stat-card stat-card-filter" data-stat-status="Ignored" style="cursor:pointer;" onclick="filterByStatCard(this, 'Ignored')">
-        <div class="stat-icon blue"><i class="fas fa-eye-slash"></i></div>
+    <div class="stat-card stat-card-filter" data-stat-status="Ignored" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="false" onclick="filterByStatCard(this, 'Ignored')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); filterByStatCard(this, 'Ignored'); }">
+        <div class="stat-icon blue"><i class="fas fa-eye-slash" aria-hidden="true"></i></div>
         <div class="stat-info">
             <div class="stat-label">Ignored</div>
             <div class="stat-value">{{ counts.ignored }}</div>
@@ -126,6 +126,9 @@ function filterByStatCard(el, status) {
     // Clicking the already-active card clears the filter; otherwise selects it
     statusFilter.value = statusFilter.value === status ? '' : status;
     filterTests();
+    document.querySelectorAll('.stat-card-filter').forEach(card => {
+        card.setAttribute('aria-pressed', card.dataset.statStatus === statusFilter.value ? 'true' : 'false');
+    });
     document.querySelector('.table-container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 </script>

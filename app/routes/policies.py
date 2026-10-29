@@ -171,11 +171,13 @@ def policy_detail(policy_id):
                           if c.id not in linked_control_ids]
     audit_logs = ActivityLog.query.filter_by(entity_type='Policy', entity_name=policy.name,
         organization_id=policy.organization_id).order_by(ActivityLog.created_at.desc()).all()
+    latest_evaluation = policy.evaluations.first()
 
     return render_template('policy_detail.html', page='policies',
         policy=policy, users=users, versions=versions, reviews=reviews,
         unacked=unacked, acked=acked, comments=comments, approvals=approvals,
         linked_controls=linked_controls, linkable_controls=linkable_controls, audit_logs=audit_logs,
+        latest_evaluation=latest_evaluation,
         POLICY_DEPARTMENTS=POLICY_DEPARTMENTS, POLICY_EFFORT_LEVELS=POLICY_EFFORT_LEVELS,
         POLICY_RECURRENCES=POLICY_RECURRENCES, STATUS_BADGE=STATUS_BADGE)
 
@@ -592,25 +594,63 @@ def evaluate_policy_route(policy_id):
 
     result = ai_evaluate_policy(policy)
     if result is None:
-        flash('Evaluation unavailable - the local AI auditor isn\'t reachable right now, or its '
-              'response couldn\'t be understood. Nothing was changed.', 'error')
+        flash('Evaluation unavailable - the local AI auditor isn\'t reachable, its response '
+              'couldn\'t be understood, or every model it tried was temporarily overloaded '
+              '(this can happen on OpenCode\'s free model tier). Nothing was changed - try '
+              'again in a minute, or see docs/local-ai-setup.md to use a paid provider instead.', 'error')
         return redirect(request.referrer or url_for('policies.policies'))
 
+    verdict_code = result.get('verdict_code')
     evaluation = PolicyEvaluation(
         policy_id=policy.id,
         organization_id=policy.organization_id,
         verdict=result.get('verdict'),
+        verdict_code=verdict_code,
         summary=result.get('summary'),
         missing_items=result.get('missing_items') or [],
         updated_policy_content=result.get('updated_policy_content') or None,
         evaluated_by_id=current_user.id,
     )
+    # Auto-remediation: a FAIL verdict immediately gets an open, assignable remediation task -
+    # a human still has to pick an assignee/due date and resolve it (see assign_policy_remediation
+    # below), this just makes sure the task exists the moment the gap is identified rather than
+    # relying on someone remembering to create one after reading the evaluation.
+    if verdict_code == 'FAIL':
+        evaluation.remediation_status = 'Open'
     db.session.add(evaluation)
     log_activity('evaluated', 'Policy', policy.name,
         f'{current_user.name} ran an AI evaluation on policy "{policy.name}" - verdict: {evaluation.verdict}')
     db.session.commit()
     flash(f'Evaluation complete - verdict: {evaluation.verdict}.', 'success')
     return redirect(request.referrer or url_for('policies.policies'))
+
+
+@policies_bp.route('/policies/<int:policy_id>/evaluation/<int:evaluation_id>/remediation', methods=['POST'])
+@login_required
+@require_permission('write')
+def assign_policy_remediation(policy_id, evaluation_id):
+    """Human-driven follow-up on a FAIL evaluation: assign an owner/due date for the
+    auto-generated remediation task, or mark it resolved. The AI never does this itself -
+    it only opened the task; a person has to pick it up and close it out."""
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    evaluation = policy.evaluations.filter_by(id=evaluation_id).first_or_404()
+
+    assignee_id = request.form.get('remediation_assignee_id')
+    due_date = request.form.get('remediation_due_date', '').strip()
+    notes = request.form.get('remediation_notes', '').strip()
+    mark_resolved = request.form.get('mark_resolved') == '1'
+
+    evaluation.remediation_assignee_id = int(assignee_id) if assignee_id else None
+    evaluation.remediation_due_date = due_date or None
+    evaluation.remediation_notes = notes or None
+    evaluation.remediation_status = 'Resolved' if mark_resolved else 'Open'
+
+    log_activity('updated', 'Policy', policy.name,
+        f'{current_user.name} updated the remediation task for policy "{policy.name}" '
+        f'(evaluation #{evaluation.id}) - status: {evaluation.remediation_status}')
+    db.session.commit()
+    flash('Remediation task updated.', 'success')
+    return redirect(url_for('policies.policy_detail', policy_id=policy.id))
 
 
 @policies_bp.route('/policies/<int:policy_id>/evaluation/latest')
@@ -622,11 +662,16 @@ def latest_policy_evaluation(policy_id):
         return jsonify({'error': 'No evaluation yet.'}), 404
     return jsonify({
         'verdict': evaluation.verdict,
+        'verdict_code': evaluation.verdict_code,
+        'badge_class': evaluation.badge_class,
         'summary': evaluation.summary,
         'missing_items': evaluation.missing_items or [],
         'updated_policy_content': evaluation.updated_policy_content,
         'created_at': evaluation.created_at.strftime('%d %b %Y %H:%M'),
         'evaluated_by': evaluation.evaluated_by.name if evaluation.evaluated_by else None,
+        'remediation_status': evaluation.remediation_status,
+        'remediation_assignee': evaluation.remediation_assignee.name if evaluation.remediation_assignee else None,
+        'remediation_due_date': evaluation.remediation_due_date,
     })
 
 

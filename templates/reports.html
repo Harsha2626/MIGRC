@@ -13,12 +13,12 @@
 <div class="card mb-16">
     <div class="card-header"><h3>Executive Summary</h3></div>
     <div class="card-body">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-            <div class="flex-center gap-12">
-                <div class="stat-icon blue" style="width:40px;height:40px;"><i class="fas fa-chart-pie"></i></div>
+        <div class="feature-row">
+            <div class="feature-row-body">
+                <div class="stat-icon stat-icon-md blue"><i class="fas fa-chart-pie" aria-hidden="true"></i></div>
                 <div>
-                    <div class="font-semibold">Dashboard Snapshot</div>
-                    <div class="text-sm text-muted">Current compliance score, risk posture, and KPIs in one PDF</div>
+                    <div class="feature-row-title">Dashboard Snapshot</div>
+                    <div class="feature-row-desc">Current compliance score, risk posture, and KPIs in one PDF</div>
                 </div>
             </div>
             <a href="/reports/dashboard.pdf" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
@@ -60,12 +60,12 @@
 <div class="card">
     <div class="card-header"><h3>Audit Readiness</h3></div>
     <div class="card-body">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border-color);border-radius:10px;">
-            <div class="flex-center gap-12">
-                <div class="stat-icon purple" style="width:40px;height:40px;"><i class="fas fa-shield-halved"></i></div>
+        <div class="feature-row">
+            <div class="feature-row-body">
+                <div class="stat-icon stat-icon-md purple"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
                 <div>
-                    <div class="font-semibold">SOC 2 Readiness Report</div>
-                    <div class="text-sm text-muted">Trust Service Criteria coverage summary for auditor handoff</div>
+                    <div class="feature-row-title">SOC 2 Readiness Report</div>
+                    <div class="feature-row-desc">Trust Service Criteria coverage summary for auditor handoff</div>
                 </div>
             </div>
             {% if soc2 %}

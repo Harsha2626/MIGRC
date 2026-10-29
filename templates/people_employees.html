@@ -37,21 +37,21 @@
         <div class="stat-icon orange"><i class="fas fa-list-check"></i></div>
         <div class="stat-info">
             <div class="stat-label">Employees with Pending Tasks</div>
-            <div class="stat-value">{{ pending_tasks_count }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_overview }}</span></div>
+            <div class="stat-value">{{ pending_tasks_count }}<span class="stat-value-sub"> / {{ total_overview }}</span></div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon blue"><i class="fas fa-desktop"></i></div>
         <div class="stat-info">
             <div class="stat-label">Monitoring Agent Installed</div>
-            <div class="stat-value">{{ monitoring_count }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_overview }}</span></div>
+            <div class="stat-value">{{ monitoring_count }}<span class="stat-value-sub"> / {{ total_overview }}</span></div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon green"><i class="fas fa-shield-halved"></i></div>
         <div class="stat-info">
             <div class="stat-label">Device Security Compliant</div>
-            <div class="stat-value">{{ device_compliant_count }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ total_overview }}</span></div>
+            <div class="stat-value">{{ device_compliant_count }}<span class="stat-value-sub"> / {{ total_overview }}</span></div>
         </div>
     </div>
 </div>
@@ -64,8 +64,8 @@
                 <canvas id="policyChart"></canvas>
             </div>
             <div class="legend" style="flex-direction:column;align-items:flex-start;">
-                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Accepted ({{ policy_accepted_count }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Not Accepted ({{ policy_not_accepted_count }})</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-success)"></div> Accepted ({{ policy_accepted_count }})</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-danger)"></div> Not Accepted ({{ policy_not_accepted_count }})</div>
             </div>
         </div>
     </div>
@@ -76,8 +76,8 @@
                 <canvas id="campaignChart"></canvas>
             </div>
             <div class="legend" style="flex-direction:column;align-items:flex-start;">
-                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Completed ({{ completed_enrollments }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Not Completed ({{ incomplete_enrollments }})</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-success)"></div> Completed ({{ completed_enrollments }})</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-danger)"></div> Not Completed ({{ incomplete_enrollments }})</div>
             </div>
         </div>
     </div>
@@ -144,6 +144,7 @@
 
 <div class="card">
     <div class="card-body no-padding">
+        {% if employees %}
         <div class="table-container">
             <table>
                 <thead>
@@ -161,7 +162,7 @@
                     <tr>
                         <td>
                             <div class="flex-center gap-8">
-                                <div class="avatar" style="width:30px;height:30px;font-size:10px;">{{ e.name.split(' ')[0][0] }}{{ e.name.split(' ')[-1][0] if ' ' in e.name else '' }}</div>
+                                <div class="avatar avatar-sm">{{ e.name.split(' ')[0][0] }}{{ e.name.split(' ')[-1][0] if ' ' in e.name else '' }}</div>
                                 <span class="font-semibold">{{ e.name }}</span>
                             </div>
                         </td>
@@ -198,6 +199,18 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-users" aria-hidden="true"></i></div>
+            <h3>No employees found</h3>
+            <p>{% if search or selected_department or selected_task_status or selected_group %}No employees match the current filters.{% else %}Add your first employee, or connect Google Workspace from the Setup Wizard to sync your directory automatically.{% endif %}</p>
+            {% if search or selected_department or selected_task_status or selected_group %}
+            <a href="{{ url_for('people.employees', tab='all') }}" class="btn btn-sm btn-secondary">Reset Filters</a>
+            {% else %}
+            <button class="btn btn-sm btn-primary" onclick="showAddEmployeeModal()"><i class="fas fa-plus"></i> Add Employee</button>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -213,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
             labels: ['Accepted', 'Not Accepted'],
             datasets: [{
                 data: [{{ policy_accepted_count }}, {{ policy_not_accepted_count }}],
-                backgroundColor: ['#10b981', '#ef4444'],
+                backgroundColor: ['#228148', '#b82a2e'],
                 borderWidth: 0
             }]
         },
@@ -226,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
             labels: ['Completed', 'Not Completed'],
             datasets: [{
                 data: [{{ completed_enrollments }}, {{ incomplete_enrollments }}],
-                backgroundColor: ['#10b981', '#ef4444'],
+                backgroundColor: ['#228148', '#b82a2e'],
                 borderWidth: 0
             }]
         },

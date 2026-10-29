@@ -21,7 +21,22 @@ from app.models import (
 )
 
 
+def _ensure_local_dev_database():
+    """Refuse to run against anything that isn't clearly a local dev database -
+    this script drops all tables, so it must never touch a shared/production DB."""
+    is_dev_env = os.environ.get('FLASK_ENV') == 'development'
+    db_uri = os.environ.get('DATABASE_URL', '')
+    is_local_sqlite = db_uri == '' or db_uri.startswith('sqlite:///')
+    if not is_dev_env and not is_local_sqlite:
+        sys.exit(
+            'Refusing to run app/seed.py: this looks like a non-local database '
+            '(DATABASE_URL is set and is not a local sqlite file, and FLASK_ENV != development). '
+            'This script drops all existing data. Run it only against a local dev database.'
+        )
+
+
 def seed_database():
+    _ensure_local_dev_database()
     app = create_app()
     with app.app_context():
         db.drop_all()

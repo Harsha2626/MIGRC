@@ -9,7 +9,7 @@
 {% block content %}
 <div class="page-header">
     <div class="flex-center gap-12">
-        <a href="{{ url_for('people.training_campaigns') }}" style="color:var(--text-primary);font-size:18px;text-decoration:none;"><i class="fas fa-arrow-left"></i></a>
+        <a href="{{ url_for('people.training_campaigns') }}" aria-label="Back to training campaigns" style="color:var(--text-primary);font-size:18px;text-decoration:none;"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
         <h1 style="margin:0;">{{ campaign.name }}</h1>
         {% if campaign.status == 'Completed' %}<span class="badge badge-success">{{ campaign.status }}</span>
         {% elif campaign.status == 'In Progress' %}<span class="badge badge-primary">{{ campaign.status }}</span>
@@ -27,9 +27,10 @@
 <div class="info-banner"><i class="fas fa-stopwatch"></i> {{ banner }}</div>
 
 <div class="tabs">
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}" style="text-decoration:none;">Overview</a>
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='employees') }}" class="tab {% if tab == 'employees' %}active{% endif %}" style="text-decoration:none;">Employees</a>
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='audit') }}" class="tab {% if tab == 'audit' %}active{% endif %}" style="text-decoration:none;">Audit Log</a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}">Overview</a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='employees') }}" class="tab {% if tab == 'employees' %}active{% endif %}">Employees</a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='audit') }}" class="tab {% if tab == 'audit' %}active{% endif %}">Audit Log</a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='settings') }}" class="tab {% if tab == 'settings' %}active{% endif %}">Settings</a>
 </div>
 
 {% if tab == 'overview' %}
@@ -118,9 +119,9 @@
     <div id="manageEmployeesBox" style="display:none;padding:16px 20px;border-bottom:1px solid var(--border-color);">
         <form method="POST" action="{{ url_for('people.update_campaign_employees', campaign_id=campaign.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;max-height:180px;overflow-y:auto;">
+            <div class="flex gap-12 mb-16" style="flex-wrap:wrap;max-height:180px;overflow-y:auto;">
                 {% for e in all_employees %}
-                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;">
+                <label class="form-check" style="width:auto;">
                     <input type="checkbox" name="employee_ids" value="{{ e.id }}" {% if e.id in enrolled_ids %}checked{% endif %}> {{ e.name }}
                 </label>
                 {% else %}
@@ -180,10 +181,69 @@
         </table>
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-clock-rotate-left"></i>
+            <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
             <h3>No activity yet</h3>
         </div>
         {% endif %}
+    </div>
+</div>
+
+{% elif tab == 'settings' %}
+<div class="card">
+    <div class="card-header"><h3>Campaign Settings</h3></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('people.edit_training_campaign', campaign_id=campaign.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Campaign Name <span class="required-star">*</span></label>
+                <input type="text" name="name" class="form-control" maxlength="100" value="{{ campaign.name }}" required>
+            </div>
+            <div class="form-group">
+                <label>Description (Optional)</label>
+                <textarea name="description" class="form-control" rows="3" maxlength="500">{{ campaign.description or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Training Selected</label>
+                <p class="text-sm text-muted mb-8">Choose which training material from your library is attached to this campaign.</p>
+                <div class="material-picker-grid">
+                    {% for m in materials %}
+                    <label class="material-picker-card">
+                        <input type="checkbox" name="material_ids" value="{{ m.id }}" {% if m in campaign.materials %}checked{% endif %}>
+                        <i class="fas {{ m.icon }}"></i>
+                        <span>{{ m.title }}</span>
+                    </label>
+                    {% else %}
+                    <div class="text-sm text-muted">Your training library is empty. Add materials from the Training Campaigns page first.</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Launch Date &amp; Time <span class="required-star">*</span></label>
+                    <input type="datetime-local" name="launch_date" id="settingsCampLaunch" class="form-control" value="{{ campaign.launch_date or '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Timezone</label>
+                    <select name="timezone" class="form-control">
+                        {% for tz in timezones %}<option value="{{ tz }}" {% if campaign.timezone == tz %}selected{% endif %}>{{ tz }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>End Date &amp; Time</label>
+                    <input type="datetime-local" name="end_date" id="settingsCampEnd" class="form-control" value="{{ campaign.end_date or '' }}" {% if campaign.no_end_date %}disabled{% endif %}>
+                </div>
+            </div>
+            <label class="form-check mb-16">
+                <input type="checkbox" name="no_end_date" id="settingsCampNoEndDate" {% if campaign.no_end_date %}checked{% endif %} onchange="document.getElementById('settingsCampEnd').disabled = this.checked;"> This campaign does not have an end date
+            </label>
+            <label class="form-check mb-16">
+                <input type="checkbox" name="sla_enabled" id="settingsCampSlaEnabled" {% if campaign.sla_days %}checked{% endif %} onchange="document.getElementById('settingsCampSlaDays').disabled = !this.checked;"> Set a campaign SLA
+                <input type="number" name="sla_days" id="settingsCampSlaDays" class="form-control" style="width:90px;" min="1" value="{{ campaign.sla_days or 0 }}" {% if not campaign.sla_days %}disabled{% endif %}>
+            </label>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save Changes</button>
+        </form>
     </div>
 </div>
 {% endif %}

@@ -390,11 +390,17 @@ def campaign_detail(campaign_id):
     audit_logs = ActivityLog.query.filter_by(entity_type='TrainingCampaign', entity_name=campaign.name).order_by(ActivityLog.created_at.desc()).all()
     all_employees = Employee.query.filter_by(organization_id=campaign.organization_id).order_by(Employee.name).all()
     enrolled_ids = {e.employee_id for e in enrollments}
+    # Needed so the Settings tab can show/edit which training materials are
+    # attached without wiping them out on save - see edit_training_campaign
+    # below, which replaces campaign.materials from whatever checkboxes the
+    # submitted form included.
+    materials = TrainingMaterial.query.filter_by(organization_id=campaign.organization_id).order_by(TrainingMaterial.created_at.desc()).all()
 
     return render_template('campaign_detail.html', page='training_campaigns',
         campaign=campaign, banner=banner, enrollments=enrollments,
         completed_within_sla=completed_within_sla, audit_logs=audit_logs,
         all_employees=all_employees, enrolled_ids=enrolled_ids,
+        materials=materials, timezones=CAMPAIGN_TIMEZONES,
         tab=tab)
 
 

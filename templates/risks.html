@@ -111,7 +111,7 @@
                             </td>
                             <td>{{ r.likelihood }}</td>
                             <td>
-                                <strong style="font-size:16px;{% if r.score >= 20 %}color:var(--accent-danger){% elif r.score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ r.score }}</strong>
+                                <strong style="font-size:var(--text-lg);{% if r.score >= 20 %}color:var(--accent-danger){% elif r.score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ r.score }}</strong>
                             </td>
                             <td>{{ r.owner }}</td>
                             <td><span class="badge badge-neutral">{{ r.treatment }}</span></td>
@@ -135,6 +135,19 @@
                                 </div>
                             </td>
                         </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" style="padding:0;">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
+                                    <h3>No risks logged yet</h3>
+                                    <p>Add a risk manually, or pull one in from the Risk Discovery library to start building your register.</p>
+                                    {% if current_user.can_write %}
+                                    <button class="btn btn-primary btn-sm" onclick="showAddRiskModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Risk</button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -148,15 +161,33 @@
     <div class="card">
         <div class="card-header">
             <h3>Risk Heatmap</h3>
+            <span class="text-sm text-muted">Likelihood &times; Impact &mdash; {{ risks|length }} risk{{ 's' if risks|length != 1 else '' }}</span>
         </div>
-        <div class="card-body" style="display:flex;justify-content:center;">
-            <div>
-                <div style="text-align:center;margin-bottom:12px;font-size:12px;font-weight:600;color:var(--text-secondary);">IMPACT &rarr;</div>
-                <div id="riskMatrixGrid" style="display:grid;grid-template-columns:70px repeat(5,80px);grid-template-rows:30px repeat(5,60px);gap:4px;align-items:center;">
-                    <!-- populated by JS -->
+        <div class="card-body">
+            {% if risks %}
+            <div style="display:flex;justify-content:center;">
+                <div style="display:flex;gap:var(--space-4);align-items:center;">
+                    <div class="axis-label" style="font-size:var(--text-xs);font-weight:var(--font-weight-semibold);color:var(--text-secondary);writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);text-transform:uppercase;letter-spacing:0.06em;">Likelihood &uarr;</div>
+                    <div>
+                        <div id="riskMatrixGrid" class="risk-matrix"><!-- populated by JS --></div>
+                        <div class="x-label" style="margin-top:var(--space-2);padding-left:90px;justify-content:flex-start;">Impact &rarr;</div>
+                    </div>
                 </div>
-                <div style="text-align:left;margin-top:12px;margin-left:70px;font-size:12px;font-weight:600;color:var(--text-secondary);">&uarr; LIKELIHOOD</div>
             </div>
+            <div class="legend" style="justify-content:center;margin-top:var(--space-6);">
+                <span class="legend-item"><span class="legend-dot negligible"></span> Negligible</span>
+                <span class="legend-item"><span class="legend-dot low"></span> Low</span>
+                <span class="legend-item"><span class="legend-dot medium"></span> Medium</span>
+                <span class="legend-item"><span class="legend-dot high"></span> High</span>
+                <span class="legend-item"><span class="legend-dot critical"></span> Critical</span>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-chart-simple" aria-hidden="true"></i></div>
+                <h3>No risks to plot yet</h3>
+                <p>Once risks are added to the register, this heatmap will place them by likelihood and impact.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -256,10 +287,17 @@
                             </td>
                             {% endif %}
                         </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" style="padding:0;">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
+                                    <h3>No mitigation tasks yet</h3>
+                                    <p>Add one here, or open a risk's detail page to attach a treatment plan.</p>
+                                </div>
+                            </td>
+                        </tr>
                         {% endfor %}
-                        {% if not tasks %}
-                        <tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-secondary);">No mitigation tasks yet. Add one here, or open a risk's detail page to attach a treatment plan.</td></tr>
-                        {% endif %}
                     </tbody>
                 </table>
             </div>
@@ -332,6 +370,9 @@ const MATRIX_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];
 const MATRIX_SCORES = { Negligible: 1, Low: 2, Medium: 3, High: 4, Critical: 5 };
 
 function buildRiskMatrix() {
+    const grid = document.getElementById('riskMatrixGrid');
+    if (!grid) return; // no risks yet - the empty-state is rendered instead
+
     const counts = {};
     MATRIX_LEVELS.forEach(l => { counts[l] = {}; MATRIX_LEVELS.forEach(i => counts[l][i] = 0); });
     risks.forEach(r => {
@@ -340,17 +381,17 @@ function buildRiskMatrix() {
         }
     });
 
-    const grid = document.getElementById('riskMatrixGrid');
     let html = '<div></div>';
     MATRIX_LEVELS.forEach(impact => {
-        html += `<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-secondary);">${impact}</div>`;
+        html += `<div class="x-label">${impact}</div>`;
     });
     [...MATRIX_LEVELS].reverse().forEach(likelihood => {
-        html += `<div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-align:right;padding-right:10px;">${likelihood}</div>`;
+        html += `<div class="y-label">${likelihood}</div>`;
         MATRIX_LEVELS.forEach(impact => {
             const severity = MATRIX_SCORES[likelihood] * MATRIX_SCORES[impact];
             const cls = severity >= 20 ? 'critical' : severity >= 12 ? 'high' : severity >= 6 ? 'medium' : severity >= 3 ? 'low' : 'negligible';
-            html += `<div class="risk-cell ${cls}">${counts[likelihood][impact]}</div>`;
+            const count = counts[likelihood][impact];
+            html += `<div class="risk-cell ${cls}" title="${likelihood} likelihood × ${impact} impact: ${count} risk${count === 1 ? '' : 's'}" aria-label="${likelihood} likelihood × ${impact} impact: ${count} risk${count === 1 ? '' : 's'}">${count}</div>`;
         });
     });
     grid.innerHTML = html;

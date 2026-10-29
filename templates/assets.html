@@ -72,7 +72,7 @@
                 </div>
 
                 <div class="dropdown-panel-wrapper">
-                    <button class="btn btn-secondary" onclick="toggleDropdownPanel('filtersPanel')"><i class="fas fa-filter"></i> More Filters</button>
+                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('filtersPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="filtersPanel"><i class="fas fa-filter" aria-hidden="true"></i> More Filters</button>
                     <div class="dropdown-panel" id="filtersPanel">
                         <div class="dropdown-panel-grid">
                             <div class="form-group" style="margin-bottom:0;">
@@ -93,10 +93,10 @@
                     </div>
                 </div>
 
-                <button class="btn btn-secondary btn-icon" title="Refresh" onclick="window.location.reload()"><i class="fas fa-rotate"></i></button>
+                <button class="btn btn-secondary btn-icon" type="button" title="Refresh" aria-label="Refresh" onclick="window.location.reload()"><i class="fas fa-rotate" aria-hidden="true"></i></button>
 
                 <div class="dropdown-panel-wrapper" style="margin-left:auto;">
-                    <button class="btn btn-secondary" onclick="toggleDropdownPanel('columnsPanel')">Columns <span class="badge badge-neutral" id="columnsCountBadge">3</span> <i class="fas fa-chevron-down" style="font-size:10px;margin-left:2px;"></i></button>
+                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('columnsPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="columnsPanel">Columns <span class="badge badge-neutral" id="columnsCountBadge">3</span> <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;margin-left:2px;"></i></button>
                     <div class="dropdown-panel" id="columnsPanel">
                         {% for key, label, default in optional_columns %}
                         <label class="dropdown-panel-item">
@@ -174,8 +174,8 @@
 
             <div class="flex-between" style="margin-top:16px;flex-wrap:wrap;gap:12px;">
                 <div class="flex gap-8" style="align-items:center;">
-                    <button class="btn btn-sm btn-secondary btn-icon" id="assetPrevBtn" onclick="changeAssetPage(-1)"><i class="fas fa-chevron-left"></i></button>
-                    <button class="btn btn-sm btn-secondary btn-icon" id="assetNextBtn" onclick="changeAssetPage(1)"><i class="fas fa-chevron-right"></i></button>
+                    <button class="btn btn-sm btn-secondary btn-icon" type="button" id="assetPrevBtn" aria-label="Previous page" onclick="changeAssetPage(-1)"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+                    <button class="btn btn-sm btn-secondary btn-icon" type="button" id="assetNextBtn" aria-label="Next page" onclick="changeAssetPage(1)"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
                     <span class="text-sm text-muted" id="assetPageInfo">0-0/0</span>
                 </div>
                 <div class="flex gap-8" style="align-items:center;">

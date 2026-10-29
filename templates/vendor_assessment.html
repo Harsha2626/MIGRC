@@ -15,7 +15,10 @@
         <p>{{ assessment.vendor.name }} &middot; Sent {{ assessment.sent_date }}</p>
     </div>
     <div class="page-actions">
-        <span class="badge {% if assessment.status == 'Completed' %}badge-success{% elif assessment.status == 'In Progress' %}badge-warning{% else %}badge-neutral{% endif %}" style="font-size:13px;padding:8px 16px;">{{ assessment.status }}</span>
+        <span class="badge badge-lg {% if assessment.status == 'Completed' %}badge-success{% elif assessment.status == 'In Progress' %}badge-warning{% else %}badge-neutral{% endif %}">{{ assessment.status }}</span>
+        {% if assessment.verdict %}
+        <span class="badge badge-lg {% if assessment.verdict == 'Pass' %}badge-success{% elif assessment.verdict == 'Fail' %}badge-danger{% else %}badge-warning{% endif %}">{{ assessment.verdict }}</span>
+        {% endif %}
         <a href="{{ url_for('vendors.vendor_detail', vendor_id=assessment.vendor.id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
@@ -24,12 +27,20 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('vendors.respond_assessment', vendor_id=assessment.vendor.id, assessment_id=assessment.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if assessment.template.questions %}
             {% for q in assessment.template.questions %}
             <div class="form-group">
                 <label>{{ loop.index }}. {{ q.question_text }}</label>
                 <textarea name="question_{{ q.id }}" class="form-control" rows="2" {% if assessment.status == 'Completed' %}readonly{% endif %}>{{ existing.get(q.id, '') }}</textarea>
             </div>
             {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-circle-question" aria-hidden="true"></i></div>
+                <h3>This questionnaire has no questions</h3>
+                <p>Add questions to the "{{ assessment.template.name }}" template before it can be completed.</p>
+            </div>
+            {% endif %}
 
             <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;">
                 <div class="form-group">

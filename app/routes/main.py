@@ -372,7 +372,8 @@ def export_activity_log():
 @main_bp.route('/api/dashboard/stats')
 @login_required
 def api_dashboard_stats():
-    frameworks = Framework.visible_to(g.current_org.id if g.current_org else -1).all()
+    org_id = g.current_org.id if g.current_org else -1
+    frameworks = Framework.visible_to(org_id).all()
     total_controls = sum(fw.total_controls for fw in frameworks)
     passing = sum(fw.passing for fw in frameworks)
     failing = sum(fw.failing for fw in frameworks)

@@ -182,6 +182,13 @@ def add_questionnaire():
 @require_permission('delete')
 def delete_questionnaire(template_id):
     template = QuestionnaireTemplate.query.filter_by(id=template_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    assessment_count = VendorAssessment.query.filter_by(template_id=template.id).count()
+    if assessment_count:
+        flash(
+            f'Cannot delete "{template.name}" - {assessment_count} assessment(s) are using it. '
+            'Delete those first.', 'error'
+        )
+        return redirect(url_for('vendors.questionnaires'))
     name = template.name
     db.session.delete(template)
     log_activity('deleted', 'Vendor', name, f'{current_user.name} deleted questionnaire template "{name}"')

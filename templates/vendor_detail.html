@@ -76,7 +76,7 @@
                     <td>
                         <form method="POST" action="{{ url_for('vendors.delete_vendor_document', vendor_id=vendor.id, evidence_id=d.id) }}" onsubmit="return confirm('Delete this document?');">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-danger btn-icon"><i class="fas fa-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete document"><i class="fas fa-trash"></i></button>
                         </form>
                     </td>
                 </tr>
@@ -84,22 +84,75 @@
             </tbody>
         </table>
         {% else %}
-        <p class="text-sm text-muted">No documents uploaded yet.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-file-shield" aria-hidden="true"></i></div>
+            <h3>No documents uploaded yet</h3>
+            <p>Upload SOC 2 reports, security questionnaires, or other compliance evidence for this vendor.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Assessments -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">
+        <h3>Assessments</h3>
+        {% if current_user.can_write %}
+        <button class="btn btn-sm btn-primary" onclick="showSendAssessmentModal()" {% if not templates %}disabled title="Create a questionnaire template first"{% endif %}><i class="fas fa-paper-plane"></i> Send Assessment</button>
+        {% endif %}
+    </div>
+    <div class="card-body no-padding">
+        {% if assessments %}
+        <table>
+            <thead><tr><th>Questionnaire</th><th>Status</th><th>Verdict</th><th>Sent</th><th>Completed</th><th></th></tr></thead>
+            <tbody>
+                {% for a in assessments %}
+                <tr>
+                    <td class="font-semibold">{{ a.template.name }}</td>
+                    <td>
+                        {% if a.status == 'Completed' %}<span class="badge badge-success">{{ a.status }}</span>
+                        {% elif a.status == 'In Progress' %}<span class="badge badge-warning">{{ a.status }}</span>
+                        {% else %}<span class="badge badge-neutral">{{ a.status }}</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if a.verdict == 'Pass' %}<span class="badge badge-success">{{ a.verdict }}</span>
+                        {% elif a.verdict == 'Fail' %}<span class="badge badge-danger">{{ a.verdict }}</span>
+                        {% elif a.verdict == 'Needs Follow-up' %}<span class="badge badge-warning">{{ a.verdict }}</span>
+                        {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                    </td>
+                    <td class="text-sm">{{ a.sent_date or '—' }}</td>
+                    <td class="text-sm">{{ a.completed_date or '—' }}</td>
+                    <td>
+                        <a href="{{ url_for('vendors.assessment_detail', vendor_id=vendor.id, assessment_id=a.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Open assessment"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-clipboard-question" aria-hidden="true"></i></div>
+            <h3>No assessments yet</h3>
+            <p>Send a questionnaire to collect this vendor's security posture and get a Pass / Fail / Needs Follow-up verdict.</p>
+            {% if current_user.can_write and templates %}
+            <button class="btn btn-primary btn-sm" onclick="showSendAssessmentModal()"><i class="fas fa-paper-plane" aria-hidden="true"></i> Send Assessment</button>
+            {% endif %}
+        </div>
         {% endif %}
     </div>
 </div>
 
 <!-- Risk -->
 <div class="card" style="margin-top:20px;">
-    <div class="card-header" style="cursor:pointer;" onclick="toggleEl('vendorRiskPanel')">
+    <div class="card-header" style="cursor:pointer;" role="button" tabindex="0" aria-expanded="true" aria-controls="vendorRiskPanel" onclick="toggleEl('vendorRiskPanel', this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleEl('vendorRiskPanel', this); }">
         <div style="display:flex;gap:12px;align-items:flex-start;">
-            <i class="fas fa-wand-magic-sparkles" style="color:var(--accent-primary);font-size:15px;margin-top:2px;"></i>
+            <i class="fas fa-wand-magic-sparkles" aria-hidden="true" style="color:var(--accent-primary);font-size:15px;margin-top:2px;"></i>
             <div>
                 <h3 style="margin-bottom:2px;">Risk</h3>
-                <p class="text-sm text-muted" style="margin-bottom:0;">AI analyzes this vendor's uploaded documents to surface potential risks. Review and add them to your <a href="/risks">risk register</a> once reviewed.</p>
+                <p class="text-sm text-muted" style="margin-bottom:0;">AI analyzes this vendor's uploaded documents to surface potential risks. Review and add them to your <a href="/risks" onclick="event.stopPropagation()">risk register</a> once reviewed.</p>
             </div>
         </div>
-        <i class="fas fa-chevron-up" style="color:var(--text-muted);font-size:12px;"></i>
+        <i class="fas fa-chevron-up" aria-hidden="true" style="color:var(--text-muted);font-size:12px;"></i>
     </div>
     <div class="card-body" id="vendorRiskPanel">
         <div class="locked-card">
@@ -113,9 +166,31 @@
 
 {% block scripts %}
 <script>
-function toggleEl(id) {
+function toggleEl(id, header) {
     const el = document.getElementById(id);
-    el.style.display = el.style.display === 'none' ? '' : 'none';
+    const collapsed = el.style.display === 'none';
+    el.style.display = collapsed ? '' : 'none';
+    if (header) header.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
 }
+
+{% if current_user.can_write %}
+const QUESTIONNAIRE_TEMPLATES = [
+    {% for t in templates %}{ "id": {{ t.id }}, "name": {{ t.name|tojson }} }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+function showSendAssessmentModal() {
+    const templateOptions = QUESTIONNAIRE_TEMPLATES.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    openModal('Send Assessment', `
+        <form id="sendAssessmentForm" method="POST" action="{{ url_for('vendors.send_assessment', vendor_id=vendor.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Questionnaire Template</label>
+                <select name="template_id" class="form-control" required>${templateOptions}</select>
+                <span class="form-help">{{ vendor.name }} will be tracked against this questionnaire. Manage templates from <a href="{{ url_for('vendors.questionnaires') }}">Questionnaire Templates</a>.</span>
+            </div>
+        </form>
+    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'sendAssessmentForm\').submit()">Send</button>');
+}
+{% endif %}
 </script>
 {% endblock %}

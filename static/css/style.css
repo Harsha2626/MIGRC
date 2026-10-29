@@ -1,76 +1,277 @@
 /* ============================================================
    MIGRC - Compliance Management Platform Styles
+   ------------------------------------------------------------
+   Token architecture: PRIMITIVE -> SEMANTIC -> COMPONENT.
+   Primitives are raw values (palette, scale) and never referenced
+   directly from component rules. Semantic tokens (--bg-primary,
+   --text-primary, --accent-*, etc.) are the stable public API that
+   every template already uses via var(--token-name) - their NAMES
+   must not change even as the underlying values evolve. Component
+   tokens (--btn-*, --input-*) compose semantic tokens for a single
+   component family.
+   Full usage guide: docs/design-system.md
    ============================================================ */
 
-/* CSS Variables - Light Theme */
-:root, [data-theme="light"] {
-    --bg-primary: #f5f6fa;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #f0f1f5;
-    --sidebar-bg: #ffffff;
-    --sidebar-hover: #f1f5f9;
-    --sidebar-active: #3b82f6;
-    --sidebar-text: #64748b;
-    --sidebar-text-active: #ffffff;
-    --sidebar-text-hover: #1e293b;
-    --sidebar-heading: #1e293b;
-    --sidebar-border: rgba(15,23,42,0.08);
-    --sidebar-surface: rgba(15,23,42,0.04);
-    --sidebar-surface-hover: rgba(15,23,42,0.08);
-    --sidebar-scrollbar: rgba(15,23,42,0.15);
-    --sidebar-muted: rgba(100,116,139,0.75);
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
-    --border-color: #e2e8f0;
-    --border-light: #f1f5f9;
-    --accent-primary: #3b82f6;
-    --accent-primary-light: #dbeafe;
-    --accent-success: #10b981;
-    --accent-success-light: #d1fae5;
-    --accent-warning: #f59e0b;
-    --accent-warning-light: #fef3c7;
-    --accent-danger: #ef4444;
-    --accent-danger-light: #fee2e2;
-    --accent-info: #6366f1;
-    --accent-info-light: #e0e7ff;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
-    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05);
+/* ============================================================
+   FONTS
+   Inter for UI/body/headings - the same precise, high-legibility
+   workhorse used across Linear/GitHub/Stripe-grade dashboards.
+   JetBrains Mono for anything that must look exact: control IDs,
+   evidence hashes, policy version numbers, API keys.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ============================================================
+   PRIMITIVE TOKENS - raw values only
+   ============================================================ */
+:root {
+    /* Type */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+    --text-xs: 0.6875rem;   /* 11px - table captions, meta */
+    --text-sm: 0.8125rem;   /* 13px - secondary UI text, buttons */
+    --text-base: 0.875rem;  /* 14px - app body (denser than marketing sites) */
+    --text-md: 0.9375rem;   /* 15px - card titles */
+    --text-lg: 1.0625rem;   /* 17px - modal titles */
+    --text-xl: 1.25rem;     /* 20px - page H1 (compact) */
+    --text-2xl: 1.5rem;     /* 24px - page H1 (standard) */
+    --text-3xl: 1.875rem;   /* 30px - hero / Trust Center */
+
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+
+    --leading-tight: 1.2;
+    --leading-snug: 1.35;
+    --leading-normal: 1.5;
+
+    /* Space - 4px grid */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+
+    /* Radius */
+    --radius-xs: 4px;
     --radius-sm: 6px;
     --radius-md: 8px;
     --radius-lg: 12px;
     --radius-xl: 16px;
-    --transition: all 0.2s ease;
+    --radius-full: 999px;
+
+    /* Motion */
+    --duration-fast: 120ms;
+    --duration-base: 180ms;
+    --duration-slow: 300ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --transition: all var(--duration-base) var(--ease-standard);
+
+    /* Palette: neutral - cool charcoal, deliberately not stock Tailwind slate */
+    --gray-0: #ffffff;
+    --gray-25: #fbfbfc;
+    --gray-50: #f5f6f8;
+    --gray-100: #ebedf1;
+    --gray-200: #dde1e8;
+    --gray-300: #c3c9d4;
+    --gray-400: #9aa2b1;
+    /* --gray-450 / --gray-550: added for the accessibility pass - accessible
+       "muted" text stops. --gray-400 on a white/near-white surface and
+       --gray-600 on a near-black surface both measured under 3:1 contrast
+       (WCAG 1.4.3 requires 4.5:1 for normal-size text), so --text-muted and
+       light-mode --sidebar-text now resolve to these in-between stops
+       instead. Added as new primitives rather than changing --gray-400/
+       --gray-600 themselves, since those two are also used directly
+       elsewhere and changing them would ripple beyond this fix. */
+    --gray-450: #8c94a4;
+    --gray-500: #717a8c;
+    --gray-550: #60697b;
+    --gray-600: #545d70;
+    --gray-700: #3b4254;
+    --gray-800: #262b3b;
+    --gray-900: #161925;
+    --gray-950: #0c0e16;
+
+    /* Palette: brand blue - deep institutional blue, not the generic #3b82f6 */
+    --blue-50: #eff3fe;
+    --blue-100: #dee7fc;
+    --blue-200: #b9ccf8;
+    --blue-300: #8fabf2;
+    --blue-400: #5e82e8;
+    --blue-500: #3b63dc;
+    --blue-600: #2748c9;
+    --blue-700: #1e38a3;
+    --blue-800: #182c7d;
+    --blue-900: #13215e;
+
+    /* Palette: success */
+    --green-50: #eaf7ee;
+    --green-100: #d1eeda;
+    --green-500: #2f9e5b;
+    --green-600: #228148;
+    --green-700: #1a6538;
+    --green-900: #0e3a20;
+
+    /* Palette: danger */
+    --red-50: #fbeaea;
+    --red-100: #f5d0d1;
+    --red-500: #d1393c;
+    --red-600: #b82a2e;
+    --red-700: #952226;
+    --red-900: #4f1113;
+
+    /* Palette: warning */
+    --amber-50: #fbf3e3;
+    --amber-100: #f5e2bc;
+    --amber-500: #c68a1a;
+    --amber-600: #a66f10;
+    --amber-700: #7f560c;
+    --amber-900: #452d05;
+
+    /* Palette: info (kept distinct from brand blue so it doesn't compete with primary actions) */
+    --violet-50: #f1eefc;
+    --violet-100: #e0daf8;
+    --violet-500: #7c6ae0;
+    --violet-600: #6150c4;
+    --violet-700: #4b3c9c;
+}
+
+/* ============================================================
+   SEMANTIC TOKENS - Light Theme (default public API; names are stable)
+   ============================================================ */
+:root, [data-theme="light"] {
+    --bg-primary: var(--gray-50);
+    --bg-secondary: var(--gray-0);
+    --bg-tertiary: var(--gray-100);
+    --surface-raised: var(--gray-0);
+    --surface-inverse: var(--gray-900);
+    --overlay-scrim: rgba(12,14,22,0.5);
+
+    --sidebar-bg: var(--gray-0);
+    --sidebar-hover: var(--gray-100);
+    --sidebar-active: var(--blue-600);
+    /* Accessibility fix: was --gray-500 (#717a8c), which measured 4.32:1
+       against the white sidebar background - just under the 4.5:1 WCAG AA
+       minimum for normal-size text (nav item labels render at 13.5px). */
+    --sidebar-text: var(--gray-550);
+    --sidebar-text-active: var(--gray-0);
+    --sidebar-text-hover: var(--gray-800);
+    --sidebar-heading: var(--gray-900);
+    --sidebar-border: rgba(22,25,37,0.08);
+    --sidebar-surface: rgba(22,25,37,0.04);
+    --sidebar-surface-hover: rgba(22,25,37,0.08);
+    --sidebar-scrollbar: rgba(22,25,37,0.15);
+    /* Accessibility fix: was rgba(113,122,140,0.8) (~3.0:1 on the white
+       sidebar bg) - the section category labels/chevrons/icons (e.g.
+       "OVERVIEW", "GOVERNANCE") failed WCAG AA. Now ~5.2:1. */
+    --sidebar-muted: rgba(84,93,112,0.9);
+
+    --text-primary: var(--gray-900);
+    --text-secondary: var(--gray-600);
+    /* Accessibility fix: was --gray-400 (#9aa2b1), which measured 2.19-2.57:1
+       against white/gray-50/gray-100 surfaces - far under the 4.5:1 WCAG AA
+       minimum for normal text. --gray-400 is still used elsewhere (e.g.
+       disabled icon states) where it isn't carrying text, so it was left
+       alone and this token was pointed at the new --gray-550 stop instead. */
+    --text-muted: var(--gray-550);
+    --text-inverse: var(--gray-0);
+
+    --border-color: var(--gray-200);
+    --border-light: var(--gray-100);
+    --border-strong: var(--gray-300);
+
+    --accent-primary: var(--blue-600);
+    --accent-primary-hover: var(--blue-700);
+    --accent-primary-active: var(--blue-800);
+    --accent-primary-light: var(--blue-100);
+    --accent-success: var(--green-600);
+    --accent-success-hover: var(--green-700);
+    --accent-success-light: var(--green-100);
+    --accent-warning: var(--amber-600);
+    --accent-warning-hover: var(--amber-700);
+    --accent-warning-light: var(--amber-100);
+    --accent-danger: var(--red-600);
+    --accent-danger-hover: var(--red-700);
+    --accent-danger-light: var(--red-100);
+    --accent-info: var(--violet-600);
+    --accent-info-hover: var(--violet-700);
+    --accent-info-light: var(--violet-100);
+
+    --focus-ring-color: rgba(39,72,201,0.35);
+
+    --shadow-xs: 0 1px 2px rgba(15,23,42,0.04);
+    --shadow-sm: 0 1px 2px rgba(15,23,42,0.06), 0 1px 1px rgba(15,23,42,0.04);
+    --shadow-md: 0 4px 10px -2px rgba(15,23,42,0.10), 0 2px 4px -2px rgba(15,23,42,0.06);
+    --shadow-lg: 0 16px 32px -8px rgba(15,23,42,0.16), 0 4px 10px -4px rgba(15,23,42,0.08);
 }
 
 /* Dark Theme */
 [data-theme="dark"] {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --sidebar-bg: #020617;
-    --sidebar-hover: #1e293b;
-    --sidebar-active: #3b82f6;
-    --sidebar-text: #94a3b8;
-    --sidebar-text-active: #ffffff;
-    --sidebar-text-hover: #e2e8f0;
-    --sidebar-heading: #ffffff;
+    --bg-primary: var(--gray-950);
+    --bg-secondary: var(--gray-900);
+    --bg-tertiary: var(--gray-800);
+    --surface-raised: var(--gray-800);
+    --surface-inverse: #05060a;
+    --overlay-scrim: rgba(3,4,8,0.65);
+
+    --sidebar-bg: #05060a;
+    --sidebar-hover: var(--gray-800);
+    --sidebar-active: var(--blue-500);
+    --sidebar-text: var(--gray-400);
+    --sidebar-text-active: var(--gray-0);
+    --sidebar-text-hover: var(--gray-100);
+    --sidebar-heading: var(--gray-0);
     --sidebar-border: rgba(255,255,255,0.08);
     --sidebar-surface: rgba(255,255,255,0.06);
-    --sidebar-surface-hover: rgba(255,255,255,0.15);
-    --sidebar-scrollbar: rgba(255,255,255,0.1);
-    --sidebar-muted: rgba(148,163,184,0.6);
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --border-color: #334155;
-    --border-light: #1e293b;
-    --accent-primary-light: #1e3a5f;
-    --accent-success-light: #064e3b;
-    --accent-warning-light: #78350f;
-    --accent-danger-light: #7f1d1d;
-    --accent-info-light: #312e81;
+    --sidebar-surface-hover: rgba(255,255,255,0.14);
+    --sidebar-scrollbar: rgba(255,255,255,0.12);
+    /* Accessibility fix: was rgba(154,162,177,0.7) (~4.3:1 on the near-black
+       sidebar bg) - just under WCAG AA for the small-caps section labels.
+       Now ~6.2:1 using --gray-300 at higher opacity. */
+    --sidebar-muted: rgba(195,201,212,0.75);
+
+    --text-primary: var(--gray-50);
+    --text-secondary: var(--gray-400);
+    /* Accessibility fix: was --gray-600 (#545d70), which measured 2.13-2.91:1
+       against the dark surfaces - far under 4.5:1. --gray-450 (new stop,
+       see primitives) restores legibility (~4.6-6.3:1) while staying
+       visually "muted" relative to --text-secondary. */
+    --text-muted: var(--gray-450);
+    --text-inverse: var(--gray-950);
+
+    --border-color: var(--gray-700);
+    --border-light: var(--gray-800);
+    --border-strong: var(--gray-600);
+
+    --accent-primary: var(--blue-400);
+    --accent-primary-hover: var(--blue-300);
+    --accent-primary-active: var(--blue-200);
+    --accent-primary-light: rgba(94,130,232,0.18);
+    --accent-success: var(--green-500);
+    --accent-success-hover: #3fb36e;
+    --accent-success-light: rgba(47,158,91,0.18);
+    --accent-warning: var(--amber-500);
+    --accent-warning-hover: #d79b2e;
+    --accent-warning-light: rgba(198,138,26,0.18);
+    --accent-danger: var(--red-500);
+    --accent-danger-hover: #dd5558;
+    --accent-danger-light: rgba(209,57,60,0.18);
+    --accent-info: var(--violet-500);
+    --accent-info-hover: #9384e8;
+    --accent-info-light: rgba(124,106,224,0.18);
+
+    --focus-ring-color: rgba(94,130,232,0.5);
+
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4);
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.5);
@@ -81,19 +282,38 @@
    ============================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg-primary);
     color: var(--text-primary);
     display: flex;
     min-height: 100vh;
     overflow-x: hidden;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, h4, h5, h6 { font-weight: var(--font-weight-bold); line-height: var(--leading-tight); letter-spacing: -0.01em; }
 
 a { color: var(--accent-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+code, kbd, samp, .mono { font-family: var(--font-mono); }
+
+::selection { background: var(--accent-primary-light); color: var(--text-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
 
 /* ============================================================
    SIDEBAR
@@ -154,20 +374,20 @@ a:hover { text-decoration: underline; }
 .logo-icon {
     width: 34px;
     height: 34px;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-    border-radius: 8px;
+    background: var(--accent-primary);
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--text-inverse);
     font-size: 16px;
 }
 
 .logo-text {
-    font-size: 20px;
-    font-weight: 700;
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
     color: var(--sidebar-heading);
-    letter-spacing: -0.5px;
+    letter-spacing: -0.02em;
 }
 
 .sidebar-toggle {
@@ -305,8 +525,8 @@ a:hover { text-decoration: underline; }
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-    color: #fff;
+    background: var(--surface-inverse);
+    color: var(--text-inverse);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -552,28 +772,22 @@ a:hover { text-decoration: underline; }
     display: flex; align-items: center; justify-content: center;
     font-size: 17px; font-weight: 700;
 }
-.integration-badge.blue { background: var(--accent-primary-light); color: #1e40af; }
-.integration-badge.green { background: var(--accent-success-light); color: #065f46; }
-.integration-badge.orange { background: var(--accent-warning-light); color: #92400e; }
-.integration-badge.red { background: var(--accent-danger-light); color: #991b1b; }
-.integration-badge.purple { background: #ede9fe; color: #6d28d9; }
+.integration-badge.blue { background: var(--accent-primary-light); color: var(--blue-700); }
+.integration-badge.green { background: var(--accent-success-light); color: var(--green-700); }
+.integration-badge.orange { background: var(--accent-warning-light); color: var(--amber-700); }
+.integration-badge.red { background: var(--accent-danger-light); color: var(--red-700); }
+.integration-badge.purple { background: var(--accent-info-light); color: var(--violet-700); }
 .integration-badge.dark { background: var(--bg-tertiary); color: var(--text-primary); }
 [data-theme="dark"] .integration-badge.purple { background: rgba(124,58,237,0.2); color: #c4b5fd; }
 
-.btn-integrate {
-    background: #7c3aed;
-    color: #fff;
-    border: none;
-    padding: 9px 18px;
-    border-radius: var(--radius-md);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition);
-    align-self: flex-start;
-    margin-top: auto;
-}
-.btn-integrate:hover { background: #6d28d9; }
+/* .btn-integrate (bespoke filled-purple CTA button) removed during the
+   design-system migration pass - it was a one-off "orange/purple CTA
+   accent" color that directly contradicts this app's single-accent-color
+   rule (see docs/design-system.md section 3: "no separate CTA accent -
+   primary blue is the only call-to-action color"). Integration cards now
+   use the standard .btn .btn-primary .btn-sm button; this rule keeps that
+   button pinned to the bottom of the flex-column card like the old one was. */
+.integration-card .btn { align-self: flex-start; margin-top: auto; }
 
 @media (max-width: 1100px) {
     .integration-grid { grid-template-columns: repeat(2, 1fr); }
@@ -846,59 +1060,121 @@ a:hover { text-decoration: underline; }
 }
 
 .page-header h1 {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
     color: var(--text-primary);
-    letter-spacing: -0.3px;
+    letter-spacing: -0.015em;
 }
 
 .page-header p {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--text-sm);
     margin-top: 2px;
 }
 
-.page-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.page-actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 
 /* ============================================================
    BUTTONS
+   Variants: primary, secondary, danger, success, ghost, icon-only.
+   Every variant defines default/hover/active/focus-visible/disabled.
+   Loading state: toggle `.is-loading` + set `disabled` from JS
+   (see app.js `setButtonLoading`) - do not remove the label text,
+   it is hidden visually but kept for consistent button width.
    ============================================================ */
 .btn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: var(--space-2);
+    position: relative;
     padding: 8px 18px;
     border-radius: var(--radius-md);
-    font-size: 13px;
-    font-weight: 500;
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
     cursor: pointer;
     border: 1px solid transparent;
     transition: var(--transition);
     white-space: nowrap;
 }
+.btn:disabled,
+.btn.is-disabled { cursor: not-allowed; opacity: 0.55; box-shadow: none; }
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
 
+/* Primary - the one high-emphasis action per view */
 .btn-primary {
     background: var(--accent-primary);
-    color: #fff;
+    color: var(--text-inverse);
     border-color: var(--accent-primary);
 }
-.btn-primary:hover { background: #2563eb; border-color: #2563eb; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-primary-hover); border-color: var(--accent-primary-hover); }
+.btn-primary:active:not(:disabled) { background: var(--accent-primary-active); border-color: var(--accent-primary-active); }
 
+/* Secondary - default workhorse button */
 .btn-secondary {
     background: var(--bg-secondary);
     color: var(--text-primary);
     border-color: var(--border-color);
 }
-.btn-secondary:hover { background: var(--bg-tertiary); }
+.btn-secondary:hover:not(:disabled) { background: var(--bg-tertiary); border-color: var(--border-strong); }
+.btn-secondary:active:not(:disabled) { background: var(--border-light); }
 
-.btn-success { background: var(--accent-success); color: #fff; }
-.btn-success:hover { background: #059669; }
+/* Ghost / tertiary - lowest emphasis, used inline or in dense toolbars */
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) { background: var(--bg-tertiary); color: var(--text-primary); }
+.btn-ghost:active:not(:disabled) { background: var(--border-light); }
 
-.btn-danger { background: var(--accent-danger); color: #fff; }
-.btn-danger:hover { background: #dc2626; }
+.btn-success { background: var(--accent-success); color: var(--text-inverse); border-color: var(--accent-success); }
+.btn-success:hover:not(:disabled) { background: var(--accent-success-hover); border-color: var(--accent-success-hover); }
 
-.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-danger { background: var(--accent-danger); color: var(--text-inverse); border-color: var(--accent-danger); }
+.btn-danger:hover:not(:disabled) { background: var(--accent-danger-hover); border-color: var(--accent-danger-hover); }
+.btn-danger:active:not(:disabled) { filter: brightness(0.92); }
+
+/* Outline-danger - for destructive actions that shouldn't shout as loud as a filled danger button */
+.btn-danger-outline {
+    background: var(--bg-secondary);
+    color: var(--accent-danger);
+    border-color: var(--border-color);
+}
+.btn-danger-outline:hover:not(:disabled) { background: var(--accent-danger-light); border-color: var(--accent-danger); }
+
+.btn-sm { padding: 5px 12px; font-size: var(--text-xs); gap: var(--space-1); }
+.btn-lg { padding: 10px 22px; font-size: var(--text-md); }
+
+/* Icon-only - always pair with a descriptive aria-label/title in markup, never bare */
 .btn-icon { padding: 8px; width: 36px; height: 36px; justify-content: center; }
+.btn-icon.btn-sm { width: 28px; height: 28px; padding: 5px; }
+
+/* Loading state - keeps button size stable, swaps label for a spinner */
+.btn.is-loading { color: transparent !important; pointer-events: none; }
+.btn.is-loading::after {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    color: inherit;
+    opacity: 0.9;
+    animation: btnSpin 0.6s linear infinite;
+}
+.btn-primary.is-loading::after,
+.btn-success.is-loading::after,
+.btn-danger.is-loading::after { color: var(--text-inverse); }
+.btn-secondary.is-loading::after,
+.btn-ghost.is-loading::after { color: var(--text-secondary); }
+@keyframes btnSpin { to { transform: rotate(360deg); } }
 
 /* ============================================================
    CARDS
@@ -908,25 +1184,25 @@ a:hover { text-decoration: underline; }
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    transition: var(--transition);
+    transition: box-shadow var(--duration-base) var(--ease-standard);
 }
-.card:hover { box-shadow: var(--shadow-md); }
 
 .card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 22px;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-6);
     border-bottom: 1px solid var(--border-color);
 }
 
 .card-header h3 {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: var(--text-md);
+    font-weight: var(--font-weight-semibold);
     color: var(--text-primary);
 }
 
-.card-body { padding: 22px; }
+.card-body { padding: var(--space-6); }
 .card-body.no-padding { padding: 0; }
 
 /* ============================================================
@@ -935,18 +1211,18 @@ a:hover { text-decoration: underline; }
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 18px;
-    margin-bottom: 24px;
+    gap: var(--space-5);
+    margin-bottom: var(--space-6);
 }
 
 .stat-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    padding: 22px;
+    padding: var(--space-6);
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: var(--space-4);
     transition: var(--transition);
     box-shadow: var(--shadow-sm);
 }
@@ -970,27 +1246,28 @@ a:hover { text-decoration: underline; }
 .stat-icon.red { background: var(--accent-danger-light); color: var(--accent-danger); }
 .stat-icon.purple { background: var(--accent-info-light); color: var(--accent-info); }
 
-.stat-info { flex: 1; }
+.stat-info { flex: 1; min-width: 0; }
 .stat-label {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
     margin-bottom: 4px;
 }
 .stat-value {
-    font-size: 26px;
-    font-weight: 700;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
     color: var(--text-primary);
-    line-height: 1.2;
+    line-height: var(--leading-tight);
 }
 .stat-change {
-    font-size: 12px;
+    font-size: var(--text-xs);
     margin-top: 4px;
     display: flex;
     align-items: center;
     gap: 4px;
+    color: var(--text-muted);
 }
 .stat-change.up { color: var(--accent-success); }
 .stat-change.down { color: var(--accent-danger); }
@@ -1060,28 +1337,45 @@ tbody tr:last-child td { border-bottom: none; }
 /* ============================================================
    BADGES / STATUS PILLS
    ============================================================ */
+/* Status pills. Pair every color with an icon or label text in markup -
+   never rely on color alone to convey PASS/FAIL/NEEDS REVIEW meaning.
+   `.badge-pass` / `.badge-fail` / `.badge-review` are the GRC-semantic
+   names for verification results (control tests, evidence review,
+   audit findings); they render identically to success/danger/warning
+   but should be reached for whenever the thing being labelled is a
+   pass/fail/needs-review verdict rather than a generic status. */
 .badge {
     display: inline-flex;
     align-items: center;
+    gap: 4px;
     padding: 3px 10px;
-    border-radius: 100px;
-    font-size: 11px;
-    font-weight: 600;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
     white-space: nowrap;
+    max-width: 100%;
 }
+.badge > span { overflow: hidden; text-overflow: ellipsis; }
+.badge i, .badge svg { font-size: 9px; flex-shrink: 0; }
 
-.badge-success { background: var(--accent-success-light); color: #065f46; }
-.badge-warning { background: var(--accent-warning-light); color: #92400e; }
-.badge-danger { background: var(--accent-danger-light); color: #991b1b; }
-.badge-info { background: var(--accent-info-light); color: #3730a3; }
+.badge-success,
+.badge-pass { background: var(--accent-success-light); color: var(--green-700); }
+.badge-warning,
+.badge-review { background: var(--accent-warning-light); color: var(--amber-900); }
+.badge-danger,
+.badge-fail { background: var(--accent-danger-light); color: var(--red-700); }
+.badge-info { background: var(--accent-info-light); color: var(--violet-700); }
 .badge-neutral { background: var(--bg-tertiary); color: var(--text-secondary); }
-.badge-primary { background: var(--accent-primary-light); color: #1e40af; }
+.badge-primary { background: var(--accent-primary-light); color: var(--blue-700); }
 
-[data-theme="dark"] .badge-success { color: #6ee7b7; }
-[data-theme="dark"] .badge-warning { color: #fcd34d; }
-[data-theme="dark"] .badge-danger { color: #fca5a5; }
-[data-theme="dark"] .badge-info { color: #a5b4fc; }
-[data-theme="dark"] .badge-primary { color: #93c5fd; }
+[data-theme="dark"] .badge-success,
+[data-theme="dark"] .badge-pass { color: #86e0ab; }
+[data-theme="dark"] .badge-warning,
+[data-theme="dark"] .badge-review { color: #f0c674; }
+[data-theme="dark"] .badge-danger,
+[data-theme="dark"] .badge-fail { color: #f29a9c; }
+[data-theme="dark"] .badge-info { color: #c3b8f5; }
+[data-theme="dark"] .badge-primary { color: #aec3f7; }
 
 /* ============================================================
    PROGRESS BARS
@@ -1337,53 +1631,93 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ============================================================
    RISK MATRIX (5x5 Heatmap)
+   Rebuilt for the Risk Register migration pass: a true 5x5 grid
+   (previously only 3 columns were defined even though the JS always
+   rendered 5), severity colors now come from the palette primitives
+   (never raw hex) so they stay legible and on-brand in both themes,
+   and axis/legend labelling was added so the heatmap reads on its
+   own without a caption. See templates/risks.html (#matrixView).
    ============================================================ */
 .risk-matrix {
     display: grid;
-    grid-template-columns: 50px repeat(3, 1fr);
-    grid-template-rows: repeat(4, 60px) 30px;
-    gap: 4px;
-    max-width: 480px;
+    grid-template-columns: 90px repeat(5, 1fr);
+    grid-template-rows: 34px repeat(5, 56px);
+    gap: var(--space-1);
+    max-width: 560px;
 }
 
 .risk-matrix .axis-label {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
     color: var(--text-secondary);
     writing-mode: vertical-rl;
     text-orientation: mixed;
     transform: rotate(180deg);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }
 
 .risk-matrix .x-label {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
     color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
+}
+
+.risk-matrix .y-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: var(--space-2);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    text-align: right;
 }
 
 .risk-cell {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 700;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-md);
+    font-weight: var(--font-weight-bold);
     color: #fff;
     cursor: pointer;
     transition: var(--transition);
 }
-.risk-cell:hover { transform: scale(1.05); }
-.risk-cell.critical { background: #dc2626; }
-.risk-cell.high { background: #f97316; }
-.risk-cell.medium { background: #eab308; }
-.risk-cell.low { background: #22c55e; }
-.risk-cell.negligible { background: #16a34a; }
+.risk-cell:hover { transform: scale(1.05); box-shadow: var(--shadow-md); z-index: 1; }
+/* Severity gradient uses the neutral green->amber->red primitives, not
+   semantic accent tokens - these five bands must stay visually stable
+   and distinct from each other regardless of theme, the way a legend
+   color should. */
+.risk-cell.negligible { background: var(--green-700); }
+/* Accessibility fix: was --green-500 (#2f9e5b), which only gave white cell
+   text 3.41:1 contrast (needs 4.5:1 - cell text is 15px bold, not large
+   enough to qualify for the 3:1 large-text exception). --green-600 is
+   already an existing primitive (used as light-mode --accent-success) and
+   gives 4.88:1 while keeping the 5-band gradient visually distinct. */
+.risk-cell.low { background: var(--green-600); }
+.risk-cell.medium { background: var(--amber-700); }
+.risk-cell.high { background: var(--red-500); }
+.risk-cell.critical { background: var(--red-700); }
+
+/* Legend dot modifiers matching the risk-cell severity bands above,
+   for use with the existing .legend / .legend-item / .legend-dot
+   pattern underneath the heatmap. */
+.legend-dot.negligible { background: var(--green-700); }
+.legend-dot.low { background: var(--green-600); }
+.legend-dot.medium { background: var(--amber-700); }
+.legend-dot.high { background: var(--red-500); }
+.legend-dot.critical { background: var(--red-700); }
 
 /* ============================================================
    DONUT / CHART CONTAINERS
@@ -1437,7 +1771,7 @@ tbody tr:last-child td { border-bottom: none; }
     outline: none;
     transition: var(--transition);
 }
-.filter-select:focus, .filter-input:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-primary-light); }
+.filter-select:focus, .filter-input:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--focus-ring-color); }
 
 .filter-input {
     width: 240px;
@@ -1477,6 +1811,8 @@ tbody tr:last-child td { border-bottom: none; }
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
     transition: var(--transition);
+    text-decoration: none;
+    display: inline-block;
 }
 .tab:hover { color: var(--text-primary); }
 .tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); font-weight: 600; }
@@ -1548,13 +1884,28 @@ tbody tr:last-child td { border-bottom: none; }
 /* ============================================================
    FORM ELEMENTS
    ============================================================ */
-.form-group { margin-bottom: 18px; }
+.form-group { margin-bottom: var(--space-5); }
 .form-group label {
     display: block;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
     color: var(--text-primary);
     margin-bottom: 6px;
+}
+.form-group .required-star { color: var(--accent-danger); }
+.form-help {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+.form-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-xs);
+    color: var(--accent-danger);
+    margin-top: 6px;
 }
 
 .form-control {
@@ -1564,13 +1915,45 @@ tbody tr:last-child td { border-bottom: none; }
     border-radius: var(--radius-md);
     background: var(--bg-secondary);
     color: var(--text-primary);
-    font-size: 14px;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
     outline: none;
     transition: var(--transition);
 }
-.form-control:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-primary-light); }
+.form-control::placeholder { color: var(--text-muted); }
+.form-control:hover:not(:disabled):not(:focus) { border-color: var(--border-strong); }
+.form-control:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--focus-ring-color); }
+.form-control:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
 
-textarea.form-control { min-height: 100px; resize: vertical; }
+.form-control.is-invalid,
+.form-control[aria-invalid="true"] { border-color: var(--accent-danger); }
+.form-control.is-invalid:focus,
+.form-control[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px var(--accent-danger-light); }
+.form-control.is-valid { border-color: var(--accent-success); }
+
+select.form-control { cursor: pointer; }
+textarea.form-control { min-height: 100px; resize: vertical; line-height: var(--leading-normal); }
+
+/* Checkbox / radio - keep native control, just align it with the type scale */
+.form-check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+}
+.form-check input[type="checkbox"],
+.form-check input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    accent-color: var(--accent-primary);
+    flex-shrink: 0;
+}
 
 /* ============================================================
    TOAST NOTIFICATIONS
@@ -1615,9 +1998,9 @@ textarea.form-control { min-height: 100px; resize: vertical; }
 .trust-hero {
     text-align: center;
     padding: 60px 20px 40px;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    background: var(--surface-inverse);
     border-radius: var(--radius-xl);
-    color: #fff;
+    color: var(--text-inverse);
     margin-bottom: 32px;
 }
 
@@ -1677,6 +2060,7 @@ textarea.form-control { min-height: 100px; resize: vertical; }
     display: flex;
     align-items: center;
     gap: 10px;
+    text-decoration: none;
 }
 .settings-nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .settings-nav-item.active { background: var(--accent-primary-light); color: var(--accent-primary); font-weight: 500; }
@@ -1686,12 +2070,67 @@ textarea.form-control { min-height: 100px; resize: vertical; }
    ============================================================ */
 .empty-state {
     text-align: center;
-    padding: 60px 20px;
+    padding: var(--space-12) var(--space-5);
     color: var(--text-secondary);
 }
-.empty-state i { font-size: 48px; margin-bottom: 16px; color: var(--text-muted); }
-.empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-primary); }
-.empty-state p { font-size: 13px; margin-bottom: 20px; }
+.empty-state-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+/* Back-compat: a bare <i> directly inside .empty-state (no wrapper) still renders sanely */
+.empty-state > i { font-size: 48px; margin-bottom: var(--space-4); color: var(--text-muted); }
+.empty-state h3 { font-size: var(--text-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-2); color: var(--text-primary); }
+.empty-state p { font-size: var(--text-sm); margin-bottom: var(--space-5); max-width: 420px; margin-left: auto; margin-right: auto; }
+
+/* Error state - same shape as empty state, danger tone, for failed loads/fetches */
+.error-state {
+    text-align: center;
+    padding: var(--space-12) var(--space-5);
+    color: var(--text-secondary);
+}
+.error-state-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--accent-danger-light);
+    color: var(--accent-danger);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+.error-state h3 { font-size: var(--text-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-2); color: var(--text-primary); }
+.error-state p { font-size: var(--text-sm); margin-bottom: var(--space-5); max-width: 420px; margin-left: auto; margin-right: auto; }
+
+/* Loading skeletons - use while async content is in flight. Keep shapes
+   roughly matching the content they stand in for (a line, a block, a circle). */
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-light) 37%, var(--bg-tertiary) 63%);
+    background-size: 400% 100%;
+    animation: skeletonShimmer 1.4s ease infinite;
+    border-radius: var(--radius-sm);
+}
+.skeleton-text { height: 12px; margin-bottom: 8px; width: 100%; }
+.skeleton-text:last-child { margin-bottom: 0; width: 70%; }
+.skeleton-title { height: 18px; width: 45%; margin-bottom: var(--space-3); }
+.skeleton-circle { border-radius: 50%; }
+.skeleton-block { height: 90px; width: 100%; }
+@keyframes skeletonShimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; background: var(--bg-tertiary); }
+}
 
 /* ============================================================
    MISC UTILITIES
@@ -1778,6 +2217,80 @@ textarea.form-control { min-height: 100px; resize: vertical; }
 }
 
 /* ============================================================
+   ACTIVITY / DEADLINE LIST (Recent Activity, Upcoming Deadlines)
+   ============================================================ */
+.activity-list { display: flex; flex-direction: column; }
+.activity-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-6);
+    border-bottom: 1px solid var(--border-light);
+}
+.activity-row:last-child { border-bottom: none; }
+.activity-row-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.activity-row-body { flex: 1; min-width: 0; }
+.activity-row-text { font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-snug); }
+
+/* ============================================================
+   FLASH MESSAGES (server-rendered via base.html)
+   ============================================================ */
+.flash-message {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    border: 1px solid transparent;
+}
+.flash-error { background: var(--accent-danger-light); color: var(--red-700); border-color: var(--red-100); }
+.flash-success { background: var(--accent-success-light); color: var(--green-700); border-color: var(--green-100); }
+.flash-info, .flash-message:not(.flash-error):not(.flash-success) { background: var(--accent-primary-light); color: var(--blue-700); border-color: var(--blue-100); }
+[data-theme="dark"] .flash-error { color: #f29a9c; }
+[data-theme="dark"] .flash-success { color: #86e0ab; }
+[data-theme="dark"] .flash-info, [data-theme="dark"] .flash-message:not(.flash-error):not(.flash-success) { color: #aec3f7; }
+
+/* ============================================================
+   FOCUS / KEYBOARD ACCESSIBILITY
+   One consistent focus treatment across every interactive element.
+   Uses :focus-visible so mouse clicks stay quiet and keyboard/
+   switch-control navigation stays clearly visible.
+   ============================================================ */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.nav-item:focus-visible,
+.tab:focus-visible,
+.nav-section-header:focus-visible,
+.settings-nav-item:focus-visible,
+[tabindex]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring-color);
+    border-radius: var(--radius-sm);
+}
+.topbar-btn:focus-visible,
+.sidebar-toggle:focus-visible,
+.modal-close:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 1200px) {
@@ -1804,3 +2317,303 @@ textarea.form-control { min-height: 100px; resize: vertical; }
 @media (max-width: 480px) {
     .stats-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   NEW - added during the Risk Register / Audits / Vendors design-
+   system migration pass (frontend-developer agent). Appended here,
+   not mixed into the sections above, since another agent is editing
+   this same file concurrently for Policies/Trust Center/Setup
+   Wizard/Settings/People/Reports/Integrations - see docs/design-
+   system.md for the token architecture these compose on top of.
+   ============================================================ */
+
+/* Large status badge - the "current state" pill used in several
+   detail-page headers (risk/audit/vendor-assessment). A size
+   modifier only; pair with an existing badge-* color class, e.g.
+   <span class="badge badge-warning badge-lg">In Treatment</span>. */
+.badge-lg {
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-4);
+}
+
+/* Generic toggle switch (checkbox styled as an iOS-style switch).
+   Used by the risk-detail "Link / Unlink Controls" picker modal
+   below; reusable anywhere a boolean needs richer affordance than a
+   bare native checkbox. Markup:
+   <label class="toggle">
+     <input type="checkbox">
+     <span class="toggle-track"><span class="toggle-thumb"></span></span>
+     <span>Label text</span>
+   </label> */
+.toggle { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; white-space: nowrap; }
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle-track {
+    width: 34px;
+    height: 18px;
+    border-radius: var(--radius-full);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    position: relative;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+.toggle-thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: var(--transition);
+}
+.toggle input:checked + .toggle-track { background: var(--accent-primary); }
+.toggle input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); background: var(--text-inverse); }
+.toggle input:focus-visible + .toggle-track { box-shadow: 0 0 0 3px var(--focus-ring-color); }
+
+/* Generic compact numbered pagination, for record pickers / long
+   lists that paginate client-side. */
+.pagination { display: flex; gap: var(--space-1); }
+.pagination-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.pagination-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.pagination-btn.active { background: var(--accent-primary); color: var(--text-inverse); border-color: var(--accent-primary); }
+
+/* Record-picker modal: a category rail + searchable/paginated
+   checklist. Built to replace risk_detail.html's old bespoke `lc-*`
+   inline <style> block ("Link / Unlink Controls"); reusable for any
+   future "attach N records from M categories" picker. */
+.picker-modal {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    width: 95%;
+    max-width: 1000px;
+    height: 85vh;
+    display: flex;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    animation: modalIn var(--duration-slow) var(--ease-out);
+}
+.picker-modal-close { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 2; }
+.picker-rail {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-color);
+    padding: var(--space-5) var(--space-3);
+    overflow-y: auto;
+}
+.picker-rail-title { font-size: var(--text-lg); font-weight: var(--font-weight-semibold); padding: 0 var(--space-2) var(--space-4); color: var(--text-primary); }
+.picker-nav { display: flex; flex-direction: column; gap: 2px; }
+.picker-tab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    width: 100%;
+    font-family: var(--font-sans);
+    transition: var(--transition);
+}
+.picker-tab:hover { background: var(--bg-tertiary); }
+.picker-tab.active { color: var(--accent-primary); background: var(--bg-tertiary); }
+.picker-count {
+    background: var(--text-muted);
+    color: var(--bg-secondary);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-bold);
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+.picker-tab.active .picker-count { background: var(--accent-primary); color: var(--text-inverse); }
+.picker-main { flex: 1; padding: var(--space-5) var(--space-6); overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+.picker-main form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.picker-title { font-size: var(--text-xl); font-weight: var(--font-weight-bold); margin: 0 0 var(--space-4); color: var(--text-primary); }
+.picker-hint-box { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.picker-hint-box-header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--font-weight-semibold); color: var(--accent-primary); }
+.picker-toolbar { display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+.picker-search { position: relative; flex: 1; min-width: 220px; }
+.picker-search i { position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: var(--text-xs); }
+.picker-search input {
+    width: 100%;
+    padding: 9px var(--space-3) 9px 32px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: var(--font-sans);
+}
+.picker-search input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--focus-ring-color); }
+.picker-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-2); min-height: 120px; }
+.picker-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.picker-row:hover { background: var(--bg-tertiary); }
+.picker-row input { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent-primary); }
+.picker-empty { text-align: center; padding: var(--space-10); color: var(--text-muted); font-size: var(--text-sm); }
+.picker-footer { display: flex; align-items: center; gap: var(--space-4); padding-top: var(--space-4); margin-top: var(--space-4); border-top: 1px solid var(--border-color); }
+.picker-footer-right { display: flex; align-items: center; gap: var(--space-3); margin-left: auto; }
+@media (max-width: 720px) {
+    .picker-modal { flex-direction: column; height: 90vh; }
+    .picker-rail { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); max-height: 140px; }
+}
+
+/* ============================================================
+   NEW - added during the Trust Center / Setup Wizard / Settings /
+   People / Reports / Integrations design-system migration pass
+   (frontend-developer agent). Appended here rather than mixed into
+   the sections above, per docs/design-system.md. These replace
+   inline style="..." attributes that were duplicating the token
+   system across those pages.
+   ============================================================ */
+
+/* Small heading used above a card/grid when the heading isn't
+   inside a .card-header (e.g. Trust Center's "Compliance
+   Certifications" label above the badge grid). */
+.subsection-title {
+    font-size: var(--text-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
+}
+
+/* Missing small-gap utility (the existing .mb-8/.mb-16/.mb-24/.mt-16 set
+   had no 4px step). */
+.mt-4 { margin-top: 4px; }
+
+/* Color variants for .info-banner (previously neutral-only). Used
+   wherever a page needs a tinted status/tip banner instead of
+   hand-rolled background+border inline styles - e.g. Setup
+   Wizard's "AI Assist" status card (connected/unreachable/not
+   configured) and its cloud-provider AI tip. Icon inherits the
+   banner's text color via currentColor, no separate inline color
+   needed on the <i>. */
+.info-banner-success { background: var(--accent-success-light); color: var(--green-700); border: 1px solid var(--accent-success); }
+.info-banner-warning { background: var(--accent-warning-light); color: var(--amber-900); border: 1px solid var(--accent-warning); }
+.info-banner-info { background: var(--accent-primary-light); color: var(--blue-700); border: 1px solid var(--accent-primary); }
+[data-theme="dark"] .info-banner-success { color: #86e0ab; }
+[data-theme="dark"] .info-banner-warning { color: #f0c674; }
+[data-theme="dark"] .info-banner-info { color: #aec3f7; }
+.info-banner-success i, .info-banner-warning i, .info-banner-info i { color: inherit; }
+
+/* Settings-style tab panels toggled by JS (Settings page, Trust
+   Center none, etc.) - replaces inline style="display:none" /
+   style="display:" toggling with a class so the show/hide state is
+   visible in markup and consistent with .wizard-step-panel.active
+   elsewhere. */
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
+
+/* Icon-chip size modifiers for .stat-icon, for contexts smaller
+   than a dashboard stat card (inline table/list icons, compact
+   security-practice rows). Avoids one-off width/height/font-size
+   inline overrides scattered across Trust Center, Access Reviews,
+   Reports, and People. */
+.stat-icon-xs { width: 28px; height: 28px; font-size: 12px; }
+.stat-icon-sm { width: 36px; height: 36px; font-size: 14px; }
+.stat-icon-md { width: 40px; height: 40px; font-size: 16px; }
+
+/* Small avatar modifier (table rows, user lists) vs. the default
+   34px sidebar avatar. */
+.avatar-sm { width: 28px; height: 28px; font-size: 10px; }
+
+/* Icon + title + description + single action row - the "security
+   practice" / "report download" row pattern repeated across Trust
+   Center and Reports. */
+.feature-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    flex-wrap: wrap;
+}
+.feature-row-body { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.feature-row-title { font-weight: var(--font-weight-semibold); font-size: var(--text-sm); color: var(--text-primary); }
+.feature-row-desc { font-size: var(--text-sm); color: var(--text-secondary); }
+
+/* Read-only code/embed snippet block (e.g. Trust Center's badge
+   embed HTML, future API keys/webhook secrets) - always paired
+   with .mono on the <code> per the design system's "data that must
+   look exact" rule. */
+.code-block { position: relative; background: var(--bg-tertiary); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin: 0; font-size: var(--text-xs); overflow-x: auto; }
+.code-block-copy { position: absolute; top: var(--space-2); right: var(--space-2); }
+
+/* Dark-mode contrast fix: .integration-badge color variants (blue/
+   green/orange/red) only ever had a light-mode text color defined
+   (e.g. #1e40af on blue), so in dark mode they sat on the dark
+   low-opacity *-light token background with the same hard-to-read
+   light-mode text color - only .purple had a dark override. Brought
+   the rest in line with the same lightened-text pattern already
+   used for .badge-success/.badge-warning/.badge-danger in dark mode. */
+[data-theme="dark"] .integration-badge.blue { color: #aec3f7; }
+[data-theme="dark"] .integration-badge.green { color: #86e0ab; }
+[data-theme="dark"] .integration-badge.orange { color: #f0c674; }
+[data-theme="dark"] .integration-badge.red { color: #f29a9c; }
+
+/* Setup Wizard: the vertical "Progress X/Y" box in the page header
+   actions slot - was a one-off inline-styled flex column. */
+.wizard-progress-box { min-width: 220px; flex-direction: column; align-items: stretch; gap: var(--space-2); }
+
+/* Setup Wizard: collapsible task row (replaces per-row inline
+   border/display/color styling, and the Jinja-computed inline
+   display:none/'' that decided which task started expanded - now a
+   plain .expanded class toggled by toggleTaskRow() in the page script). */
+.task-row { border-bottom: 1px solid var(--border-color); }
+.task-row:last-child { border-bottom: none; }
+.task-row-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 22px;
+    cursor: pointer;
+}
+.task-row-status-icon { font-size: 16px; color: var(--text-muted); }
+.task-row-status-icon.completed { color: var(--accent-success); }
+.task-row-text { flex: 1; min-width: 0; }
+.task-row-chevron { font-size: 11px; color: var(--text-muted); transition: transform var(--duration-base) var(--ease-standard); }
+.task-row.expanded .task-row-chevron { transform: rotate(180deg); }
+.task-row-content { display: none; padding: 0 22px var(--space-5) 54px; }
+.task-row.expanded .task-row-content { display: block; }
+
+/* Compact padding modifier for a .card used as a small grid tile inside
+   a form (Setup Wizard's IDP/cloud-provider/department-owner/audit-
+   schedule cards) rather than a full page-level card. */
+.card-compact { padding: var(--space-4); }
+
+/* .pagination-btn had no disabled state (used by the Audit Trail log's
+   numbered pager for the first/previous and last/next edges). */
+.pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* "<count> / <total>" suffix inside a .stat-value (Employees overview
+   cards: "3 / 12"). */
+.stat-value-sub { font-size: var(--text-md); font-weight: var(--font-weight-normal); color: var(--text-secondary); }

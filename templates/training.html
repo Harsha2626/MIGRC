@@ -41,6 +41,7 @@
 
 <div class="card">
     <div class="card-body no-padding">
+        {% if campaigns %}
         <div class="table-container">
             <table>
                 <thead>
@@ -59,7 +60,7 @@
                     {% for c in campaigns %}
                     <tr onclick="window.location='{{ url_for('people.campaign_detail', campaign_id=c.id) }}'" style="cursor:pointer;">
                         <td>
-                            <div class="font-semibold">{{ c.name }}</div>
+                            <div class="font-semibold"><a href="{{ url_for('people.campaign_detail', campaign_id=c.id) }}" style="color:inherit;text-decoration:none;">{{ c.name }}</a></div>
                             {% if c.description %}<div class="text-sm text-muted">{{ c.description }}</div>{% endif %}
                         </td>
                         <td>
@@ -97,6 +98,14 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-graduation-cap" aria-hidden="true"></i></div>
+            <h3>No training campaigns yet</h3>
+            <p>Launch your first security awareness campaign to start tracking employee completion.</p>
+            <button class="btn btn-primary btn-sm" onclick="openCampaignWizard()"><i class="fas fa-plus"></i> Add Campaign</button>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -160,8 +169,8 @@
                             </div>
                         </div>
 
-                        <h4 style="font-size:14px;margin:20px 0 12px;">Schedule Campaign</h4>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                        <h4 class="subsection-title mt-16">Schedule Campaign</h4>
+                        <div class="grid-2">
                             <div class="form-group">
                                 <label>Launch Date &amp; Time <span class="required-star">*</span></label>
                                 <input type="datetime-local" name="launch_date" id="campLaunch" class="form-control" required onchange="updateCampaignDuration()">
@@ -173,7 +182,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end;">
+                        <div class="grid-2" style="align-items:end;">
                             <div class="form-group">
                                 <label>End Date &amp; Time <span class="required-star">*</span></label>
                                 <input type="datetime-local" name="end_date" id="campEnd" class="form-control" onchange="updateCampaignDuration()">
@@ -183,10 +192,10 @@
                                 <div class="text-sm font-semibold" id="campaignDurationText">&mdash;</div>
                             </div>
                         </div>
-                        <label class="flex-center gap-8 text-sm mb-16" style="font-weight:400;">
+                        <label class="form-check mb-16">
                             <input type="checkbox" name="no_end_date" id="campNoEndDate" onchange="toggleNoEndDate()"> This campaign does not have an end date
                         </label>
-                        <label class="flex-center gap-8 text-sm" style="font-weight:400;">
+                        <label class="form-check">
                             <input type="checkbox" name="sla_enabled" id="campSlaEnabled" onchange="toggleSla()"> Set your campaign SLA
                             <input type="number" name="sla_days" id="campSlaDays" class="form-control" style="width:90px;" min="1" value="0" disabled>
                             <i class="fas fa-circle-info text-muted" title="Number of days employees have to complete training after enrollment"></i>
@@ -246,7 +255,7 @@ function showAddTrainingMaterialModal() {
                 <div class="flex-center gap-8"><i class="fas {{ m.icon }}" style="color:var(--accent-primary);"></i> <span class="text-sm font-semibold">{{ m.title|e }}</span> <span class="badge badge-neutral">{{ m.type }}</span></div>
                 <form method="POST" action="{{ url_for('people.delete_training_material', material_id=m.id) }}" onsubmit="return confirm('Remove {{ m.title|e }} from the library?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-danger btn-icon"><i class="fas fa-trash"></i></button>
+                    <button type="submit" class="btn btn-sm btn-danger btn-icon" aria-label="Remove {{ m.title|e }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </form>
             </div>
             {% else %}

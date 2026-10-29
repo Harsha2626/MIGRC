@@ -99,7 +99,7 @@ def review_evidence(evidence, control, upload_folder):
 
     try:
         response = client.messages.create(
-            model="claude-opus-5",
+            model="claude-opus-5-5",
             max_tokens=1024,
             tools=[REVIEW_TOOL],
             tool_choice={"type": "tool", "name": "submit_evidence_review"},

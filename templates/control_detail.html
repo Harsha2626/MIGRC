@@ -135,7 +135,7 @@
                             {% if ev.ai_rationale %}<div style="margin-top:2px;color:var(--text-secondary);">{{ ev.ai_rationale }}</div>{% endif %}
                         </div>
                         {% elif ev.status == 'Pending Review' %}
-                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--accent-warning-light,rgba(255,159,10,0.1));color:var(--accent-warning);">
+                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--accent-warning-light);color:var(--accent-warning);">
                             <i class="fas fa-hourglass-half"></i> AI validation pending — AI integration coming soon
                         </div>
                         {% endif %}
@@ -188,9 +188,10 @@
             </tbody>
         </table>
         {% else %}
-        <div style="padding:40px;text-align:center;color:var(--text-muted);">
-            <i class="fas fa-cloud-upload-alt" style="font-size:32px;margin-bottom:12px;opacity:0.3;"></i>
-            <p>No evidence uploaded yet. Click "Upload Evidence" to get started.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></div>
+            <h3>No evidence uploaded yet</h3>
+            <p>Click "Upload Evidence" to get started.</p>
         </div>
         {% endif %}
     </div>

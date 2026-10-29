@@ -595,22 +595,80 @@ class PolicyApproval(db.Model):
 class PolicyEvaluation(db.Model):
     """One AI-assisted evidence-sufficiency check of a policy, run via the local
     OpenCode compliance-auditor agent (see app/services/ai_opencode_policy_evaluation.py).
-    Advisory only - never changes the policy's own content or status by itself."""
+    Advisory only - never changes the policy's own content or status by itself;
+    a human always has to act on the result (re-run workflow approvals, or the
+    remediation fields below) for anything to actually change.
+
+    verdict / verdict_code: `verdict` is the friendly, human-facing label the AI
+    service has always returned ("Sufficient" / "Partially Sufficient" / "Insufficient").
+    `verdict_code` is the normalized cross-feature verdict enum ("PASS" / "FAIL" /
+    "NEEDS_REVIEW") added so this lines up with the same enum used elsewhere in the
+    app's AI-assist features (see ai_opencode_policy_evaluation.VERDICT_CODE for the
+    mapping) and so the UI can reach for the shared .badge-pass/-fail/-review classes
+    without re-deriving the mapping in every template. Old rows created before this
+    field existed will have verdict_code = None; templates fall back to badge-neutral
+    for those.
+
+    remediation_* fields: a lightweight, Evaluation-scoped "assignable task" - set
+    automatically (remediation_status='Open') when verdict_code == 'FAIL', and
+    updated by a human via the policy detail page's remediation panel. This is
+    deliberately NOT the Remediation model (see below) - that model is a 1:1,
+    non-nullable FK onto AuditFinding and is wired through the Audit module's
+    routes/templates, which another workstream owns concurrently; extending it to
+    also point at a PolicyEvaluation would mean loosening its unique/non-nullable
+    FK and touching Audit-side code outside this feature's scope for comparatively
+    little benefit. A few flag/assignee columns here are lower-risk and sufficient."""
     __tablename__ = 'policy_evaluations'
     id = db.Column(db.Integer, primary_key=True)
     policy_id = db.Column(db.Integer, db.ForeignKey('policies.id'), nullable=False)
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
     verdict = db.Column(db.String(30))  # Sufficient, Partially Sufficient, Insufficient
+    verdict_code = db.Column(db.String(20))  # PASS, FAIL, NEEDS_REVIEW - normalized, see docstring above
     summary = db.Column(db.Text)
     missing_items = db.Column(db.JSON, default=list)
     updated_policy_content = db.Column(db.Text)
     evaluated_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    remediation_status = db.Column(db.String(20))  # None, 'Open', 'Resolved'
+    remediation_assignee_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    remediation_due_date = db.Column(db.String(20))
+    remediation_notes = db.Column(db.Text)
 
     policy = db.relationship('Policy', backref=db.backref(
         'evaluations', lazy='dynamic', cascade='all, delete-orphan',
         order_by='PolicyEvaluation.created_at.desc()'))
-    evaluated_by = db.relationship('User')
+    evaluated_by = db.relationship('User', foreign_keys=[evaluated_by_id])
+    remediation_assignee = db.relationship('User', foreign_keys=[remediation_assignee_id])
+
+    BADGE_CLASS = {'PASS': 'badge-pass', 'FAIL': 'badge-fail', 'NEEDS_REVIEW': 'badge-review'}
+
+    @property
+    def badge_class(self):
+        return self.BADGE_CLASS.get(self.verdict_code, 'badge-neutral')
+
+
+class AiAuditorLock(db.Model):
+    """Mutex row serializing access to *one machine's* local OpenCode compliance-auditor
+    server (see app/services/ai_opencode_policy_evaluation.py). That server isn't built for
+    concurrent multi-caller use, so only one evaluate_policy() call on a given machine may
+    hold that machine's row at a time.
+
+    Scoped per machine, not global. `id` is a deterministic hash of the caller's hostname
+    (see `_machine_lock_id()` in ai_opencode_policy_evaluation.py) rather than a hardcoded
+    `1`, and `machine_id` records the hostname itself for readability/debugging. This matters
+    because MIGRC's DATABASE_URL can be (and in practice is, for this project) a single
+    Postgres instance shared across several developers' machines, while the OpenCode server
+    each call talks to is local to the machine that made the call. A single global id=1 row
+    would incorrectly serialize across machines - blocking developer A's call while
+    developer B's completely independent local OpenCode server sits idle. Keying the row by
+    machine instead means each machine gets its own lock (and its own independent stale-lock
+    reclamation after LOCK_STALE_SECONDS), without ever blocking another machine's idle
+    server."""
+    __tablename__ = 'ai_auditor_lock'
+    id = db.Column(db.Integer, primary_key=True)
+    machine_id = db.Column(db.String(255), nullable=True)
+    locked_by = db.Column(db.String(100), nullable=False)
+    locked_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
 class Audit(db.Model):
