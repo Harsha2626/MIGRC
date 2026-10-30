@@ -96,11 +96,19 @@
 <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
         <h3><i class="fas fa-folder-open" style="margin-right:8px;"></i> Uploaded Evidence</h3>
-        {% if current_user.can_write %}
-        <button class="btn btn-sm btn-primary" onclick="document.getElementById('uploadSection').style.display = document.getElementById('uploadSection').style.display === 'none' ? '' : 'none'">
-            <i class="fas fa-cloud-upload-alt"></i> Upload Evidence
-        </button>
-        {% endif %}
+        <div style="display:flex;gap:8px;">
+            {% if current_user.can_write and evidence_list|selectattr('status','equalto','Pending Review')|list|length > 0 %}
+            <form method="POST" action="{{ url_for('compliance.evaluate_control_evidence', framework_id=framework.id, control_id=control.id) }}" onsubmit="return confirm('Run AI evidence review for all pending evidence on this control? This compares each item\'s title/description against the control\'s evidence requirement and may take a minute.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-wand-magic-sparkles"></i> Evaluate Evidence with AI</button>
+            </form>
+            {% endif %}
+            {% if current_user.can_write %}
+            <button class="btn btn-sm btn-primary" onclick="document.getElementById('uploadSection').style.display = document.getElementById('uploadSection').style.display === 'none' ? '' : 'none'">
+                <i class="fas fa-cloud-upload-alt"></i> Upload Evidence
+            </button>
+            {% endif %}
+        </div>
     </div>
     <div class="card-body no-padding">
         {% if evidence_list %}
@@ -135,8 +143,8 @@
                             {% if ev.ai_rationale %}<div style="margin-top:2px;color:var(--text-secondary);">{{ ev.ai_rationale }}</div>{% endif %}
                         </div>
                         {% elif ev.status == 'Pending Review' %}
-                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--accent-warning-light);color:var(--accent-warning);">
-                            <i class="fas fa-hourglass-half"></i> AI validation pending — AI integration coming soon
+                        <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-muted);">
+                            <i class="fas fa-hourglass-half"></i> No AI suggestion yet — click "Evaluate Evidence with AI" above to check this item
                         </div>
                         {% endif %}
                     </td>
@@ -151,6 +159,15 @@
                         {% if ev.status == 'Pending Review' %}
                         <div style="display:flex;gap:4px;">
                             {% if current_user.can_review_evidence %}
+                            {% if ev.ai_suggested_status in ('Approved', 'Rejected') %}
+                            <!-- Human verification: this only ever submits when a reviewer explicitly
+                                 clicks it and confirms - the AI's suggestion is never applied on its own. -->
+                            <form action="/evidence/{{ ev.id }}/review" method="POST" style="display:inline;" onsubmit="return confirm('Accept the AI\'s suggested verdict ({{ ev.ai_suggested_status }}) for this evidence?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="accept_ai">
+                                <button type="submit" class="btn btn-sm btn-icon" title="Accept AI suggestion: {{ ev.ai_suggested_status }}" style="color:var(--accent-primary);"><i class="fas fa-wand-magic-sparkles"></i></button>
+                            </form>
+                            {% endif %}
                             <form action="/evidence/{{ ev.id }}/review" method="POST" style="display:inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="action" value="approve">

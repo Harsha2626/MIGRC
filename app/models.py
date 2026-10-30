@@ -649,13 +649,14 @@ class PolicyEvaluation(db.Model):
 
 class AiAuditorLock(db.Model):
     """Mutex row serializing access to *one machine's* local OpenCode compliance-auditor
-    server (see app/services/ai_opencode_policy_evaluation.py). That server isn't built for
-    concurrent multi-caller use, so only one evaluate_policy() call on a given machine may
-    hold that machine's row at a time.
+    server (see app/services/ai_dispatch.py, shared by every AI-assist feature that talks to
+    it - policy evaluation, control evidence review). That server isn't built for concurrent
+    multi-caller use, so only one run_compliance_agent() call on a given machine may hold that
+    machine's row at a time.
 
     Scoped per machine, not global. `id` is a deterministic hash of the caller's hostname
-    (see `_machine_lock_id()` in ai_opencode_policy_evaluation.py) rather than a hardcoded
-    `1`, and `machine_id` records the hostname itself for readability/debugging. This matters
+    (see `_machine_lock_id()` in ai_dispatch.py) rather than a hardcoded `1`, and `machine_id`
+    records the hostname itself for readability/debugging. This matters
     because MIGRC's DATABASE_URL can be (and in practice is, for this project) a single
     Postgres instance shared across several developers' machines, while the OpenCode server
     each call talks to is local to the machine that made the call. A single global id=1 row

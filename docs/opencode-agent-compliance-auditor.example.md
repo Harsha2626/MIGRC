@@ -1,6 +1,10 @@
 ---
 description: Reviews MIGRC policy-evaluation prompts for document completeness and evidence sufficiency. Read-only - never writes files, runs shell commands, or fetches URLs.
 mode: subagent
+# Low temperature/top_p favor consistent, literal rule-following over creative variation,
+# appropriate for a judgment that should be reproducible and strictly criteria-driven.
+temperature: 0.2
+top_p: 0.9
 tools:
   write: false
   edit: false

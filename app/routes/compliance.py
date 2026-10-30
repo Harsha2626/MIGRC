@@ -276,6 +276,7 @@ def control_detail(framework_id, control_id):
             'ai_suggested_status': ev.ai_suggested_status,
             'ai_confidence': ev.ai_confidence,
             'ai_rationale': ev.ai_rationale,
+            'ai_reviewed_at': ev.ai_reviewed_at,
             'created_at': ev.created_at,
             'audit_period_start': ev.audit_period_start,
             'audit_period_end': ev.audit_period_end,
@@ -367,8 +368,8 @@ def upload_evidence(framework_id, control_id):
         except ValueError:
             pass
 
-    # AI-suggested review (no-op until ANTHROPIC_API_KEY is configured)
-    suggestion = ai_review_evidence(evidence, ctrl, upload_folder)
+    # AI-suggested review (no-op if no local AI backend is configured/reachable)
+    suggestion = ai_review_evidence(evidence, ctrl)
     if suggestion:
         evidence.ai_suggested_status = suggestion.get('status')
         evidence.ai_confidence = suggestion.get('confidence')
@@ -408,7 +409,21 @@ def review_evidence(evidence_id):
     action = request.form.get('action')
     review_notes = request.form.get('review_notes', '').strip()
 
-    if action == 'approve':
+    if action == 'accept_ai':
+        # Human verification step: a reviewer explicitly confirms the AI's suggested verdict
+        # rather than it ever being applied automatically (see the confirm() prompt in
+        # control_detail.html). Only a concrete suggestion can be accepted this way - "Needs
+        # Human Review" isn't a verdict, so there's nothing to accept and the reviewer must
+        # approve/reject manually instead.
+        if evidence.ai_suggested_status not in ('Approved', 'Rejected'):
+            flash('The AI suggestion for this evidence isn\'t a clear Approved/Rejected verdict - review it manually.', 'error')
+            return redirect(request.referrer or '/')
+        action = 'approve' if evidence.ai_suggested_status == 'Approved' else 'reject'
+        evidence.status = evidence.ai_suggested_status
+        ai_note = f'Accepted AI suggestion ({evidence.ai_suggested_status}, {round((evidence.ai_confidence or 0) * 100)}% confidence).'
+        review_notes = f'{ai_note} {review_notes}'.strip()
+        flash(f'Evidence "{evidence.title}" {evidence.status.lower()} (AI suggestion accepted).', 'success' if action == 'approve' else 'error')
+    elif action == 'approve':
         evidence.status = 'Approved'
         flash(f'Evidence "{evidence.title}" approved.', 'success')
     elif action == 'reject':
@@ -441,6 +456,55 @@ def review_evidence(evidence_id):
         notify_evidence_rejected(evidence)
 
     return redirect(request.referrer or '/')
+
+
+# ---- AI EVIDENCE REVIEW (manual re-run) ----
+@compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>/evaluate-evidence', methods=['POST'])
+@login_required
+@require_permission('write')
+def evaluate_control_evidence(framework_id, control_id):
+    """Manually (re-)runs the AI evidence review (see app/services/ai_evidence_review.py) for
+    every still-pending evidence item mapped to this control. The automatic review already runs
+    once at upload time (see upload_evidence above); this exists so a human can retry evidence
+    that got no suggestion that time (AI backend was unreachable, model overloaded, etc.) without
+    re-uploading the file. Never changes Evidence.status itself - only populates the
+    ai_suggested_* fields for a human to act on via the review route's 'accept_ai' action."""
+    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
+    ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
+    pending = [
+        m.evidence for m in ctrl.evidence_mappings
+        if m.evidence and m.evidence.status == 'Pending Review'
+        and m.evidence.organization_id == (g.current_org.id if g.current_org else -1)
+    ]
+    if not pending:
+        flash('No pending evidence to evaluate for this control.', 'info')
+        return redirect(url_for('compliance.control_detail', framework_id=framework_id, control_id=control_id))
+
+    evaluated = 0
+    for evidence in pending:
+        suggestion = ai_review_evidence(evidence, ctrl)
+        if suggestion:
+            evidence.ai_suggested_status = suggestion.get('status')
+            evidence.ai_confidence = suggestion.get('confidence')
+            evidence.ai_rationale = suggestion.get('rationale')
+            evidence.ai_reviewed_at = datetime.utcnow()
+            evaluated += 1
+            # Commit after each item, not just once at the end - each AI call can take up to a
+            # few minutes (see DEFAULT_FREE_MODELS fallback in ai_dispatch.py), so a control with
+            # several pending items keeps this request open for a long time; committing as each
+            # result lands means an aborted request (browser/proxy timeout, worker restart) only
+            # loses the item in flight, not every suggestion already computed before it.
+            db.session.commit()
+
+    if evaluated:
+        log_activity('evaluated', 'Evidence', ctrl.code,
+            f'{current_user.name} ran AI evidence review on {evaluated} pending item(s) for control "{ctrl.code}"')
+        flash(f'AI review complete for {evaluated} of {len(pending)} pending evidence item(s).', 'success')
+    else:
+        flash('Evaluation unavailable - the local AI auditor isn\'t reachable, its response '
+              'couldn\'t be understood, or every model it tried failed. Nothing was changed - '
+              'try again in a minute.', 'error')
+    return redirect(url_for('compliance.control_detail', framework_id=framework_id, control_id=control_id))
 
 
 # ---- EVIDENCE DELETE ----

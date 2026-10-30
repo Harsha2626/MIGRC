@@ -163,6 +163,14 @@
         <details style="margin-top:8px;">
             <summary class="text-sm" style="cursor:pointer;color:var(--accent-primary);">AI-Proposed Updated Policy Text</summary>
             <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-tertiary);padding:12px;border-radius:8px;max-height:260px;overflow-y:auto;margin-top:8px;">{{ latest_evaluation.updated_policy_content }}</div>
+            {% if current_user.can_write and policy.content_state == 'content' %}
+            <!-- Nothing applies this automatically - a human has to read the proposed text above
+                 and explicitly approve it here, same as the remediation task below. -->
+            <form method="POST" action="{{ url_for('policies.apply_policy_evaluation', policy_id=policy.id, evaluation_id=latest_evaluation.id) }}" style="margin-top:10px;" onsubmit="return confirm('Replace the policy\'s current content with this AI-proposed text? The current content will be kept in version history. This cannot be undone from here.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> Approve &amp; Apply This Update</button>
+            </form>
+            {% endif %}
         </details>
         {% endif %}
 

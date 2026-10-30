@@ -653,6 +653,46 @@ def assign_policy_remediation(policy_id, evaluation_id):
     return redirect(url_for('policies.policy_detail', policy_id=policy.id))
 
 
+@policies_bp.route('/policies/<int:policy_id>/evaluation/<int:evaluation_id>/apply', methods=['POST'])
+@login_required
+@require_permission('write')
+def apply_policy_evaluation(policy_id, evaluation_id):
+    """Human-verified approval step that turns the AI's *proposed* updated_policy_content into
+    the policy's actual content. evaluate_policy() only ever suggests - this route is the one
+    place that suggestion becomes a real change, and it only runs when a human explicitly clicks
+    "Apply" (see the confirm() prompt in policy_detail.html) and only for policies with editable
+    text content. The pre-change content is snapshotted to PolicyVersion first, using the same
+    version-bump convention as a manual edit (see edit_policy above), so applying an AI suggestion
+    is never silently destructive and looks identical to a human-authored revision in history."""
+    policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    evaluation = policy.evaluations.filter_by(id=evaluation_id).first_or_404()
+
+    if not evaluation.updated_policy_content:
+        flash('This evaluation has no AI-proposed content to apply.', 'error')
+        return redirect(url_for('policies.policy_detail', policy_id=policy.id))
+    if policy.content_state != 'content':
+        flash('This policy is stored as an uploaded file or an external link and cannot be updated here.', 'error')
+        return redirect(url_for('policies.policy_detail', policy_id=policy.id))
+
+    db.session.add(PolicyVersion(
+        policy_id=policy.id, version=policy.version,
+        content=policy.content, created_by=current_user.name,
+    ))
+    try:
+        next_version = round(float(policy.version) + 0.1, 1)
+    except (TypeError, ValueError):
+        next_version = 1.1
+    policy.version = str(next_version)
+    policy.content = evaluation.updated_policy_content
+
+    log_activity('updated', 'Policy', policy.name,
+        f'{current_user.name} approved and applied the AI-proposed update from evaluation '
+        f'#{evaluation.id} to policy "{policy.name}" (now v{policy.version})')
+    db.session.commit()
+    flash(f'AI-proposed update applied - policy is now version {policy.version}.', 'success')
+    return redirect(url_for('policies.policy_detail', policy_id=policy.id))
+
+
 @policies_bp.route('/policies/<int:policy_id>/evaluation/latest')
 @login_required
 def latest_policy_evaluation(policy_id):
