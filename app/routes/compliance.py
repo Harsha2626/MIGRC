@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
 from app.models import (
     db, Framework, Control, ControlStatus, Evidence, EvidenceMapping,
-    ComplianceSnapshot, Policy, OrganizationExcludedFramework, Audit,
+    ComplianceSnapshot, Policy, OrganizationFramework, Audit,
 )
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
@@ -29,7 +29,7 @@ def compliance():
     if not g.current_org:
         flash('No active organization.', 'error')
         return redirect(url_for('main.dashboard'))
-    # Shared library frameworks + whatever this org added privately for itself.
+    # Frameworks this org has explicitly added (opt-in) + whatever it added privately for itself.
     frameworks = Framework.visible_to(g.current_org.id).order_by(Framework.name).all()
     # Deduplicate by name if duplicates exist (prefer the one with controls)
     fws_by_name = {}
@@ -38,8 +38,20 @@ def compliance():
             fws_by_name[fw.name] = fw
     frameworks = sorted(fws_by_name.values(), key=lambda f: f.name)
 
+    # The rest of the shared library - what 'Add Compliance Framework' lets this org pick from.
+    library = Framework.library(g.current_org.id).order_by(Framework.name).all()
+
+    # Lightweight dicts for the library grid - these frameworks aren't adopted yet, so there's
+    # no per-org compliance status to compute (to_dict()'s passing/failing/etc. would just be a
+    # wasted DB round-trip per framework for a number that's always zero here).
+    library_cards = [{
+        'id': fw.id, 'name': fw.name, 'category': fw.category, 'icon': fw.icon,
+        'description': fw.description, 'total_controls': fw.total_controls,
+    } for fw in library]
+
     return render_template('compliance.html', page='compliance',
-        frameworks=[dict(fw.to_dict(), is_shared=fw.is_shared) for fw in frameworks])
+        frameworks=[dict(fw.to_dict(), is_shared=fw.is_shared) for fw in frameworks],
+        library=library_cards)
 
 
 @compliance_bp.route('/tests')
@@ -101,40 +113,37 @@ def add_framework():
         flash('No active organization.', 'error')
         return redirect(url_for('main.dashboard'))
 
-    name = request.form.get('name', '').strip()
-    if name == '__custom__':
-        name = request.form.get('custom_name', '').strip()
+    framework_id = request.form.get('framework_id', '').strip()
 
-    if not name:
-        flash('Please select or name a framework.', 'error')
+    # Picking an existing shared-library framework: just opt this org into it (no new row).
+    if framework_id and framework_id != '__custom__':
+        try:
+            framework_id = int(framework_id)
+        except ValueError:
+            flash('Please select a valid framework.', 'error')
+            return redirect(url_for('compliance.compliance'))
+
+        shared_fw = Framework.query.filter_by(id=framework_id, organization_id=None).first()
+        if not shared_fw:
+            flash('That framework could not be found in the shared library.', 'error')
+            return redirect(url_for('compliance.compliance'))
+
+        if OrganizationFramework.query.filter_by(organization_id=g.current_org.id, framework_id=shared_fw.id).first():
+            flash(f'Framework "{shared_fw.name}" is already active in your organization.', 'error')
+            return redirect(url_for('compliance.compliance'))
+
+        db.session.add(OrganizationFramework(organization_id=g.current_org.id, framework_id=shared_fw.id))
+        log_activity('added', 'Framework', f'{shared_fw.name} added to organization')
+        db.session.commit()
+        flash(f'Framework "{shared_fw.name}" added to your organization.', 'success')
         return redirect(url_for('compliance.compliance'))
 
-    # 1. Check if this framework exists in the shared reference library
-    shared_fw = Framework.query.filter(
-        Framework.organization_id.is_(None),
-        Framework.name == name
-    ).first()
+    # Otherwise, a brand-new custom framework private to this org.
+    name = request.form.get('custom_name', '').strip()
+    if not name:
+        flash('Please select a framework or name a custom one.', 'error')
+        return redirect(url_for('compliance.compliance'))
 
-    if shared_fw:
-        # Check if it was previously excluded/removed by this organization
-        exclusion = OrganizationExcludedFramework.query.filter_by(
-            organization_id=g.current_org.id,
-            framework_id=shared_fw.id
-        ).first()
-
-        if exclusion:
-            db.session.delete(exclusion)
-            log_activity('added', 'Framework', f'{name} re-added to organization')
-            db.session.commit()
-            flash(f'Framework "{name}" has been added back to your organization.', 'success')
-            return redirect(url_for('compliance.compliance'))
-
-        # If it's already active in this organization
-        if Framework.visible_to(g.current_org.id).filter_by(id=shared_fw.id).first():
-            flash(f'Framework "{name}" is already active in your organization.', 'error')
-            return redirect(url_for('compliance.compliance'))
-
-    # 2. Check if a custom framework already exists with this name in this organization
     if Framework.query.filter_by(organization_id=g.current_org.id, name=name).first():
         flash(f'A framework named "{name}" already exists in your organization.', 'error')
         return redirect(url_for('compliance.compliance'))
@@ -143,7 +152,6 @@ def add_framework():
     owner = request.form.get('owner', '').strip()
     target_date = request.form.get('target_date')
 
-    # Frameworks added here are private to this org
     fw = Framework(
         organization_id=g.current_org.id,
         name=name,
@@ -196,17 +204,13 @@ def delete_framework(framework_id):
 
         if fw.is_shared:
             # Shared library framework: DO NOT delete the shared framework record or controls!
-            # Instead, record the exclusion for this organization so it is removed only from this org.
-            existing_exclusion = OrganizationExcludedFramework.query.filter_by(
+            # Just un-adopt it for this org (remove the opt-in row) - it stays in the library.
+            adoption = OrganizationFramework.query.filter_by(
                 organization_id=org_id,
                 framework_id=fw.id
             ).first()
-            if not existing_exclusion:
-                exclusion = OrganizationExcludedFramework(
-                    organization_id=org_id,
-                    framework_id=fw.id
-                )
-                db.session.add(exclusion)
+            if adoption:
+                db.session.delete(adoption)
 
             log_activity('removed', 'Framework', f'{name} removed from organization')
             db.session.commit()

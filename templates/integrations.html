@@ -22,17 +22,8 @@
         </div>
         <select class="filter-select" id="integrationsForFilter" onchange="jumpToCategoryValue(this.value)">
             <option value="">Integrations For</option>
-            <option value="cat-monitoring">Capacity &amp; Usage Monitoring</option>
             <option value="cat-cloud">Cloud Providers</option>
-            <option value="cat-comms">Communication Tools</option>
-            <option value="cat-crm">Customer Relationship Management</option>
-            <option value="cat-database">Database</option>
-            <option value="cat-hris">Human Resource Information Systems</option>
             <option value="cat-identity">Identity Providers</option>
-            <option value="cat-misc">Miscellaneous</option>
-            <option value="cat-mdm">Mobile Device Management Tools</option>
-            <option value="cat-policy">Policy Management</option>
-            <option value="cat-vcs">Version Control</option>
         </select>
     </div>
 </div>
@@ -54,39 +45,13 @@
                 <button type="button" class="categories-collapse-btn" id="categoriesCollapseBtn" onclick="toggleCategoriesPanel()"><i class="fas fa-angles-left"></i></button>
             </div>
             <div class="categories-list">
-                <a href="#cat-monitoring" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Capacity &amp; Usage Monitoring"><i class="fas fa-gauge-high"></i><span>Capacity &amp; Usage Monitoring</span></a>
                 <a href="#cat-cloud" class="settings-nav-item active" onclick="jumpToCategory(event, this)" data-label="Cloud Providers"><i class="fas fa-cloud"></i><span>Cloud Providers</span></a>
-                <a href="#cat-comms" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Communication Tools"><i class="fas fa-comment"></i><span>Communication Tools</span></a>
-                <a href="#cat-crm" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Customer Relationship Management"><i class="fas fa-address-book"></i><span>Customer Relationship Management</span></a>
-                <a href="#cat-database" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Database"><i class="fas fa-database"></i><span>Database</span></a>
-                <a href="#cat-hris" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Human Resource Information Systems"><i class="fas fa-user-tie"></i><span>Human Resource Information Systems</span></a>
                 <a href="#cat-identity" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Identity Providers"><i class="fas fa-id-badge"></i><span>Identity Providers</span></a>
-                <a href="#cat-misc" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Miscellaneous"><i class="fas fa-ellipsis"></i><span>Miscellaneous</span></a>
-                <a href="#cat-mdm" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Mobile Device Management Tools"><i class="fas fa-mobile-screen"></i><span>Mobile Device Management Tools</span></a>
-                <a href="#cat-policy" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Policy Management"><i class="fas fa-file-shield"></i><span>Policy Management</span></a>
-                <a href="#cat-vcs" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Version Control"><i class="fas fa-code-branch"></i><span>Version Control</span></a>
             </div>
         </div>
 
         <!-- Catalog -->
         <div class="integrations-catalog">
-
-            <div class="integration-category" id="cat-monitoring">
-                <h3>Capacity &amp; Usage Monitoring</h3>
-                <p class="text-sm text-muted mb-16">Track infrastructure capacity and usage metrics as continuous evidence.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="datadog">
-                        <div class="integration-card-head"><div class="integration-badge purple">DD</div><h4>Datadog</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Datadog')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="new relic">
-                        <div class="integration-card-head"><div class="integration-badge blue">NR</div><h4>New Relic</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('New Relic')">Integrate</button>
-                    </div>
-                </div>
-            </div>
 
             <div class="integration-category" id="cat-cloud">
                 <h3>Cloud Providers</h3>
@@ -101,103 +66,15 @@
                         </div>
                         <button class="btn btn-sm btn-primary" onclick="configureIntegration('Amazon Web Services')">Integrate</button>
                     </div>
-                    <div class="integration-card" data-name="digital ocean">
-                        <div class="integration-card-head"><div class="integration-badge blue">DO</div><h4>Digital Ocean</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Digital Ocean')">Integrate</button>
-                    </div>
                     <div class="integration-card" data-name="google cloud platform gcp">
                         <div class="integration-card-head"><div class="integration-badge red"><i class="fab fa-google"></i></div><h4>Google Cloud</h4></div>
                         <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span><span class="tag">Asset Management</span></div>
                         <button class="btn btn-sm btn-primary" onclick="configureIntegration('Google Cloud')">Integrate</button>
                     </div>
-                    <div class="integration-card" data-name="heroku">
-                        <div class="integration-card-head"><div class="integration-badge purple">H</div><h4>Heroku</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Asset Management</span><span class="tag">Continuous Monitoring</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Heroku')">Integrate</button>
-                    </div>
                     <div class="integration-card" data-name="microsoft azure">
                         <div class="integration-card-head"><div class="integration-badge blue"><i class="fab fa-microsoft"></i></div><h4>Microsoft Azure</h4></div>
                         <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span><span class="tag">Asset Management</span><span class="tag">User Access Data</span></div>
                         <button class="btn btn-sm btn-primary" onclick="configureIntegration('Microsoft Azure')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="vercel">
-                        <div class="integration-card-head"><div class="integration-badge dark">&#9650;</div><h4>Vercel</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">User Access Data</span><span class="tag">Continuous Monitoring</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Vercel')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-comms">
-                <h3>Communication Tools</h3>
-                <p class="text-sm text-muted mb-16">Send compliance alerts and notifications to your team's chat tools.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="slack">
-                        <div class="integration-card-head"><div class="integration-badge green"><i class="fab fa-slack"></i></div><h4>Slack</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Compliance Alerts</span><span class="tag">Notifications</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Slack')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="microsoft teams">
-                        <div class="integration-card-head"><div class="integration-badge purple">T</div><h4>Microsoft Teams</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Compliance Alerts</span><span class="tag">Notifications</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Microsoft Teams')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-crm">
-                <h3>Customer Relationship Management</h3>
-                <p class="text-sm text-muted mb-16">Sync customer and vendor account data to support risk and vendor reviews.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="salesforce">
-                        <div class="integration-card-head"><div class="integration-badge blue"><i class="fab fa-salesforce"></i></div><h4>Salesforce</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">User Access Data</span><span class="tag">Vendor Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Salesforce')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="hubspot">
-                        <div class="integration-card-head"><div class="integration-badge orange"><i class="fab fa-hubspot"></i></div><h4>HubSpot</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">User Access Data</span><span class="tag">Vendor Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('HubSpot')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-database">
-                <h3>Database</h3>
-                <p class="text-sm text-muted mb-16">Scan your databases for access control and encryption evidence.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="postgresql">
-                        <div class="integration-card-head"><div class="integration-badge blue">PG</div><h4>PostgreSQL</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Asset Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('PostgreSQL')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="mongodb">
-                        <div class="integration-card-head"><div class="integration-badge green">MDB</div><h4>MongoDB</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Asset Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('MongoDB')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="mysql">
-                        <div class="integration-card-head"><div class="integration-badge orange">SQL</div><h4>MySQL</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Asset Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('MySQL')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-hris">
-                <h3>Human Resource Information Systems</h3>
-                <p class="text-sm text-muted mb-16">Sync employee records for onboarding, training, and access-review evidence.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="bamboohr">
-                        <div class="integration-card-head"><div class="integration-badge green">BH</div><h4>BambooHR</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Employee Directory</span><span class="tag">Automated Tests</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('BambooHR')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="workday">
-                        <div class="integration-card-head"><div class="integration-badge orange">WD</div><h4>Workday</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Employee Directory</span><span class="tag">Automated Tests</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Workday')">Integrate</button>
                     </div>
                 </div>
             </div>
@@ -220,79 +97,6 @@
                         <div class="integration-card-head"><div class="integration-badge blue"><i class="fab fa-microsoft"></i></div><h4>Microsoft Entra ID</h4></div>
                         <div class="tag-list mb-16"><span class="tag">Employee Directory</span><span class="tag">User Access Data</span><span class="tag">SSO</span></div>
                         <button class="btn btn-sm btn-primary" onclick="configureIntegration('Microsoft Entra ID')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-misc">
-                <h3>Miscellaneous</h3>
-                <p class="text-sm text-muted mb-16">Other tools that can feed evidence into your compliance program.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="jira">
-                        <div class="integration-card-head"><div class="integration-badge blue">JI</div><h4>Jira</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Findings Tracking</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Jira')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="zendesk">
-                        <div class="integration-card-head"><div class="integration-badge green">ZD</div><h4>Zendesk</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">User Access Data</span><span class="tag">Vendor Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Zendesk')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-mdm">
-                <h3>Mobile Device Management Tools</h3>
-                <p class="text-sm text-muted mb-16">Pull device compliance and encryption status as endpoint evidence.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="jamf">
-                        <div class="integration-card-head"><div class="integration-badge orange">JM</div><h4>Jamf</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Asset Management</span><span class="tag">Automated Tests</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Jamf')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="microsoft intune">
-                        <div class="integration-card-head"><div class="integration-badge blue">IN</div><h4>Microsoft Intune</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Asset Management</span><span class="tag">Automated Tests</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Microsoft Intune')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-policy">
-                <h3>Policy Management</h3>
-                <p class="text-sm text-muted mb-16">Sync policy documents authored in other workplace tools.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="confluence">
-                        <div class="integration-card-head"><div class="integration-badge blue">CO</div><h4>Confluence</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Document Sync</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Confluence')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="notion">
-                        <div class="integration-card-head"><div class="integration-badge dark">N</div><h4>Notion</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Document Sync</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Notion')">Integrate</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="integration-category" id="cat-vcs">
-                <h3>Version Control</h3>
-                <p class="text-sm text-muted mb-16">Integrate with your version control tool to gather code review results as evidence.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="github version control">
-                        <div class="integration-card-head"><div class="integration-badge purple"><i class="fab fa-github"></i></div><h4>GitHub</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Code Review</span><span class="tag">Automated Tests</span><span class="tag">Version Control</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('GitHub')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="gitlab">
-                        <div class="integration-card-head"><div class="integration-badge orange"><i class="fab fa-gitlab"></i></div><h4>GitLab</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Code Review</span><span class="tag">Version Control</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('GitLab')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="bitbucket">
-                        <div class="integration-card-head"><div class="integration-badge blue"><i class="fab fa-bitbucket"></i></div><h4>Bitbucket</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Code Review</span><span class="tag">Version Control</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Bitbucket')">Integrate</button>
                     </div>
                 </div>
             </div>

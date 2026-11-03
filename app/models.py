@@ -157,16 +157,29 @@ class Framework(db.Model):
 
     @staticmethod
     def visible_to(org_id):
-        """Frameworks an org can see: the shared library (organization_id IS NULL) plus
-        whatever that org added privately for itself, minus any frameworks that this org
-        explicitly removed/excluded."""
-        base_query = Framework.query.filter(
-            db.or_(Framework.organization_id.is_(None), Framework.organization_id == org_id)
-        )
+        """Frameworks that appear in an org's active Compliance tracking: whatever private/custom
+        framework the org created for itself, plus shared-library frameworks (organization_id IS
+        NULL) the org has explicitly added via OrganizationFramework. The shared library itself is
+        much bigger than this - see Framework.library() for the full catalog an org picks from."""
         if not org_id:
-            return base_query
-        excluded_ids = db.session.query(OrganizationExcludedFramework.framework_id).filter_by(organization_id=org_id)
-        return base_query.filter(~Framework.id.in_(excluded_ids))
+            return Framework.query.filter(db.false())
+        added_ids = db.session.query(OrganizationFramework.framework_id).filter_by(organization_id=org_id)
+        return Framework.query.filter(
+            db.or_(
+                Framework.organization_id == org_id,
+                db.and_(Framework.organization_id.is_(None), Framework.id.in_(added_ids)),
+            )
+        )
+
+    @staticmethod
+    def library(org_id=None):
+        """The full shared-library catalog (organization_id IS NULL) that 'Add Compliance
+        Framework' lets an org pick from. Pass org_id to exclude frameworks that org already added."""
+        query = Framework.query.filter(Framework.organization_id.is_(None))
+        if org_id:
+            added_ids = db.session.query(OrganizationFramework.framework_id).filter_by(organization_id=org_id)
+            query = query.filter(~Framework.id.in_(added_ids))
+        return query
 
     @property
     def is_shared(self):
@@ -252,6 +265,23 @@ class OrganizationExcludedFramework(db.Model):
 
     organization = db.relationship('Organization', backref=db.backref('excluded_frameworks', lazy='dynamic', cascade='all, delete-orphan'))
     framework = db.relationship('Framework', backref=db.backref('org_exclusions', lazy='dynamic', cascade='all, delete-orphan'))
+
+
+class OrganizationFramework(db.Model):
+    """Records that an organization has explicitly added a shared-library framework (opt-in) to
+    its active Compliance tracking via 'Add Compliance Framework'. The shared library itself
+    (organization_id IS NULL on Framework) is just a catalog - a framework only shows up in an
+    org's Compliance section once a row exists here (see Framework.visible_to)."""
+    __tablename__ = 'organization_frameworks'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    framework_id = db.Column(db.Integer, db.ForeignKey('frameworks.id'), nullable=False)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('organization_id', 'framework_id', name='uq_org_added_fw'),)
+
+    organization = db.relationship('Organization', backref=db.backref('added_frameworks', lazy='dynamic', cascade='all, delete-orphan'))
+    framework = db.relationship('Framework', backref=db.backref('org_adoptions', lazy='dynamic', cascade='all, delete-orphan'))
 
 
 class Control(db.Model):

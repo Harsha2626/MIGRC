@@ -5,17 +5,23 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Compliance Frameworks</h1>
+        <h1>Compliance Frameworks <span class="badge badge-neutral" style="font-size:13px;vertical-align:middle;">{{ frameworks|length }}</span></h1>
         <p>Manage and monitor your compliance across multiple frameworks</p>
     </div>
     <div class="page-actions">
         {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddFrameworkModal()"><i class="fas fa-plus"></i> Add Framework</button>
+        <button class="btn btn-primary" onclick="showAddFrameworkModal()"><i class="fas fa-plus"></i> Add Custom Framework</button>
         {% endif %}
     </div>
 </div>
 
-<!-- Framework Cards Grid -->
+<div class="tabs">
+    <button class="tab active" id="myFrameworksTab" onclick="switchFrameworksView(this, 'my')"><i class="fas fa-list-check" style="margin-right:6px;"></i>My Frameworks</button>
+    <button class="tab" id="frameworksLibraryTab" onclick="switchFrameworksView(this, 'library')"><i class="fas fa-book" style="margin-right:6px;"></i>Frameworks Library <span class="badge badge-neutral">{{ library|length }}</span></button>
+</div>
+
+<!-- ============ MY FRAMEWORKS VIEW ============ -->
+<div id="myFrameworksView">
 <div class="grid-3" id="frameworkGrid">
     {% for fw in frameworks %}
     <div class="framework-card" data-category="{{ fw.category|lower }}" onclick="window.location='/compliance/{{ fw.id }}'" style="cursor:pointer;position:relative;">
@@ -57,6 +63,57 @@
         </div>
     </div>
     {% endfor %}
+</div>
+{% if not frameworks %}
+<div class="card" style="text-align:center;padding:48px 24px;">
+    <i class="fas fa-book" style="font-size:28px;color:var(--text-muted);margin-bottom:12px;"></i>
+    <h3 style="margin-bottom:6px;">No frameworks added yet</h3>
+    <p class="text-sm text-muted" style="margin-bottom:16px;">Browse the Frameworks Library and add the ones your organization needs to track.</p>
+    <button class="btn btn-primary" onclick="switchFrameworksView(document.getElementById('frameworksLibraryTab'), 'library')"><i class="fas fa-book"></i> Browse Frameworks Library</button>
+</div>
+{% endif %}
+</div>
+
+<!-- ============ FRAMEWORKS LIBRARY VIEW ============ -->
+<div id="frameworksLibraryView" style="display:none;">
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:16px;">
+            <div class="search-input-wrapper">
+                <i class="fas fa-search"></i>
+                <input type="text" class="filter-input" placeholder="Search the library by name or category..." id="librarySearch" oninput="applyLibraryFilter()">
+            </div>
+        </div>
+    </div>
+    <div class="grid-3" id="libraryGrid">
+        {% for fw in library %}
+        <div class="framework-card" data-name="{{ fw.name|lower }}" data-category="{{ (fw.category or '')|lower }}" style="position:relative;">
+            <div class="framework-card-header">
+                <div>
+                    <h4>{{ fw.name }}</h4>
+                    <span class="fw-category">{{ fw.category }} &middot; {{ fw.total_controls }} controls</span>
+                </div>
+                <div class="fw-icon stat-icon {% if fw.category == 'Security' %}blue{% elif fw.category == 'Privacy' %}purple{% elif fw.category == 'Healthcare' %}green{% else %}orange{% endif %}" style="position:relative;">
+                    <i class="fas fa-{{ fw.icon }}"></i>
+                    <i class="fas fa-lock" style="position:absolute;bottom:-4px;right:-4px;font-size:9px;background:var(--bg-secondary);color:var(--text-muted);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-color);"></i>
+                </div>
+            </div>
+            <p class="text-sm text-muted" style="margin:10px 0 16px;min-height:36px;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ fw.description or 'No description provided.' }}</p>
+            {% if current_user.can_write %}
+            <form method="POST" action="{{ url_for('compliance.add_framework') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="framework_id" value="{{ fw.id }}">
+                <button type="submit" class="btn btn-sm btn-primary" style="width:100%;"><i class="fas fa-plus"></i> Add to My Frameworks</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% if not library %}
+    <div class="card" style="text-align:center;padding:48px 24px;">
+        <i class="fas fa-circle-check" style="font-size:28px;color:var(--accent-success);margin-bottom:12px;"></i>
+        <p class="text-sm text-muted">Every framework in the shared library has already been added to My Frameworks.</p>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -106,29 +163,14 @@ function showFrameworkDetail(idx) {
 }
 
 function showAddFrameworkModal() {
-    openModal('Add Compliance Framework', `
+    openModal('Add Custom Framework', `
         <form id="frameworkForm" method="POST" action="/compliance/add">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="framework_id" value="__custom__">
+            <p class="text-sm text-muted" style="margin-bottom:16px;">Looking for a standard like ISO 27001 or SOC 2? Check the <strong>Frameworks Library</strong> tab instead — this form is only for a framework specific to your organization.</p>
             <div class="form-group">
-                <label>Framework</label>
-                <select name="name" class="form-control" id="frameworkNameSelect" required>
-                    <option value="">Select a framework...</option>
-                    <option>SOC 2 Type I</option>
-                    <option>SOC 2 Type II</option>
-                    <option>ISO 27001:2022</option>
-                    <option>GDPR</option>
-                    <option>HIPAA</option>
-                    <option>PCI DSS v4.0</option>
-                    <option>NIST CSF 2.0</option>
-                    <option>NIST 800-53</option>
-                    <option>FedRAMP</option>
-                    <option>CCPA</option>
-                    <option value="__custom__">Custom Framework...</option>
-                </select>
-            </div>
-            <div class="form-group" id="customNameGroup" style="display:none;">
                 <label>Custom Framework Name</label>
-                <input type="text" name="custom_name" class="form-control" placeholder="e.g. Internal Security Baseline">
+                <input type="text" name="custom_name" class="form-control" placeholder="e.g. Internal Security Baseline" required>
             </div>
             <div class="form-group">
                 <label>Category</label>
@@ -147,12 +189,24 @@ function showAddFrameworkModal() {
                 <label>Target Completion Date</label>
                 <input type="date" name="target_date" class="form-control">
             </div>
-            <p class="text-sm text-muted">Note: new frameworks start with no controls — controls are currently seeded, not authored from the UI.</p>
+            <p class="text-sm text-muted">Note: custom frameworks start with no controls — controls aren't authored from the UI.</p>
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'frameworkForm\').submit()">Add Framework</button>');
+}
 
-    document.getElementById('frameworkNameSelect').addEventListener('change', function() {
-        document.getElementById('customNameGroup').style.display = this.value === '__custom__' ? '' : 'none';
+// ---- My Frameworks / Frameworks Library tabs ----
+function switchFrameworksView(el, view) {
+    document.getElementById('myFrameworksTab').classList.toggle('active', view === 'my');
+    document.getElementById('frameworksLibraryTab').classList.toggle('active', view === 'library');
+    document.getElementById('myFrameworksView').style.display = view === 'my' ? '' : 'none';
+    document.getElementById('frameworksLibraryView').style.display = view === 'library' ? '' : 'none';
+}
+
+function applyLibraryFilter() {
+    const search = document.getElementById('librarySearch').value.toLowerCase();
+    document.querySelectorAll('#libraryGrid .framework-card').forEach(card => {
+        const matches = !search || card.dataset.name.includes(search) || card.dataset.category.includes(search);
+        card.style.display = matches ? '' : 'none';
     });
 }
 </script>

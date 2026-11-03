@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app.models import (
-    db, SetupTask, Framework, Policy, Employee, Vendor, Risk, Audit, Evidence, ControlStatus,
+    db, SetupTask, Framework, OrganizationFramework, Policy, Employee, Vendor, Risk, Audit, Evidence, ControlStatus,
     Organization, OrganizationMembership, DepartmentOwner, GoogleWorkspaceConnection,
 )
 from app.routes.policies import POLICY_DEPARTMENTS
@@ -100,14 +100,18 @@ def _auto_completion(org):
     dept_owners_assigned = DepartmentOwner.query.filter_by(organization_id=org.id) \
         .filter(DepartmentOwner.owner_id.isnot(None)).count() > 0
 
-    # Framework/Control definitions are a shared library available to every org from day
-    # one, so "choose frameworks" is now signaled by having started assessing a control.
-    started_assessing = ControlStatus.query.filter_by(organization_id=org.id).count() > 0
+    # Framework/Control definitions live in a shared library every org can pick from, so
+    # "choose frameworks" is done once the org has actually added at least one (opt-in via
+    # OrganizationFramework) or created a private/custom framework of its own.
+    chose_frameworks = (
+        OrganizationFramework.query.filter_by(organization_id=org.id).count() > 0
+        or Framework.query.filter_by(organization_id=org.id).count() > 0
+    )
 
     return {
         'org_details': bool(org.legal_name),
         'assign_department_owners': dept_owners_assigned,
-        'choose_frameworks': started_assessing,
+        'choose_frameworks': chose_frameworks,
         'add_policies': Policy.query.filter_by(organization_id=org.id).count() > 0,
         'add_employees': Employee.query.filter_by(organization_id=org.id).count() > 0,
         'upload_evidence': Evidence.query.filter_by(organization_id=org.id).count() > 0,
