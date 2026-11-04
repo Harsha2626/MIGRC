@@ -32,9 +32,12 @@ def compliance():
     # Frameworks this org has explicitly added (opt-in) + whatever it added privately for itself.
     frameworks = Framework.visible_to(g.current_org.id).order_by(Framework.name).all()
     # Deduplicate by name if duplicates exist (prefer the one with controls)
+    fw_totals = dict(db.session.query(Control.framework_id, db.func.count(Control.id))
+        .filter(Control.framework_id.in_([f.id for f in frameworks] or [-1]))
+        .group_by(Control.framework_id).all())
     fws_by_name = {}
     for fw in frameworks:
-        if fw.name not in fws_by_name or fw.controls.count() > fws_by_name[fw.name].controls.count():
+        if fw.name not in fws_by_name or fw_totals.get(fw.id, 0) > fw_totals.get(fws_by_name[fw.name].id, 0):
             fws_by_name[fw.name] = fw
     frameworks = sorted(fws_by_name.values(), key=lambda f: f.name)
 
@@ -44,9 +47,12 @@ def compliance():
     # Lightweight dicts for the library grid - these frameworks aren't adopted yet, so there's
     # no per-org compliance status to compute (to_dict()'s passing/failing/etc. would just be a
     # wasted DB round-trip per framework for a number that's always zero here).
+    control_totals = dict(db.session.query(Control.framework_id, db.func.count(Control.id))
+        .filter(Control.framework_id.in_([fw.id for fw in library] or [-1]))
+        .group_by(Control.framework_id).all())
     library_cards = [{
         'id': fw.id, 'name': fw.name, 'category': fw.category, 'icon': fw.icon,
-        'description': fw.description, 'total_controls': fw.total_controls,
+        'description': fw.description, 'total_controls': control_totals.get(fw.id, 0),
     } for fw in library]
 
     return render_template('compliance.html', page='compliance',
@@ -134,7 +140,12 @@ def add_framework():
 
         db.session.add(OrganizationFramework(organization_id=g.current_org.id, framework_id=shared_fw.id))
         log_activity('added', 'Framework', f'{shared_fw.name} added to organization')
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash(f'Framework "{shared_fw.name}" is already active in your organization.', 'error')
+            return redirect(url_for('compliance.compliance'))
         flash(f'Framework "{shared_fw.name}" added to your organization.', 'success')
         return redirect(url_for('compliance.compliance'))
 
@@ -246,9 +257,14 @@ def framework_detail(framework_id):
         categories[cat].append(c)
 
     # Build evidence count per control for badges
-    evidence_counts = {}
-    for c in controls:
-        evidence_counts[c.id] = c.evidence_mappings.count()
+    org_id = g.current_org.id if g.current_org else -1
+    evidence_counts = {c.id: 0 for c in controls}
+    for cid, n in db.session.query(EvidenceMapping.control_id, db.func.count(EvidenceMapping.id)) \
+            .join(Evidence, Evidence.id == EvidenceMapping.evidence_id) \
+            .filter(Evidence.organization_id == org_id,
+                    EvidenceMapping.control_id.in_(list(evidence_counts))) \
+            .group_by(EvidenceMapping.control_id).all():
+        evidence_counts[cid] = n
 
     return render_template('compliance_detail.html', page='compliance',
         framework=fw, controls=controls, categories=categories,
@@ -262,7 +278,7 @@ def control_detail(framework_id, control_id):
     ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
 
     # Get all evidence mapped to this control
-    mappings = EvidenceMapping.query.filter_by(control_id=ctrl.id).all()
+    mappings = EvidenceMapping.for_org(g.current_org.id if g.current_org else -1, ctrl.id).all()
     evidence_list = []
     for m in mappings:
         ev = m.evidence
@@ -363,14 +379,19 @@ def upload_evidence(framework_id, control_id):
     db.session.add(EvidenceMapping(evidence_id=evidence.id, control_id=ctrl.id))
 
     # Map to additional controls if selected
+    visible_fw_ids = [f.id for f in Framework.visible_to(g.current_org.id).all()]
     for cid in map_control_ids:
         try:
             cid_int = int(cid)
-            if cid_int not in mapped_ids:
-                mapped_ids.add(cid_int)
-                db.session.add(EvidenceMapping(evidence_id=evidence.id, control_id=cid_int))
         except ValueError:
-            pass
+            continue
+        if cid_int in mapped_ids:
+            continue
+        # Only controls in frameworks visible to this org may be mapped (ignore anything else).
+        if not Control.query.filter(Control.id == cid_int, Control.framework_id.in_(visible_fw_ids)).first():
+            continue
+        mapped_ids.add(cid_int)
+        db.session.add(EvidenceMapping(evidence_id=evidence.id, control_id=cid_int))
 
     # AI-suggested review (no-op if no local AI backend is configured/reachable)
     suggestion = ai_review_evidence(evidence, ctrl)
@@ -558,8 +579,7 @@ def _recalculate_control_status(control_id):
     if not ctrl:
         return
 
-    mappings = EvidenceMapping.query.filter_by(control_id=control_id).all()
-    org_mappings = [m for m in mappings if m.evidence and m.evidence.organization_id == org.id]
+    org_mappings = EvidenceMapping.for_org(org.id, control_id).all()
 
     row = ControlStatus.query.filter_by(control_id=control_id, organization_id=org.id).first()
     if not row:

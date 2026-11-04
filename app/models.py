@@ -251,22 +251,6 @@ class Framework(db.Model):
         }
 
 
-class OrganizationExcludedFramework(db.Model):
-    """Tracks frameworks (especially from the shared reference library) that a specific organization
-    has removed/excluded from its active compliance tracking. Allows an org to delete/remove a
-    shared framework from its workspace without affecting other organizations."""
-    __tablename__ = 'organization_excluded_frameworks'
-    id = db.Column(db.Integer, primary_key=True)
-    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
-    framework_id = db.Column(db.Integer, db.ForeignKey('frameworks.id'), nullable=False)
-    excluded_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    __table_args__ = (db.UniqueConstraint('organization_id', 'framework_id', name='uq_org_excluded_fw'),)
-
-    organization = db.relationship('Organization', backref=db.backref('excluded_frameworks', lazy='dynamic', cascade='all, delete-orphan'))
-    framework = db.relationship('Framework', backref=db.backref('org_exclusions', lazy='dynamic', cascade='all, delete-orphan'))
-
-
 class OrganizationFramework(db.Model):
     """Records that an organization has explicitly added a shared-library framework (opt-in) to
     its active Compliance tracking via 'Add Compliance Framework'. The shared library itself
@@ -374,6 +358,17 @@ class EvidenceMapping(db.Model):
     status = db.Column(db.String(30), default='Mapped')
     mapped_at = db.Column(db.DateTime, default=datetime.utcnow)
     validated_at = db.Column(db.DateTime)
+
+    @staticmethod
+    def for_org(org_id, control_id=None):
+        """EvidenceMapping rows whose Evidence belongs to org_id. Controls in the shared
+        framework library are common to all tenants, so every read of mappings MUST go through
+        this (or an equivalent Evidence.organization_id filter) to avoid cross-tenant leakage."""
+        q = EvidenceMapping.query.join(Evidence, Evidence.id == EvidenceMapping.evidence_id) \
+            .filter(Evidence.organization_id == (org_id if org_id else -1))
+        if control_id is not None:
+            q = q.filter(EvidenceMapping.control_id == control_id)
+        return q
 
 
 risk_controls = db.Table(
