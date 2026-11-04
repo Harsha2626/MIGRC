@@ -196,7 +196,12 @@ def _candidate_models(base_url=None, password=None):
             defaults = [(p, m, None) for p, m in _default_models(base_url, password)]
             return pinned_list + [d for d in defaults if d[:2] != (provider_id, model_id)]
         return pinned_list
-    return [(p, m, None) for p, m in _default_models(base_url, password)]
+    models = [(p, m, None) for p, m in _default_models(base_url, password)]
+    # Safety net: if the OpenCode server is gated/unavailable, fall through to Cline-direct as the
+    # LAST candidate (only when a key is configured). OpenCode stays the primary path.
+    if os.environ.get('CLINE_API_KEY') and os.environ.get('CLINE_FALLBACK', '1') != '0':
+        models.append(('clinedirect', os.environ.get('CLINE_FALLBACK_MODEL', 'minimax/minimax-m2.5'), None))
+    return models
 
 
 def _config():
@@ -370,7 +375,10 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
     try:
         last_failure = None
         auth_blocks = 0
+        opencode_gated = False
         for attempt, (provider_id, model_id, variant) in enumerate(candidates):
+            if opencode_gated and provider_id != 'clinedirect':
+                continue
             attempt_timeout = REQUEST_TIMEOUT if attempt == 0 else FALLBACK_REQUEST_TIMEOUT
             tag = f'{provider_id}/{model_id}' + (f' ({variant})' if variant else '')
             scratch_dir = tempfile.mkdtemp(prefix='migrc_ai_eval_')
@@ -407,9 +415,9 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
                                 # Account-wide gate (not a per-model outage): the remaining models
                                 # will fail identically, so fail fast instead of burning minutes.
                                 logger.warning('AI dispatch (%s): %d consecutive entitlement/sign-in '
-                                               'errors - server is gating models account-wide, giving up',
-                                               log_tag, auth_blocks)
-                                break
+                                               'errors - server is gating models account-wide, skipping '
+                                               'remaining OpenCode models', log_tag, auth_blocks)
+                                opencode_gated = True
                         else:
                             auth_blocks = 0
                         continue
