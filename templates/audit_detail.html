@@ -1,200 +1,245 @@
 {% extends "base.html" %}
 {% block title %}{{ audit.name }}{% endblock %}
-{% block breadcrumb %}
-<a href="/audits" style="color:var(--text-secondary);text-decoration:none;">Audit Center</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<span>{{ audit.name }}</span>
-{% endblock %}
+{% block breadcrumb %}<a href="/audits">Audit Center</a><span>/</span><span>{{ audit.name }}</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-b.css') }}">
+{% set pill_of = {'Completed': 'pill-completed', 'Under Review': 'pill-in-review', 'In Progress': 'pill-in-progress'} %}
+{% set icon_of = {'Completed': 'fa-check', 'Under Review': 'fa-magnifying-glass', 'In Progress': 'fa-spinner', 'Scheduled': 'fa-calendar'} %}
+{% set sev_pill = {'Critical': 'pill-critical', 'High': 'pill-warning', 'Medium': 'pill-info'} %}
+{% set AUDIT_STEPS = ['Scheduled', 'In Progress', 'Under Review', 'Completed'] %}
+{% set current_index = AUDIT_STEPS.index(audit.status) if audit.status in AUDIT_STEPS else -1 %}
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">{{ audit.framework }}</div>
         <h1>{{ audit.name }}</h1>
-        <p>{{ audit.framework }} &middot; {{ audit.auditor or 'No auditor assigned' }} &middot; {{ audit.start_date }} to {{ audit.end_date }}</p>
+        <div class="header-meta">
+            <span class="pill {{ pill_of.get(audit.status, 'pill-neutral') }}"><i class="fas {{ icon_of.get(audit.status, 'fa-circle') }}" aria-hidden="true"></i>{{ audit.status }}</span>
+            <span>{{ audit.auditor or 'No auditor assigned' }}</span>
+            <span class="sep" aria-hidden="true">&middot;</span>
+            <span>{{ audit.start_date }} to {{ audit.end_date }}</span>
+        </div>
     </div>
     <div class="page-actions">
-        <span class="badge badge-lg {% if audit.status == 'Completed' %}badge-success{% elif audit.status == 'Under Review' %}badge-warning{% elif audit.status == 'In Progress' %}badge-primary{% else %}badge-neutral{% endif %}">{{ audit.status }}</span>
-        {% if audit.next_status %}
-        <form method="POST" action="{{ url_for('audits.update_audit_status', audit_id=audit.id) }}" style="display:inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="status" value="{{ audit.next_status }}">
-            <button type="submit" class="btn btn-primary">
-                {% if audit.next_status == 'In Progress' %}<i class="fas fa-play"></i> Start Audit
-                {% elif audit.next_status == 'Under Review' %}<i class="fas fa-paper-plane"></i> Submit for Review
-                {% else %}<i class="fas fa-check"></i> Mark Completed{% endif %}
-            </button>
-        </form>
-        {% endif %}
-        <a href="{{ url_for('audits.audit_report', audit_id=audit.id) }}" class="btn btn-secondary" target="_blank"><i class="fas fa-file-lines"></i> View Report</a>
-        <a href="{{ url_for('audits.audit_report_pdf', audit_id=audit.id) }}" class="btn btn-secondary"><i class="fas fa-file-pdf"></i> Download PDF</a>
-        <a href="/audits" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('audits.audit_report', audit_id=audit.id) }}" class="btn btn-secondary" target="_blank" rel="noopener"><i class="fas fa-file-lines" aria-hidden="true"></i> View report<span class="sr-only"> (opens in a new tab)</span></a>
+        <a href="{{ url_for('audits.audit_report_pdf', audit_id=audit.id) }}" class="btn btn-secondary"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</a>
+        <a href="/audits" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     </div>
 </div>
 
-<div class="grid-4" style="margin-bottom:24px;">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-list-check"></i></div>
-        <div class="stat-info"><div class="stat-label">Controls in Scope</div><div class="stat-value">{{ evidence_items|length }}</div></div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-list-check" aria-hidden="true"></i> Controls in scope</div>
+        <div class="kpi-value">{{ evidence_items|length }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
-        <div class="stat-info"><div class="stat-label">Evidence Collected</div><div class="stat-value">{{ audit.evidence_collected }}<span style="font-size:14px;color:var(--text-secondary)"> / {{ audit.evidence_total }}</span></div></div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Evidence collected</div>
+        <div class="kpi-value">{{ audit.evidence_collected }}<small> / {{ audit.evidence_total }}</small></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div>
-        <div class="stat-info"><div class="stat-label">Findings</div><div class="stat-value">{{ audit.findings }}</div></div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Findings</div>
+        <div class="kpi-value">{{ audit.findings }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-clock"></i></div>
-        <div class="stat-info"><div class="stat-label">Open Findings</div><div class="stat-value">{{ audit.open_findings }}</div></div>
+    <div class="kpi kpi-accent-danger">
+        <div class="kpi-label"><i class="fas fa-clock" aria-hidden="true"></i> Open findings</div>
+        <div class="kpi-value">{{ audit.open_findings }}</div>
+    </div>
+</div>
+
+<!-- Audit lifecycle -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h2 class="card-title">Audit progress</h2>
+            <div class="card-subtitle">Scheduled &rarr; In Progress &rarr; Under Review &rarr; Completed</div>
+        </div>
+        {% if audit.next_status %}
+        <form method="POST" action="{{ url_for('audits.update_audit_status', audit_id=audit.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="{{ audit.next_status }}">
+            <button type="submit" class="btn btn-primary">
+                {% if audit.next_status == 'In Progress' %}<i class="fas fa-play" aria-hidden="true"></i> Start audit
+                {% elif audit.next_status == 'Under Review' %}<i class="fas fa-paper-plane" aria-hidden="true"></i> Submit for review
+                {% else %}<i class="fas fa-check" aria-hidden="true"></i> Mark completed{% endif %}
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <ol class="flow" aria-label="Audit status">
+            {% for step in AUDIT_STEPS %}
+            <li class="flow-step {% if loop.index0 < current_index %}is-done{% elif loop.index0 == current_index %}is-current{% endif %}" {% if loop.index0 == current_index %}aria-current="step"{% endif %}>
+                <span class="flow-dot">{% if loop.index0 < current_index %}<i class="fas fa-check" aria-hidden="true"></i><span class="sr-only">Completed: </span>{% else %}{{ loop.index }}{% endif %}</span>
+                <span class="flow-label">{{ step }}</span>
+            </li>
+            {% endfor %}
+        </ol>
     </div>
 </div>
 
 <!-- Evidence Checklist -->
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-header"><h3><i class="fas fa-folder-open" style="margin-right:8px;"></i> Evidence Checklist</h3></div>
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h2 class="card-title"><i class="fas fa-folder-open" aria-hidden="true"></i> Evidence checklist</h2>
+            <div class="card-subtitle">{{ audit.evidence_collected }} of {{ audit.evidence_total }} collected</div>
+        </div>
+    </div>
     <div class="card-body no-padding">
-        <table>
-            <thead>
-                <tr><th>Control</th><th>Status</th><th>Linked Evidence</th><th style="width:280px;">Actions</th></tr>
-            </thead>
-            <tbody>
-                {% for item in evidence_items %}
-                <tr>
-                    <td><strong class="mono">{{ item.control.code }}</strong> &ndash; {{ item.control.title }}</td>
-                    <td>
-                        <span class="badge {{ 'badge-success' if item.status == 'Collected' else 'badge-warning' }}">{{ item.status }}</span>
-                    </td>
-                    <td class="text-sm">
-                        {% if item.evidence %}{{ item.evidence.title }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
-                    </td>
-                    <td>
-                        <div class="flex gap-8" style="flex-wrap:wrap;">
-                            <button class="btn btn-sm btn-secondary" onclick="toggleRow('manage-{{ item.id }}')"><i class="fas fa-file-circle-plus"></i> Attach</button>
-                            <form method="POST" action="{{ url_for('audits.toggle_evidence', audit_id=audit.id, evidence_id=item.id) }}" style="display:inline;">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-secondary">{{ 'Mark Missing' if item.status == 'Collected' else 'Mark Collected' }}</button>
-                            </form>
-                        </div>
-                        <div id="manage-{{ item.id }}" style="display:none;margin-top:10px;padding:12px;background:var(--bg-tertiary);border-radius:8px;">
-                            {% set existing = existing_evidence_by_control.get(item.control_id, []) %}
-                            {% if existing %}
-                            <form method="POST" action="{{ url_for('audits.link_evidence', audit_id=audit.id, evidence_id=item.id) }}" style="margin-bottom:10px;">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <div class="flex gap-8">
-                                    <select name="evidence_id" class="form-control" style="font-size:12px;">
-                                        {% for ev in existing %}
-                                        <option value="{{ ev.id }}">{{ ev.title }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-primary">Link</button>
-                                </div>
-                            </form>
-                            {% endif %}
-                            <form method="POST" action="{{ url_for('audits.upload_audit_evidence', audit_id=audit.id, evidence_id=item.id) }}" enctype="multipart/form-data">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <div class="flex gap-8">
-                                    <input type="text" name="title" class="form-control" placeholder="Evidence title" style="font-size:12px;">
-                                    <input type="file" name="file" class="form-control" style="font-size:12px;" required>
-                                    <button type="submit" class="btn btn-sm btn-primary">Upload</button>
-                                </div>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" style="padding:0;">
-                        <div class="empty-state">
-                            <div class="empty-state-icon"><i class="fas fa-folder-open" aria-hidden="true"></i></div>
-                            <h3>No controls in scope</h3>
-                            <p>This audit has no controls assigned yet. Edit the audit's scope to add controls for evidence collection.</p>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% if evidence_items %}
+        <div class="table-container">
+            <table>
+                <caption class="sr-only">Evidence checklist by control</caption>
+                <thead>
+                    <tr><th>Control</th><th>Status</th><th>Linked evidence</th><th class="table-actions-col">Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in evidence_items %}
+                    <tr>
+                        <td><span class="cell-mono">{{ item.control.code }}</span> &ndash; {{ item.control.title }}</td>
+                        <td>
+                            {% if item.status == 'Collected' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>{{ item.status }}</span>
+                            {% else %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>{{ item.status }}</span>{% endif %}
+                        </td>
+                        <td class="text-sm">
+                            {% if item.evidence %}{{ item.evidence.title }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="cluster">
+                                <button type="button" class="btn btn-sm btn-secondary" data-toggle-panel="manage-{{ item.id }}" aria-expanded="false" aria-controls="manage-{{ item.id }}"><i class="fas fa-file-circle-plus" aria-hidden="true"></i> Attach</button>
+                                <form method="POST" action="{{ url_for('audits.toggle_evidence', audit_id=audit.id, evidence_id=item.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-secondary">{{ 'Mark missing' if item.status == 'Collected' else 'Mark collected' }}</button>
+                                </form>
+                            </div>
+                            <div id="manage-{{ item.id }}" class="attach-panel" hidden>
+                                {% set existing = existing_evidence_by_control.get(item.control_id, []) %}
+                                {% if existing %}
+                                <form method="POST" action="{{ url_for('audits.link_evidence', audit_id=audit.id, evidence_id=item.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="inline-form">
+                                        <label class="sr-only" for="linkEv{{ item.id }}">Existing evidence for {{ item.control.code }}</label>
+                                        <select id="linkEv{{ item.id }}" name="evidence_id" class="form-control">
+                                            {% for ev in existing %}
+                                            <option value="{{ ev.id }}">{{ ev.title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-primary">Link</button>
+                                    </div>
+                                </form>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('audits.upload_audit_evidence', audit_id=audit.id, evidence_id=item.id) }}" enctype="multipart/form-data">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="inline-form">
+                                        <label class="sr-only" for="evTitle{{ item.id }}">Evidence title</label>
+                                        <input type="text" id="evTitle{{ item.id }}" name="title" class="form-control" placeholder="Evidence title">
+                                        <label class="sr-only" for="evFile{{ item.id }}">Evidence file</label>
+                                        <input type="file" id="evFile{{ item.id }}" name="file" class="form-control" required>
+                                        <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-folder-open" aria-hidden="true"></i></div>
+            <h3>No controls in scope</h3>
+            <p>This audit has no controls assigned yet. Edit the audit's scope to add controls for evidence collection.</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 
 <!-- Findings -->
 <div class="card">
     <div class="card-header">
-        <h3><i class="fas fa-magnifying-glass" style="margin-right:8px;"></i> Findings</h3>
-        <button class="btn btn-sm btn-primary" onclick="toggleRow('addFinding')"><i class="fas fa-plus"></i> Log Finding</button>
+        <div>
+            <h2 class="card-title"><i class="fas fa-magnifying-glass" aria-hidden="true"></i> Findings</h2>
+            <div class="card-subtitle">{{ audit.findings }} logged, {{ audit.open_findings }} open</div>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" data-toggle-panel="addFinding" aria-expanded="false" aria-controls="addFinding"><i class="fas fa-plus" aria-hidden="true"></i> Log finding</button>
     </div>
     <div class="card-body">
-        <div id="addFinding" style="display:none;margin-bottom:20px;padding:16px;background:var(--bg-tertiary);border-radius:8px;">
+        <div id="addFinding" class="reveal" hidden>
             <form method="POST" action="{{ url_for('audits.add_finding', audit_id=audit.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+                <div class="form-grid-3">
                     <div class="form-group">
-                        <label>Type</label>
-                        <select name="type" class="form-control">
+                        <label for="findingType">Type</label>
+                        <select id="findingType" name="type" class="form-control">
                             {% for t in finding_types %}<option>{{ t }}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Severity</label>
-                        <select name="severity" class="form-control">
+                        <label for="findingSeverity">Severity</label>
+                        <select id="findingSeverity" name="severity" class="form-control">
                             {% for s in finding_severities %}<option {% if s == 'Medium' %}selected{% endif %}>{{ s }}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Related Control (optional)</label>
-                        <select name="control_id" class="form-control">
+                        <label for="findingControl">Related control (optional)</label>
+                        <select id="findingControl" name="control_id" class="form-control">
                             <option value="">None</option>
                             {% for c in all_controls %}<option value="{{ c.id }}">{{ c.code }} &ndash; {{ c.title }}</option>{% endfor %}
                         </select>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" class="form-control" placeholder="Describe the finding..." required></textarea>
+                    <label for="findingDesc">Description <span class="required-star">*</span></label>
+                    <textarea id="findingDesc" name="description" class="form-control" placeholder="Describe the finding..." required></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">Log Finding</button>
+                <button type="submit" class="btn btn-primary">Log finding</button>
             </form>
         </div>
 
         {% if findings %}
         {% for f in findings %}
-        <div style="border:1px solid var(--border-color);border-radius:8px;padding:16px;margin-bottom:12px;">
-            <div class="flex-between mb-8">
-                <div class="flex gap-8" style="align-items:center;">
-                    <span class="badge badge-neutral">{{ f.type }}</span>
-                    <span class="badge {% if f.severity == 'Critical' %}badge-danger{% elif f.severity == 'High' %}badge-warning{% elif f.severity == 'Medium' %}badge-info{% else %}badge-neutral{% endif %}">{{ f.severity }}</span>
-                    {% if f.control %}<span class="text-sm text-muted">{{ f.control.code }}</span>{% endif %}
+        <div class="finding">
+            <div class="finding-head">
+                <div class="finding-tags">
+                    <span class="pill pill-neutral">{{ f.type }}</span>
+                    <span class="pill {{ sev_pill.get(f.severity, 'pill-neutral') }}">{{ f.severity }}</span>
+                    {% if f.control %}<span class="text-sm text-muted cell-mono">{{ f.control.code }}</span>{% endif %}
                 </div>
-                <span class="badge {{ 'badge-success' if f.status == 'Remediated' else 'badge-danger' }}">{{ f.status }}</span>
+                {% if f.status == 'Remediated' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>{{ f.status }}</span>
+                {% else %}<span class="pill pill-failing"><i class="fas fa-xmark" aria-hidden="true"></i>{{ f.status }}</span>{% endif %}
             </div>
-            <p style="font-size:13px;margin-bottom:12px;">{{ f.description }}</p>
+            <p>{{ f.description }}</p>
 
-            <div style="background:var(--bg-tertiary);border-radius:8px;padding:12px;">
-                <div class="text-sm font-semibold mb-8">Remediation</div>
+            <div class="finding-remediation">
+                <h3>Remediation</h3>
                 <form method="POST" action="{{ url_for('audits.save_remediation', audit_id=audit.id, finding_id=f.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label class="text-sm">Owner</label>
-                            <input type="text" name="owner" class="form-control" style="font-size:12px;" value="{{ f.remediation.owner if f.remediation else '' }}">
+                    <div class="form-grid-4">
+                        <div class="form-group">
+                            <label for="remOwner{{ f.id }}">Owner</label>
+                            <input type="text" id="remOwner{{ f.id }}" name="owner" class="form-control" value="{{ f.remediation.owner if f.remediation else '' }}">
                         </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label class="text-sm">Deadline</label>
-                            <input type="date" name="deadline" class="form-control" style="font-size:12px;" value="{{ f.remediation.deadline if f.remediation else '' }}">
+                        <div class="form-group">
+                            <label for="remDeadline{{ f.id }}">Deadline</label>
+                            <input type="date" id="remDeadline{{ f.id }}" name="deadline" class="form-control" value="{{ f.remediation.deadline if f.remediation else '' }}">
                         </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label class="text-sm">Status</label>
-                            <select name="status" class="form-control" style="font-size:12px;">
+                        <div class="form-group">
+                            <label for="remStatus{{ f.id }}">Status</label>
+                            <select id="remStatus{{ f.id }}" name="status" class="form-control">
                                 {% for s in ['Planned', 'In Progress', 'Completed'] %}
                                 <option {% if f.remediation and f.remediation.status == s %}selected{% endif %}>{{ s }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-top:10px;margin-bottom:0;">
-                        <input type="text" name="notes" class="form-control" style="font-size:12px;" placeholder="Remediation notes..." value="{{ f.remediation.notes if f.remediation else '' }}">
+                    <div class="form-group mb-0">
+                        <label class="sr-only" for="remNotes{{ f.id }}">Remediation notes</label>
+                        <input type="text" id="remNotes{{ f.id }}" name="notes" class="form-control" placeholder="Remediation notes..." value="{{ f.remediation.notes if f.remediation else '' }}">
                     </div>
                 </form>
             </div>
@@ -213,9 +258,14 @@
 
 {% block scripts %}
 <script>
-function toggleRow(id) {
-    const el = document.getElementById(id);
-    el.style.display = el.style.display === 'none' ? '' : 'none';
-}
+document.querySelectorAll('[data-toggle-panel]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        const panel = document.getElementById(btn.dataset.togglePanel);
+        if (!panel) return;
+        const open = panel.hidden;
+        panel.hidden = !open;
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+});
 </script>
 {% endblock %}

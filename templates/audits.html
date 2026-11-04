@@ -1,173 +1,189 @@
 {% extends "base.html" %}
 {% block title %}Audit Center{% endblock %}
-{% block breadcrumb %}<span>Audit Center</span>{% endblock %}
+{% block breadcrumb %}<span>Operations</span><span>/</span><span>Audit Center</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-b.css') }}">
+{% set pill_of = {'Completed': 'pill-completed', 'Under Review': 'pill-in-review', 'In Progress': 'pill-in-progress'} %}
+{% set icon_of = {'Completed': 'fa-check', 'Under Review': 'fa-magnifying-glass', 'In Progress': 'fa-spinner', 'Scheduled': 'fa-calendar'} %}
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Operations</div>
         <h1>Audit Center</h1>
-        <p>Track audits, collect evidence, and manage findings</p>
+        <p>Track audits, collect evidence, and manage findings.</p>
     </div>
     <div class="page-actions">
-        <a href="/audits/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        <a href="/audits/export" class="btn btn-secondary"><i class="fas fa-download" aria-hidden="true"></i> Export</a>
         {% if current_user.can_audit_write %}
-        <button class="btn btn-primary" onclick="showCreateAuditModal()"><i class="fas fa-plus"></i> Create Audit</button>
+        <button type="button" class="btn btn-primary" id="createAuditBtn"><i class="fas fa-plus" aria-hidden="true"></i> Create audit</button>
         {% endif %}
     </div>
 </div>
 
-<!-- Audit Stats -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Total Audits</div>
-            <div class="stat-value">{{ audits|length }}</div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-clipboard-list" aria-hidden="true"></i> Total audits</div>
+        <div class="kpi-value">{{ audits|length }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-spinner"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">In Progress</div>
-            <div class="stat-value">{{ audits|selectattr('status', 'equalto', 'In Progress')|list|length }}</div>
-        </div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-spinner" aria-hidden="true"></i> In progress</div>
+        <div class="kpi-value">{{ audits|selectattr('status', 'equalto', 'In Progress')|list|length }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon purple"><i class="fas fa-calendar"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Scheduled</div>
-            <div class="stat-value">{{ audits|selectattr('status', 'equalto', 'Scheduled')|list|length }}</div>
-        </div>
+    <div class="kpi">
+        <div class="kpi-label"><i class="fas fa-calendar" aria-hidden="true"></i> Scheduled</div>
+        <div class="kpi-value">{{ audits|selectattr('status', 'equalto', 'Scheduled')|list|length }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Completed</div>
-            <div class="stat-value">{{ audits|selectattr('status', 'equalto', 'Completed')|list|length }}</div>
-        </div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Completed</div>
+        <div class="kpi-value">{{ audits|selectattr('status', 'equalto', 'Completed')|list|length }}</div>
     </div>
 </div>
 
-<!-- Audit Cards -->
-<div class="grid-2">
+{% if audits %}
+<div class="filter-bar" role="search">
+    <div class="filter-search input-icon">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input type="search" class="form-control" id="auditSearch" placeholder="Search audits..." aria-label="Search audits">
+    </div>
+    <select class="filter-select" id="auditStatusFilter" aria-label="Status">
+        <option value="">All statuses</option>
+        {% for s in ['Scheduled', 'In Progress', 'Under Review', 'Completed'] %}<option>{{ s }}</option>{% endfor %}
+    </select>
+</div>
+{% endif %}
+
+<div class="card-grid" id="auditGrid">
     {% for a in audits %}
-    <div class="card" style="cursor:pointer;" onclick="window.location='{{ url_for('audits.audit_detail', audit_id=a.id) }}'">
+    {% set pct = (a.evidence_collected / a.evidence_total * 100)|round|int if a.evidence_total else 0 %}
+    <article class="card audit-card" data-status="{{ a.status }}" data-search="{{ (a.name ~ ' ' ~ (a.framework or '') ~ ' ' ~ (a.auditor or ''))|lower }}">
         <div class="card-header">
             <div>
-                <h3><a href="{{ url_for('audits.audit_detail', audit_id=a.id) }}" style="color:inherit;text-decoration:none;">{{ a.name }}</a></h3>
-                <span class="text-sm text-muted">{{ a.framework }} &middot; {{ a.auditor }}</span>
+                <h2 class="card-title"><a class="card-link" href="{{ url_for('audits.audit_detail', audit_id=a.id) }}">{{ a.name }}</a></h2>
+                <div class="card-subtitle">{{ a.framework }} &middot; {{ a.auditor or 'No auditor' }}</div>
             </div>
-            <div class="flex gap-8">
-                {% if a.status == 'Completed' %}<span class="badge badge-success">{{ a.status }}</span>
-                {% elif a.status == 'Under Review' %}<span class="badge badge-warning">{{ a.status }}</span>
-                {% elif a.status == 'In Progress' %}<span class="badge badge-primary">{{ a.status }}</span>
-                {% else %}<span class="badge badge-neutral">{{ a.status }}</span>{% endif %}
+            <div class="card-actions cluster">
+                <span class="pill {{ pill_of.get(a.status, 'pill-neutral') }}"><i class="fas {{ icon_of.get(a.status, 'fa-circle') }}" aria-hidden="true"></i>{{ a.status }}</span>
                 {% if current_user.can_delete %}
-                <form method="POST" action="{{ url_for('audits.delete_audit', audit_id=a.id) }}" style="display:inline;" onclick="event.stopPropagation()" onsubmit="return confirm('Delete {{ a.name }}?');">
+                <form method="POST" action="{{ url_for('audits.delete_audit', audit_id=a.id) }}" data-confirm="Delete {{ a.name }}? Its evidence checklist and findings will be removed." data-confirm-title="Delete audit" data-confirm-button="Delete">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                    <button type="submit" class="btn btn-sm btn-danger btn-icon" aria-label="Delete {{ a.name }}" title="Delete"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </form>
                 {% endif %}
             </div>
         </div>
         <div class="card-body">
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:20px;">
-                <div>
-                    <div class="text-sm text-muted mb-8">Start Date</div>
-                    <div class="font-semibold">{{ a.start_date }}</div>
-                </div>
-                <div>
-                    <div class="text-sm text-muted mb-8">End Date</div>
-                    <div class="font-semibold">{{ a.end_date }}</div>
-                </div>
-                <div>
-                    <div class="text-sm text-muted mb-8">Findings</div>
-                    <div class="font-semibold">{{ a.findings }} <span class="text-sm text-muted">({{ a.open_findings }} open)</span></div>
-                </div>
+            <dl class="audit-facts">
+                <div><dt>Start date</dt><dd>{{ a.start_date or '—' }}</dd></div>
+                <div><dt>End date</dt><dd>{{ a.end_date or '—' }}</dd></div>
+                <div><dt>Findings</dt><dd>{{ a.findings }} <span class="text-sm text-muted">({{ a.open_findings }} open)</span></dd></div>
+            </dl>
+            <div class="progress-label">
+                <span>Evidence collection</span>
+                <span class="font-semibold">{{ a.evidence_collected }}/{{ a.evidence_total }}</span>
             </div>
-
-            <div class="mb-8">
-                <div class="flex-between mb-8">
-                    <span class="text-sm text-muted">Evidence Collection</span>
-                    <span class="text-sm font-semibold">{{ a.evidence_collected }}/{{ a.evidence_total }}</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill {% if a.evidence_total and (a.evidence_collected / a.evidence_total * 100) >= 90 %}green{% elif a.evidence_total and (a.evidence_collected / a.evidence_total * 100) >= 50 %}blue{% else %}orange{% endif %}" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round if a.evidence_total else 0 }}%"></div>
-                </div>
-                <div class="progress-label">
-                    <span>{{ (a.evidence_collected / a.evidence_total * 100)|round|int if a.evidence_total else 0 }}% complete</span>
-                    <span>{{ a.evidence_total - a.evidence_collected }} remaining</span>
-                </div>
+            <div class="progress {% if pct >= 90 %}is-success{% elif pct < 50 %}is-warning{% endif %}" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="Evidence collected for {{ a.name }}"><span style="width:{{ pct }}%"></span></div>
+            <div class="progress-label">
+                <span>{{ pct }}% complete</span>
+                <span>{{ a.evidence_total - a.evidence_collected }} remaining</span>
             </div>
         </div>
-    </div>
+    </article>
     {% else %}
-    <div class="empty-state" style="grid-column:1/-1;">
+    <div class="empty-state">
         <div class="empty-state-icon"><i class="fas fa-clipboard-list" aria-hidden="true"></i></div>
         <h3>No audits yet</h3>
         <p>Create an audit against one of your compliance frameworks to start tracking evidence collection and findings.</p>
         {% if current_user.can_audit_write %}
-        <button class="btn btn-primary btn-sm" onclick="showCreateAuditModal()"><i class="fas fa-plus" aria-hidden="true"></i> Create Audit</button>
+        <button type="button" class="btn btn-primary btn-sm" id="createAuditEmptyBtn"><i class="fas fa-plus" aria-hidden="true"></i> Create audit</button>
         {% endif %}
     </div>
     {% endfor %}
+    {% if audits %}
+    <div class="empty-state" id="auditNoMatch" hidden>
+        <div class="empty-state-icon"><i class="fas fa-filter-circle-xmark" aria-hidden="true"></i></div>
+        <h3>No matching audits</h3>
+        <p>Try a different search or status.</p>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function filterControlOptions(frameworkId) {
-    document.querySelectorAll('#controlCheckboxes label').forEach(label => {
-        label.style.display = label.dataset.frameworkId === frameworkId ? '' : 'none';
-    });
-}
+(function () {
+    function filterControlOptions(frameworkId) {
+        document.querySelectorAll('#controlCheckboxes label').forEach(label => {
+            label.hidden = label.dataset.frameworkId !== frameworkId;
+        });
+    }
 
-function showCreateAuditModal() {
-    openModal('Create New Audit', `
-        <form id="auditForm" method="POST" action="/audits/add">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label>Audit Name</label>
-                <input type="text" name="name" class="form-control" placeholder="e.g., SOC 2 Type II Annual Audit" required>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    function showCreateAuditModal() {
+        openModal('Create new audit', `
+            <form id="auditForm" method="POST" action="/audits/add">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
-                    <label>Framework</label>
-                    <select name="framework_id" class="form-control" onchange="filterControlOptions(this.value)" required>
-                        {% for fw in frameworks %}
-                        <option value="{{ fw.id }}">{{ fw.name }} ({{ fw.total_controls }} controls)</option>
+                    <label for="auditName">Audit name <span class="required-star">*</span></label>
+                    <input type="text" id="auditName" name="name" class="form-control" placeholder="e.g., SOC 2 Type II Annual Audit" required>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="auditFramework">Framework <span class="required-star">*</span></label>
+                        <select id="auditFramework" name="framework_id" class="form-control" required>
+                            {% for fw in frameworks %}
+                            <option value="{{ fw.id }}">{{ fw.name }} ({{ fw.total_controls }} controls)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="auditAuditor">Auditor</label>
+                        <input type="text" id="auditAuditor" name="auditor" class="form-control" placeholder="Auditing firm or Internal">
+                    </div>
+                    <div class="form-group">
+                        <label for="auditStart">Start date</label>
+                        <input type="date" id="auditStart" name="start_date" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="auditEnd">End date</label>
+                        <input type="date" id="auditEnd" name="end_date" class="form-control">
+                    </div>
+                </div>
+                <fieldset class="form-group">
+                    <legend>Scope (optional)</legend>
+                    <div class="form-help">Leave everything unchecked to include every control in the framework.</div>
+                    <div id="controlCheckboxes" class="check-scroll">
+                        {% for c in all_controls %}
+                        <label class="form-check" data-framework-id="{{ c.framework_id }}">
+                            <input type="checkbox" name="control_ids" value="{{ c.id }}"> <span>{{ c.code }} &ndash; {{ c.title }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Auditor</label>
-                    <input type="text" name="auditor" class="form-control" placeholder="Auditing firm or Internal">
-                </div>
-                <div class="form-group">
-                    <label>Start Date</label>
-                    <input type="date" name="start_date" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>End Date</label>
-                    <input type="date" name="end_date" class="form-control">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Scope (optional &mdash; leave unchecked to include every control in the framework)</label>
-                <div id="controlCheckboxes" style="max-height:180px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;padding:8px 12px;">
-                    {% for c in all_controls %}
-                    <label data-framework-id="{{ c.framework_id }}" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:400;padding:3px 0;">
-                        <input type="checkbox" name="control_ids" value="{{ c.id }}"> {{ c.code }} &ndash; {{ c.title }}
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-        </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'auditForm\').submit()">Create Audit</button>');
+                    </div>
+                </fieldset>
+            </form>
+        `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'auditForm\').submit()">Create audit</button>');
 
-    {% if frameworks %}
-    filterControlOptions('{{ frameworks[0].id }}');
-    {% endif %}
-}
+        const fw = document.getElementById('auditFramework');
+        fw.addEventListener('change', function () { filterControlOptions(fw.value); });
+        {% if frameworks %}
+        filterControlOptions('{{ frameworks[0].id }}');
+        {% endif %}
+    }
+    ['createAuditBtn', 'createAuditEmptyBtn'].forEach(function (id) {
+        const el = document.getElementById(id); if (el) el.addEventListener('click', showCreateAuditModal);
+    });
+
+    // Client-side search + status filter
+    const search = document.getElementById('auditSearch'), status = document.getElementById('auditStatusFilter');
+    function applyFilters() {
+        const q = search.value.toLowerCase().trim(), s = status.value;
+        let shown = 0;
+        document.querySelectorAll('#auditGrid .audit-card').forEach(function (c) {
+            const ok = (!q || c.dataset.search.includes(q)) && (!s || c.dataset.status === s);
+            c.hidden = !ok; if (ok) shown++;
+        });
+        document.getElementById('auditNoMatch').hidden = shown > 0;
+    }
+    if (search && status) { search.addEventListener('input', applyFilters); status.addEventListener('change', applyFilters); }
+})();
 </script>
 {% endblock %}

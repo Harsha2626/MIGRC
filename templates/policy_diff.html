@@ -1,36 +1,36 @@
 {% extends "base.html" %}
 {% block title %}{{ policy.name }} - Diff{% endblock %}
-{% block breadcrumb %}
-<a href="/policies" style="color:var(--text-secondary);text-decoration:none;">Policy Management</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<a href="{{ url_for('policies.policy_detail', policy_id=policy.id) }}" style="color:var(--text-secondary);text-decoration:none;">{{ policy.name }}</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<span>Diff</span>
-{% endblock %}
+{% block breadcrumb %}<a href="/policies">Policies</a><span>/</span><a href="{{ url_for('policies.policy_detail', policy_id=policy.id) }}">{{ policy.name }}</a><span>/</span><span>Diff</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-b.css') }}">
 <div class="page-header">
     <div>
-        <h1>{{ policy.name }}: v{{ old_version.version }} &rarr; v{{ policy.version }}</h1>
-        <p>Comparing the saved v{{ old_version.version }} snapshot against the current content</p>
+        <div class="page-eyebrow">Version comparison</div>
+        <h1>{{ policy.name }} <span class="code">v{{ old_version.version }}</span> <span aria-hidden="true">&rarr;</span><span class="sr-only">to</span> <span class="code">v{{ policy.version }}</span></h1>
+        <p>Comparing the saved v{{ old_version.version }} snapshot against the current content.</p>
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('policies.policy_detail', policy_id=policy.id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Policy</a>
+        <a href="{{ url_for('policies.policy_detail', policy_id=policy.id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to policy</a>
     </div>
 </div>
 
 <div class="card">
-    <div class="card-body" style="overflow-x:auto;">
-        <style>
-            table.diff { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; border-collapse: collapse; width: 100%; }
-            table.diff td { padding: 2px 8px; white-space: pre-wrap; word-break: break-word; }
-            table.diff .diff_header { background: var(--bg-tertiary); color: var(--text-muted); text-align: right; }
-            table.diff .diff_next { background: var(--bg-tertiary); }
-            table.diff .diff_add { background: var(--accent-success-light); }
-            table.diff .diff_chg { background: var(--accent-warning-light); }
-            table.diff .diff_sub { background: var(--accent-danger-light); }
-        </style>
-        {{ diff|safe }}
+    <div class="card-header">
+        <div>
+            <h2 class="card-title">Changes</h2>
+            <div class="card-subtitle">Left is v{{ old_version.version }}, right is the current version. Changed words are underlined (added) or struck through (removed).</div>
+        </div>
+        <div class="diff-legend" aria-label="Legend">
+            <span class="diff-key"><i class="k-add" aria-hidden="true"></i> Added</span>
+            <span class="diff-key"><i class="k-chg" aria-hidden="true"></i> Changed</span>
+            <span class="diff-key"><i class="k-sub" aria-hidden="true"></i> Removed</span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="diff-wrap" tabindex="0" role="region" aria-label="Side-by-side policy diff">
+            {{ diff|safe }}
+        </div>
     </div>
 </div>
 {% endblock %}
