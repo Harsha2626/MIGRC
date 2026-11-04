@@ -1,124 +1,49 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIGRC - Login</title>
+    <title>Sign in - MIGRC</title>
+    <meta name="color-scheme" content="light dark">
+    <script>(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--bg-primary);
-            font-family: var(--font-sans);
-        }
-        .login-container {
-            width: 100%;
-            max-width: 420px;
-            padding: 20px;
-        }
-        .login-card {
-            background: var(--bg-secondary);
-            border-radius: var(--radius-xl);
-            box-shadow: var(--shadow-lg);
-            padding: 40px;
-            border: 1px solid var(--border-color);
-        }
-        .login-logo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            margin-bottom: 8px;
-        }
-        .login-logo-icon {
-            width: 44px;
-            height: 44px;
-            background: var(--accent-primary);
-            border-radius: var(--radius-md);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-inverse);
-            font-size: 20px;
-        }
-        .login-logo-text {
-            font-size: 28px;
-            font-weight: 800;
-            color: var(--text-primary);
-            letter-spacing: -0.5px;
-        }
-        .login-subtitle {
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 14px;
-            margin-bottom: 32px;
-        }
-        .login-form .form-group {
-            margin-bottom: 20px;
-        }
-        .login-form label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 6px;
-        }
-        .login-form input {
-            width: 100%;
-            padding: 10px 14px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            color: var(--text-primary);
-            background: var(--bg-primary);
-            outline: none;
-            transition: border-color 0.2s;
-            box-sizing: border-box;
-        }
-        .login-form input:focus {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px var(--focus-ring-color);
-        }
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: var(--accent-primary);
-            color: var(--text-inverse);
-            border: none;
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .login-btn:hover {
-            background: var(--accent-primary-hover);
-        }
-        .login-btn:active {
-            background: var(--accent-primary-active);
-        }
-        .flash-messages {
-            margin-bottom: 20px;
-        }
+        /* Login page is standalone (no app shell): neutralise the shell's flex body. */
+        body { display: block; }
+        .auth-pw { position: relative; }
+        .auth-pw .btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
+        .auth-pw .form-control { padding-right: 44px; }
+        .auth-submit { width: 100%; margin-top: 8px; }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-logo">
-                <div class="login-logo-icon"><i class="fas fa-shield-halved"></i></div>
-                <span class="login-logo-text">MIGRC</span>
-            </div>
-            <p class="login-subtitle">Compliance Management Platform</p>
+    <button class="topbar-btn auth-theme" id="themeToggle" type="button" aria-label="Toggle light/dark theme" aria-pressed="false"><i class="fas fa-moon" aria-hidden="true"></i></button>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            <div class="flash-messages">
+    <div class="auth">
+        <aside class="auth-aside" aria-label="About MIGRC">
+            <div class="auth-brand"><span class="mark"><i class="fas fa-shield-halved" aria-hidden="true"></i></span> MIGRC</div>
+            <div>
+                <h2>Continuous compliance, always audit-ready.</h2>
+                <p>One place to run your frameworks, risks, policies, vendors and evidence, so the next audit is a report, not a project.</p>
+                <ul class="auth-points">
+                    <li><i class="fas fa-circle-check" aria-hidden="true"></i><span>Control status tracked against every framework you adopt</span></li>
+                    <li><i class="fas fa-circle-check" aria-hidden="true"></i><span>Risk register with a live likelihood and impact heatmap</span></li>
+                    <li><i class="fas fa-circle-check" aria-hidden="true"></i><span>Evidence, policies and audits linked in one audit trail</span></li>
+                </ul>
+            </div>
+            <div class="auth-fine">&copy; MIGRC. Access is monitored and logged.</div>
+        </aside>
+
+        <main class="auth-main" id="main">
+            <div class="auth-card">
+                <h1>Sign in</h1>
+                <p class="lead">Welcome back. Enter your credentials to continue.</p>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
                 {% for category, message in messages %}
                 {% set flash_icon = {'error': 'fa-circle-exclamation', 'success': 'fa-circle-check'}.get(category, 'fa-circle-info') %}
                 <div class="flash-message flash-{{ category }}" role="alert">
@@ -126,25 +51,40 @@
                     <span>{{ message }}</span>
                 </div>
                 {% endfor %}
-            </div>
-            {% endif %}
-            {% endwith %}
+                {% endif %}
+                {% endwith %}
 
-            <form class="login-form" method="POST" action="{{ url_for('auth.login') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" placeholder="you@company.com" required autofocus>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
-                </div>
-                <button type="submit" class="login-btn">
-                    <i class="fas fa-sign-in-alt"></i> Sign In
-                </button>
-            </form>
-        </div>
+                <form method="POST" action="{{ url_for('auth.login') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" class="form-control" placeholder="you@company.com" autocomplete="username" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="auth-pw">
+                            <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" autocomplete="current-password" required>
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" id="pwToggle" aria-label="Show password" aria-pressed="false"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg auth-submit"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> Sign in</button>
+                </form>
+            </div>
+        </main>
     </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+    (function () {
+        var b = document.getElementById('pwToggle'), i = document.getElementById('password');
+        b.addEventListener('click', function () {
+            var show = i.type === 'password';
+            i.type = show ? 'text' : 'password';
+            b.setAttribute('aria-pressed', show ? 'true' : 'false');
+            b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            b.firstElementChild.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+        });
+    })();
+    </script>
 </body>
 </html>
