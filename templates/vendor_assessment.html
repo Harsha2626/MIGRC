@@ -19,6 +19,12 @@
         {% if assessment.verdict %}
         <span class="badge badge-lg {% if assessment.verdict == 'Pass' %}badge-success{% elif assessment.verdict == 'Fail' %}badge-danger{% else %}badge-warning{% endif %}">{{ assessment.verdict }}</span>
         {% endif %}
+        {% if assessment.status != 'Completed' and assessment.template.questions and current_user.has_permission('write') %}
+        <form method="POST" action="{{ url_for('vendors.ai_suggest_assessment', vendor_id=assessment.vendor.id, assessment_id=assessment.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary" title="Drafts answers from your published policies and approved evidence. Review before accepting."><i class="fas fa-wand-magic-sparkles"></i> AI suggest answers</button>
+        </form>
+        {% endif %}
         <a href="{{ url_for('vendors.vendor_detail', vendor_id=assessment.vendor.id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
@@ -32,6 +38,15 @@
             <div class="form-group">
                 <label>{{ loop.index }}. {{ q.question_text }}</label>
                 <textarea name="question_{{ q.id }}" class="form-control" rows="2" {% if assessment.status == 'Completed' %}readonly{% endif %}>{{ existing.get(q.id, '') }}</textarea>
+                {% set s = (suggestions or {}).get(q.id) %}
+                {% if s and assessment.status != 'Completed' %}
+                <div style="margin-top:6px;padding:8px 10px;border:1px dashed var(--border);border-radius:6px;font-size:13px;">
+                    <div style="color:var(--text-muted);margin-bottom:4px;"><i class="fas fa-wand-magic-sparkles"></i> AI suggestion (draft, not saved) &middot; confidence {{ (s.confidence * 100)|round|int }}%{% if s.needs_human %} &middot; no source cited{% endif %}</div>
+                    <div style="white-space:pre-wrap;">{{ s.answer }}</div>
+                    {% if s.sources %}<div style="color:var(--text-muted);margin-top:4px;">Sources: {{ s.sources|join('; ') }}</div>{% endif %}
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" data-target="question_{{ q.id }}" data-text="{{ s.accept_text }}" onclick="var t=document.getElementsByName(this.dataset.target)[0]; t.value=this.dataset.text; this.textContent='Accepted - remember to Save Progress'; this.disabled=true;">Accept suggestion</button>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
             {% else %}
