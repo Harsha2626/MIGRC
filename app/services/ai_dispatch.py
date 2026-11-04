@@ -74,6 +74,11 @@ DEFAULT_FREE_MODELS = [
     ('opencode', 'big-pickle'),                   # 200,000 ctx / 32,000 out (free)
 ]
 
+# Provider errors that mean "this account is gated", not "this model is down" (observed live
+# 2026-11-04: HTTP 401 PAID_MODEL_AUTH_REQUIRED / HTTP 403 ENTITLEMENT_ERROR on every model).
+AUTH_BLOCK_SIGNATURES = ('PAID_MODEL_AUTH_REQUIRED', 'ENTITLEMENT_ERROR')
+AUTH_BLOCK_LIMIT = 3
+
 DISCOVERY_TTL_SECONDS = 300
 DISCOVERY_TIMEOUT = 3
 _discovery_cache = {'at': 0.0, 'key': None, 'models': None}
@@ -364,6 +369,7 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
 
     try:
         last_failure = None
+        auth_blocks = 0
         for attempt, (provider_id, model_id, variant) in enumerate(candidates):
             attempt_timeout = REQUEST_TIMEOUT if attempt == 0 else FALLBACK_REQUEST_TIMEOUT
             tag = f'{provider_id}/{model_id}' + (f' ({variant})' if variant else '')
@@ -395,6 +401,17 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
                     if last.get('error'):
                         last_failure = f'{tag}: {last["error"]}'
                         logger.warning('AI dispatch (%s) agent errored using model %s: %s', log_tag, tag, last['error'])
+                        if any(sig in str(last['error']) for sig in AUTH_BLOCK_SIGNATURES):
+                            auth_blocks += 1
+                            if auth_blocks >= AUTH_BLOCK_LIMIT:
+                                # Account-wide gate (not a per-model outage): the remaining models
+                                # will fail identically, so fail fast instead of burning minutes.
+                                logger.warning('AI dispatch (%s): %d consecutive entitlement/sign-in '
+                                               'errors - server is gating models account-wide, giving up',
+                                               log_tag, auth_blocks)
+                                break
+                        else:
+                            auth_blocks = 0
                         continue
                     full_text = '\n'.join(p['text'] for p in last.get('content', []) if p.get('type') == 'text')
 

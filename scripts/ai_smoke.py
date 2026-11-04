@@ -22,14 +22,25 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--env', help='optional .env file to load OPENCODE_* variables from')
+    ap.add_argument('--pinned', action='store_true',
+                    help='keep OPENCODE_MODEL/CLINE_API_KEY from --env (tests the opt-in pinned path)')
     args = ap.parse_args()
     if args.env:
         from dotenv import dotenv_values
         for k, v in dotenv_values(args.env).items():
             if k.startswith('OPENCODE_') and k not in os.environ:
                 os.environ[k] = v
-    os.environ.pop('OPENCODE_MODEL', None)
-    os.environ.pop('OPENCODE_MODEL_VARIANT', None)
+    import logging
+    logging.basicConfig(level=logging.WARNING, format='%(asctime)s %(name)s: %(message)s')
+    if args.pinned:
+        # exercise the opt-in pinned path (e.g. clinedirect/...) using the env file's settings
+        from dotenv import dotenv_values
+        for k, v in dotenv_values(args.env).items():
+            if k in ('OPENCODE_MODEL', 'OPENCODE_MODEL_VARIANT', 'CLINE_API_KEY'):
+                os.environ.setdefault(k, v)
+    else:
+        os.environ.pop('OPENCODE_MODEL', None)
+        os.environ.pop('OPENCODE_MODEL_VARIANT', None)
     if not os.environ.get('OPENCODE_SERVER_PASSWORD'):
         print('FAIL: OPENCODE_SERVER_PASSWORD not set')
         return 2

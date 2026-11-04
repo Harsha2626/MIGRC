@@ -177,3 +177,14 @@ valid citation are capped at 25% and flagged. See `app/services/ai_questionnaire
 `python scripts/ai_smoke.py [--env /path/to/.env]` exercises the real server (status, a trivial
 dispatch, and the questionnaire suggester against a throwaway sqlite DB). It is not run in CI.
 Unit tests (`test_ai_services.py`) mock the HTTP layer.
+
+### Known issue: account-wide gating (observed 2026-11-04)
+
+On this install the OpenCode server currently answers every model, free or not, with
+`HTTP 401 PAID_MODEL_AUTH_REQUIRED` ("sign in to use this model") or `HTTP 403 ENTITLEMENT_ERROR`
+(also for the server's `cline-pass` provider). That is a server/account entitlement gate, not
+something MIGRC can fix; fix it by signing in (`opencode auth login`) or restoring the
+subscription. MIGRC detects it: after 3 consecutive such errors the dispatcher stops trying the
+remaining models (about 6 seconds instead of minutes) and fails open. Until the gate is lifted,
+set `OPENCODE_MODEL=clinedirect/<model>` + `CLINE_API_KEY` as the explicit opt-in workaround.
+`python scripts/ai_smoke.py --pinned --env <.env>` tests that pinned path.

@@ -139,6 +139,22 @@ def test_dispatch_falls_through_error_and_unparseable(monkeypatch):
     assert state['deleted'] == ['/session/s1', '/session/s2', '/session/s3']
 
 
+def test_dispatch_fails_fast_on_account_wide_entitlement_block(monkeypatch):
+    blocked = "{'message': 'HTTP 403: ENTITLEMENT_ERROR'}"
+    replies = {m: None for _, m in ai_dispatch.DEFAULT_FREE_MODELS}
+    state = _fake_server(monkeypatch, replies)
+    orig = ai_dispatch._request
+
+    def with_err(base_url, password, method, path, body=None, timeout=None):
+        res = orig(base_url, password, method, path, body, timeout)
+        if method == 'GET' and path.endswith('/message'):
+            res['data'][0]['error'] = blocked
+        return res
+    monkeypatch.setattr(ai_dispatch, '_request', with_err)
+    assert ai_dispatch.run_compliance_agent('p', lambda t: t) is None
+    assert len(state['session_model']) == ai_dispatch.AUTH_BLOCK_LIMIT  # not all 10 models
+
+
 def test_dispatch_fail_open_when_parse_fn_raises(monkeypatch):
     replies = {m: 'x' for _, m in ai_dispatch.DEFAULT_FREE_MODELS}
     _fake_server(monkeypatch, replies)
