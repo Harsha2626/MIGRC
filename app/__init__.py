@@ -107,6 +107,8 @@ def create_app():
     app.register_blueprint(setup_bp)
     app.register_blueprint(organizations_bp)
     app.register_blueprint(google_oauth_bp)
+    from app.routes.incidents import incidents_bp
+    app.register_blueprint(incidents_bp)
 
     from app.cli import register_cli
     register_cli(app)

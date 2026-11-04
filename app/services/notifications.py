@@ -8,6 +8,7 @@ TYPE_ICONS = {
     'risk_escalated': 'fa-triangle-exclamation',
     'policy_review_due': 'fa-file-shield',
     'finding_assigned': 'fa-magnifying-glass-chart',
+    'incident': 'fa-bell',
 }
 
 
