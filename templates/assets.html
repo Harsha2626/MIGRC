@@ -3,6 +3,7 @@
 {% block breadcrumb %}<span>Asset Management</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-c.css') }}">
 {% set type_icons = {
     'Compute Instances': 'server',
     'Container Platforms': 'box',
@@ -17,6 +18,13 @@
     'Identity Groups': 'users',
     'Code Repo': 'code-branch',
 } %}
+{% set type_groups = [
+    ('Compute & platform', ['Compute Instances', 'Container Platforms', 'Serverless Functions']),
+    ('Data & network', ['Storage & Databases', 'Virtual Network (VPCs)']),
+    ('Security & observability', ['Monitoring & Logging', 'Key Management']),
+    ('Identity & devices', ['Identity Users', 'Identity Roles', 'Identity Groups', 'Mobile Devices']),
+    ('Code', ['Code Repo']),
+] %}
 {% set optional_columns = [
     ('source', 'Source', true),
     ('risk', 'Risk Associated', true),
@@ -26,66 +34,97 @@
     ('classification', 'Classification', false),
     ('status', 'Status', false),
 ] %}
+{% set hidden_cols = ['owner', 'environment', 'classification', 'status'] %}
+{% set at = namespace(n=0) %}
+{% for t in asset_types %}{% if type_counts[t] %}{% set at.n = at.n + 1 %}{% endif %}{% endfor %}
+{% set active_types = at.n %}
 
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Inventory</div>
         <h1>Asset Management</h1>
         <p>Track and secure all critical organizational assets across your cloud and identity providers</p>
     </div>
     <div class="page-actions">
-        <a href="/assets/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        <a href="/assets/export" class="btn btn-secondary"><i class="fas fa-download" aria-hidden="true"></i> Export</a>
         {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddAssetModal()"><i class="fas fa-plus"></i> Add Asset</button>
+        <button type="button" class="btn btn-primary" onclick="showAddAssetModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Asset</button>
         {% endif %}
     </div>
 </div>
 
-<div class="settings-grid" id="assetTypesGrid">
-    <!-- Asset Types Nav -->
-    <div class="card" style="height:fit-content;" id="assetTypesNavCard">
-        <div class="card-header" style="padding:14px 16px;">
-            <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Asset Types</h3>
-            <i class="fas fa-angles-left" style="cursor:pointer;color:var(--text-secondary);font-size:12px;" title="Collapse" onclick="toggleAssetTypesNav()"></i>
-        </div>
-        <div class="card-body" style="padding:12px;" id="assetTypesNavBody">
-            <div class="settings-nav" id="assetTypesNav">
-                {% for t in asset_types %}
-                <a href="{{ url_for('assets.assets', type=t) }}" class="settings-nav-item {% if t == selected_type %}active{% endif %}" style="text-decoration:none;justify-content:space-between;">
-                    <span><i class="fas fa-{{ type_icons[t] }}" style="width:16px;"></i> {{ t }}</span>
-                    <span class="badge badge-neutral">{{ type_counts[t] }}</span>
-                </a>
-                {% endfor %}
-            </div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-server" aria-hidden="true"></i> Total assets</div>
+        <div class="kpi-value">{{ total_assets }}</div>
+        <div class="kpi-foot"><span>across {{ active_types }} of {{ asset_types|length }} types</span></div>
     </div>
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-{{ type_icons.get(selected_type, 'server') }}" aria-hidden="true"></i> {{ selected_type }}</div>
+        <div class="kpi-value">{{ assets|length }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label"><i class="fas fa-earth-americas" aria-hidden="true"></i> Regions in view</div>
+        <div class="kpi-value">{{ regions|length }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label"><i class="fas fa-cloud" aria-hidden="true"></i> Sources in view</div>
+        <div class="kpi-value">{{ sources|length }}</div>
+    </div>
+</div>
 
-    <!-- Asset Table Panel -->
+<div class="asset-layout" id="assetTypesGrid">
+    <!-- Asset types, grouped -->
+    <nav class="card" aria-label="Asset types" id="assetTypesNavCard">
+        <div class="card-header">
+            <h2 class="card-title asset-nav-label">Asset types</h2>
+            <button type="button" class="btn btn-ghost btn-icon btn-sm" id="assetNavToggle" aria-label="Collapse asset types" aria-expanded="true" onclick="toggleAssetTypesNav(this)"><i class="fas fa-angles-left" aria-hidden="true"></i></button>
+        </div>
+        <div class="asset-nav" id="assetTypesNav">
+            {% for group, types in type_groups %}
+            {% set group_total = namespace(n=0) %}
+            {% for t in types %}{% if t in type_counts %}{% set group_total.n = group_total.n + type_counts[t] %}{% endif %}{% endfor %}
+            <div class="asset-group-title">{{ group }} ({{ group_total.n }})</div>
+            {% for t in types if t in asset_types %}
+            <a href="{{ url_for('assets.assets', type=t) }}" {% if t == selected_type %}aria-current="page"{% endif %} title="{{ t }}">
+                <span><i class="fas fa-{{ type_icons.get(t, 'server') }}" aria-hidden="true"></i><span class="asset-nav-label">{{ t }}</span></span>
+                <span class="count"><span class="sr-only">{{ type_counts[t] }} assets</span><span aria-hidden="true">{{ type_counts[t] }}</span></span>
+            </a>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </nav>
+
+    <!-- Asset table -->
     <div class="card">
         <div class="card-header">
-            <h3>{{ selected_type }} <span class="badge badge-neutral">{{ assets|length }}</span></h3>
+            <div>
+                <h2 class="card-title">{{ selected_type }}</h2>
+                <div class="card-subtitle">{{ assets|length }} asset{{ '' if assets|length == 1 else 's' }}</div>
+            </div>
         </div>
-        <div class="card-body" style="padding:16px;">
-            <div class="toolbar" style="margin-bottom:0;">
-                <div class="search-input-wrapper">
-                    <i class="fas fa-search"></i>
-                    <input type="text" class="filter-input" placeholder="Search by text" id="assetSearch" oninput="applyAssetFilters()">
+        <div class="card-body">
+            <div class="filter-bar flat">
+                <div class="filter-search input-icon">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" class="form-control" placeholder="Search by text" aria-label="Search assets" id="assetSearch" oninput="applyAssetFilters()">
                 </div>
 
                 <div class="dropdown-panel-wrapper">
-                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('filtersPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="filtersPanel"><i class="fas fa-filter" aria-hidden="true"></i> More Filters</button>
+                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('filtersPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="filtersPanel"><i class="fas fa-filter" aria-hidden="true"></i> More filters</button>
                     <div class="dropdown-panel" id="filtersPanel">
-                        <div class="dropdown-panel-grid">
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label style="font-size:11px;">Region</label>
+                        <div class="filter-panel-grid">
+                            <div class="form-group">
+                                <label for="assetRegionFilter">Region</label>
                                 <select class="form-control" id="assetRegionFilter" onchange="applyAssetFilters()">
-                                    <option value="">All Regions</option>
+                                    <option value="">All regions</option>
                                     {% for r in regions %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
                                 </select>
                             </div>
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label style="font-size:11px;">Source</label>
+                            <div class="form-group">
+                                <label for="assetSourceFilter">Source</label>
                                 <select class="form-control" id="assetSourceFilter" onchange="applyAssetFilters()">
-                                    <option value="">All Sources</option>
+                                    <option value="">All sources</option>
                                     {% for s in sources %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
                                 </select>
                             </div>
@@ -95,8 +134,10 @@
 
                 <button class="btn btn-secondary btn-icon" type="button" title="Refresh" aria-label="Refresh" onclick="window.location.reload()"><i class="fas fa-rotate" aria-hidden="true"></i></button>
 
-                <div class="dropdown-panel-wrapper" style="margin-left:auto;">
-                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('columnsPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="columnsPanel">Columns <span class="badge badge-neutral" id="columnsCountBadge">3</span> <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;margin-left:2px;"></i></button>
+                <span class="spacer"></span>
+
+                <div class="dropdown-panel-wrapper">
+                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('columnsPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="columnsPanel">Columns <span class="pill pill-neutral" id="columnsCountBadge">3</span> <i class="fas fa-chevron-down" aria-hidden="true"></i></button>
                     <div class="dropdown-panel" id="columnsPanel">
                         {% for key, label, default in optional_columns %}
                         <label class="dropdown-panel-item">
@@ -108,86 +149,102 @@
                 </div>
             </div>
 
-            <form id="bulkDeleteForm" method="POST" action="{{ url_for('assets.bulk_delete_assets') }}">
+            {% if assets %}
+            <form id="bulkDeleteForm" method="POST" action="{{ url_for('assets.bulk_delete_assets') }}" data-confirm="Delete the selected assets? This cannot be undone." data-confirm-title="Delete assets" data-confirm-button="Delete">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="type" value="{{ selected_type }}">
-                <div id="bulkActionBar" style="display:none;align-items:center;gap:12px;margin-top:12px;padding:8px 12px;background:var(--accent-primary-light);border-radius:var(--radius-md);">
-                    <span style="font-size:13px;font-weight:500;color:var(--accent-primary);"><span id="bulkSelectedCount">0</span> selected</span>
+                <div class="bulk-bar" id="bulkActionBar" role="region" aria-label="Bulk actions">
+                    <span><span id="bulkSelectedCount">0</span> selected</span>
                     {% if current_user.can_delete %}
-                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected assets?');"><i class="fas fa-trash"></i> Delete Selected</button>
+                    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash" aria-hidden="true"></i> Delete selected</button>
                     {% endif %}
+                    <button type="button" class="btn btn-sm btn-ghost" onclick="clearAssetSelection()">Clear selection</button>
                 </div>
 
-                <div class="table-container" style="margin-top:12px;">
-                    <table id="assetTable">
+                <div class="table-container">
+                    <table id="assetTable" class="table-sortable">
                         <thead>
                             <tr>
-                                <th style="width:36px;"><input type="checkbox" id="assetSelectAll" onchange="toggleSelectAllAssets(this)"></th>
-                                <th>Resource ID</th>
-                                <th>Resource Name</th>
-                                <th data-col="source">Source</th>
-                                <th data-col="risk">Risk Associated</th>
-                                <th data-col="region">Region</th>
-                                <th data-col="owner" style="display:none;">Owner</th>
-                                <th data-col="environment" style="display:none;">Environment</th>
-                                <th data-col="classification" style="display:none;">Classification</th>
-                                <th data-col="status" style="display:none;">Status</th>
-                                <th style="width:90px;">Actions</th>
+                                <th class="col-check"><input type="checkbox" id="assetSelectAll" aria-label="Select all visible assets" onchange="toggleSelectAllAssets(this)"></th>
+                                <th data-sort="text">Resource ID</th>
+                                <th data-sort="text">Resource name</th>
+                                <th data-sort="text" data-col="source">Source</th>
+                                <th data-sort="text" data-col="risk">Risk associated</th>
+                                <th data-sort="text" data-col="region">Region</th>
+                                <th data-sort="text" data-col="owner" class="col-hidden">Owner</th>
+                                <th data-sort="text" data-col="environment" class="col-hidden">Environment</th>
+                                <th data-sort="text" data-col="classification" class="col-hidden">Classification</th>
+                                <th data-sort="text" data-col="status" class="col-hidden">Status</th>
+                                <th class="actions"><span class="sr-only">Actions</span></th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for a in assets %}
                             <tr data-region="{{ a.region or '' }}" data-source="{{ a.cloud_provider or '' }}">
-                                <td><input type="checkbox" class="asset-row-checkbox" name="asset_ids" value="{{ a.id }}" onchange="updateBulkBar()"></td>
-                                <td><span style="font-family:monospace;font-size:12px;color:var(--accent-primary);">{{ a.resource_id or '—' }}</span></td>
-                                <td class="font-semibold">{{ a.name }}</td>
+                                <td class="col-check"><input type="checkbox" class="asset-row-checkbox" name="asset_ids" value="{{ a.id }}" aria-label="Select {{ a.name }}" onchange="updateBulkBar()"></td>
+                                <td><span class="mono">{{ a.resource_id or '—' }}</span></td>
+                                <td class="cell-title">{{ a.name }}</td>
                                 <td data-col="source">
-                                    {% if a.cloud_provider == 'AWS' %}<i class="fab fa-aws" title="AWS"></i>
-                                    {% elif a.cloud_provider == 'Azure' %}<i class="fab fa-microsoft" title="Azure"></i>
-                                    {% elif a.cloud_provider == 'GCP' %}<i class="fab fa-google" title="GCP"></i>
-                                    {% elif a.cloud_provider == 'GitHub' %}<i class="fab fa-github" title="GitHub"></i>
-                                    {% else %}<i class="fas fa-minus" style="color:var(--text-muted);"></i>{% endif %}
+                                    {% if a.cloud_provider == 'AWS' %}<i class="fab fa-aws" aria-hidden="true"></i>
+                                    {% elif a.cloud_provider == 'Azure' %}<i class="fab fa-microsoft" aria-hidden="true"></i>
+                                    {% elif a.cloud_provider == 'GCP' %}<i class="fab fa-google" aria-hidden="true"></i>
+                                    {% elif a.cloud_provider == 'GitHub' %}<i class="fab fa-github" aria-hidden="true"></i>
+                                    {% else %}<i class="fas fa-minus text-muted" aria-hidden="true"></i>{% endif %}
                                     {{ a.cloud_provider or '—' }}
                                 </td>
                                 <td data-col="risk">{{ a.risk_associated or '—' }}</td>
                                 <td data-col="region">{{ a.region or '—' }}</td>
-                                <td data-col="owner" style="display:none;">{{ a.owner or '—' }}</td>
-                                <td data-col="environment" style="display:none;">{{ a.environment or '—' }}</td>
-                                <td data-col="classification" style="display:none;">{{ a.classification or '—' }}</td>
-                                <td data-col="status" style="display:none;"><span class="badge badge-success">{{ a.status }}</span></td>
-                                <td>
-                                    <div class="flex gap-8">
+                                <td data-col="owner" class="col-hidden">{{ a.owner or '—' }}</td>
+                                <td data-col="environment" class="col-hidden">{{ a.environment or '—' }}</td>
+                                <td data-col="classification" class="col-hidden">{{ a.classification or '—' }}</td>
+                                <td data-col="status" class="col-hidden"><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>{{ a.status }}</span></td>
+                                <td class="actions">
+                                    <div class="row-actions">
                                         {% if current_user.can_write %}
-                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditAssetModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit" aria-label="Edit {{ a.name }}" onclick="showEditAssetModal({{ loop.index0 }})"><i class="fas fa-pen" aria-hidden="true"></i></button>
                                         {% endif %}
-                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Details" onclick="showAssetInfoModal({{ loop.index0 }})"><i class="fas fa-circle-info"></i></button>
+                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Details" aria-label="Details for {{ a.name }}" onclick="showAssetInfoModal({{ loop.index0 }})"><i class="fas fa-circle-info" aria-hidden="true"></i></button>
                                     </div>
                                 </td>
                             </tr>
-                            {% else %}
-                            <tr><td colspan="11" style="text-align:center;padding:32px;color:var(--text-muted);">No assets in this category yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </form>
 
-            <div class="flex-between" style="margin-top:16px;flex-wrap:wrap;gap:12px;">
-                <div class="flex gap-8" style="align-items:center;">
+            <div class="empty-state is-hidden-row" id="assetNoMatch">
+                <div class="empty-state-icon"><i class="fas fa-filter" aria-hidden="true"></i></div>
+                <h3>No assets match these filters</h3>
+                <p>Try a different search term, region or source.</p>
+            </div>
+
+            <div class="asset-pager">
+                <div class="cluster">
                     <button class="btn btn-sm btn-secondary btn-icon" type="button" id="assetPrevBtn" aria-label="Previous page" onclick="changeAssetPage(-1)"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
                     <button class="btn btn-sm btn-secondary btn-icon" type="button" id="assetNextBtn" aria-label="Next page" onclick="changeAssetPage(1)"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
-                    <span class="text-sm text-muted" id="assetPageInfo">0-0/0</span>
+                    <span id="assetPageInfo" role="status" aria-live="polite">0-0/0</span>
                 </div>
-                <div class="flex gap-8" style="align-items:center;">
-                    <span class="text-sm text-muted">Show</span>
-                    <select class="filter-select" style="padding:6px 10px;" onchange="changeAssetPerPage(this.value)">
+                <div class="cluster">
+                    <label for="assetPerPage">Show</label>
+                    <select id="assetPerPage" class="filter-select" onchange="changeAssetPerPage(this.value)">
                         <option value="10">10</option>
                         <option value="25">25</option>
                         <option value="50">50</option>
                     </select>
-                    <span class="text-sm text-muted">per page</span>
+                    <span>per page</span>
                 </div>
             </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-{{ type_icons.get(selected_type, 'server') }}" aria-hidden="true"></i></div>
+                <h3>No assets in this category yet</h3>
+                <p>Add an asset manually, or connect an integration to sync {{ selected_type|lower }} automatically.</p>
+                {% if current_user.can_write %}
+                <button type="button" class="btn btn-primary btn-sm" onclick="showAddAssetModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Asset</button>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -202,36 +259,49 @@ const ASSET_CLASSIFICATIONS = ['Restricted', 'Confidential', 'Internal', 'Public
 const ASSET_CLOUD_PROVIDERS = ['AWS', 'Azure', 'GCP', 'GitHub', 'N/A'];
 const SELECTED_TYPE = {{ selected_type|tojson }};
 
-// toggleDropdownPanel() and its document click-away listener now live in static/js/app.js (shared across pages).
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 // ---- Column visibility ----
 function toggleAssetColumn(checkbox) {
     const col = checkbox.dataset.col;
-    document.querySelectorAll(`[data-col="${col}"]`).forEach(el => el.style.display = checkbox.checked ? '' : 'none');
+    document.querySelectorAll(`#assetTable [data-col="${col}"]`).forEach(el => el.classList.toggle('col-hidden', !checkbox.checked));
     document.getElementById('columnsCountBadge').textContent = document.querySelectorAll('.asset-col-toggle:checked').length;
 }
 
 // ---- Collapse Asset Types nav ----
-function toggleAssetTypesNav() {
+function toggleAssetTypesNav(btn) {
     const grid = document.getElementById('assetTypesGrid');
-    grid.classList.toggle('nav-collapsed');
-    document.getElementById('assetTypesNavBody').style.display = grid.classList.contains('nav-collapsed') ? 'none' : '';
+    const collapsed = grid.classList.toggle('nav-collapsed');
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    btn.setAttribute('aria-label', collapsed ? 'Expand asset types' : 'Collapse asset types');
+    btn.querySelector('i').className = collapsed ? 'fas fa-angles-right' : 'fas fa-angles-left';
 }
 
 // ---- Bulk select ----
+function visibleAssetBoxes() {
+    return getAssetRows().filter(r => !r.classList.contains('is-hidden-row')).map(r => r.querySelector('.asset-row-checkbox'));
+}
 function toggleSelectAllAssets(checkbox) {
-    document.querySelectorAll('#assetTable tbody tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const cb = row.querySelector('.asset-row-checkbox');
-            if (cb) cb.checked = checkbox.checked;
-        }
-    });
+    visibleAssetBoxes().forEach(cb => { cb.checked = checkbox.checked; });
+    updateBulkBar();
+}
+function clearAssetSelection() {
+    document.querySelectorAll('.asset-row-checkbox').forEach(cb => { cb.checked = false; });
     updateBulkBar();
 }
 function updateBulkBar() {
     const checked = document.querySelectorAll('.asset-row-checkbox:checked').length;
-    document.getElementById('bulkActionBar').style.display = checked > 0 ? 'flex' : 'none';
+    const bar = document.getElementById('bulkActionBar');
+    if (!bar) return;
+    bar.classList.toggle('is-active', checked > 0);
     document.getElementById('bulkSelectedCount').textContent = checked;
+    const all = document.getElementById('assetSelectAll');
+    const vis = visibleAssetBoxes();
+    const visChecked = vis.filter(cb => cb.checked).length;
+    all.checked = vis.length > 0 && visChecked === vis.length;
+    all.indeterminate = visChecked > 0 && visChecked < vis.length;
 }
 
 // ---- Search / filter / pagination ----
@@ -244,11 +314,12 @@ function getAssetRows() {
 
 function applyAssetFilters() {
     const search = document.getElementById('assetSearch').value.toLowerCase();
-    const region = document.getElementById('assetRegionFilter') ? document.getElementById('assetRegionFilter').value : '';
-    const source = document.getElementById('assetSourceFilter') ? document.getElementById('assetSourceFilter').value : '';
+    const regionEl = document.getElementById('assetRegionFilter');
+    const sourceEl = document.getElementById('assetSourceFilter');
+    const region = regionEl ? regionEl.value : '';
+    const source = sourceEl ? sourceEl.value : '';
     getAssetRows().forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
+        const matchSearch = !search || row.textContent.toLowerCase().includes(search);
         const matchRegion = !region || row.dataset.region === region;
         const matchSource = !source || row.dataset.source === source;
         row.dataset.filteredOut = (!(matchSearch && matchRegion && matchSource)).toString();
@@ -258,16 +329,16 @@ function applyAssetFilters() {
 }
 
 function renderAssetPage() {
+    if (!document.getElementById('assetTable')) return;
     const rows = getAssetRows();
     const visible = rows.filter(r => r.dataset.filteredOut !== 'true');
     const total = visible.length;
     const totalPages = Math.max(1, Math.ceil(total / assetPerPage));
     if (assetPage > totalPages) assetPage = totalPages;
 
-    rows.forEach(r => r.style.display = 'none');
+    rows.forEach(r => r.classList.add('is-hidden-row'));
     visible.forEach((r, i) => {
-        const page = Math.floor(i / assetPerPage) + 1;
-        if (page === assetPage) r.style.display = '';
+        if (Math.floor(i / assetPerPage) + 1 === assetPage) r.classList.remove('is-hidden-row');
     });
 
     const start = total === 0 ? 0 : (assetPage - 1) * assetPerPage + 1;
@@ -275,70 +346,69 @@ function renderAssetPage() {
     document.getElementById('assetPageInfo').textContent = `${start}-${end}/${total}`;
     document.getElementById('assetPrevBtn').disabled = assetPage <= 1;
     document.getElementById('assetNextBtn').disabled = assetPage >= totalPages;
+    document.getElementById('assetNoMatch').classList.toggle('is-hidden-row', total > 0);
+    document.getElementById('assetTable').closest('.table-container').classList.toggle('is-hidden-row', total === 0);
     updateBulkBar();
 }
 
-function changeAssetPage(delta) {
-    assetPage += delta;
-    renderAssetPage();
-}
-
-function changeAssetPerPage(val) {
-    assetPerPage = parseInt(val, 10);
-    assetPage = 1;
-    renderAssetPage();
-}
+function changeAssetPage(delta) { assetPage += delta; renderAssetPage(); }
+function changeAssetPerPage(val) { assetPerPage = parseInt(val, 10); assetPage = 1; renderAssetPage(); }
 
 renderAssetPage();
+// Re-paginate after a header sort (app.js has already reordered the rows).
+document.querySelectorAll('#assetTable thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => setTimeout(renderAssetPage, 0));
+    th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') setTimeout(renderAssetPage, 0); });
+});
 
 // ---- Add / Edit / Info modals ----
 function assetFormFields(a) {
     a = a || {};
     return `
         <div class="form-group">
-            <label>Resource Name</label>
-            <input type="text" name="name" class="form-control" placeholder="Enter resource name" value="${a.name || ''}" required>
+            <label for="af-name">Resource name <span class="required-star">*</span></label>
+            <input type="text" id="af-name" name="name" class="form-control" placeholder="Enter resource name" value="${esc(a.name)}" required>
         </div>
         <div class="form-group">
-            <label>Asset Type</label>
-            <select name="type" class="form-control">
-                ${ASSET_TYPES.map(t => `<option ${t === (a.type || SELECTED_TYPE) ? 'selected' : ''}>${t}</option>`).join('')}
+            <label for="af-type">Asset type</label>
+            <select id="af-type" name="type" class="form-control">
+                ${ASSET_TYPES.map(t => `<option ${t === (a.type || SELECTED_TYPE) ? 'selected' : ''}>${esc(t)}</option>`).join('')}
             </select>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-grid-2">
             <div class="form-group">
-                <label>Resource ID / ARN</label>
-                <input type="text" name="resource_id" class="form-control" placeholder="arn:aws:..." value="${a.resource_id || ''}">
+                <label for="af-rid">Resource ID / ARN</label>
+                <input type="text" id="af-rid" name="resource_id" class="form-control" placeholder="arn:aws:..." value="${esc(a.resource_id)}">
             </div>
             <div class="form-group">
-                <label>Region</label>
-                <input type="text" name="region" class="form-control" placeholder="e.g. ap-south-1" value="${a.region || ''}">
+                <label for="af-region">Region</label>
+                <input type="text" id="af-region" name="region" class="form-control" placeholder="e.g. ap-south-1" value="${esc(a.region)}">
             </div>
             <div class="form-group">
-                <label>Source</label>
-                <select name="cloud_provider" class="form-control">
+                <label for="af-source">Source</label>
+                <select id="af-source" name="cloud_provider" class="form-control">
                     ${ASSET_CLOUD_PROVIDERS.map(c => `<option ${c === a.cloud_provider ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
-                <label>Risk Associated</label>
-                <input type="text" name="risk_associated" class="form-control" placeholder="Optional" value="${a.risk_associated || ''}">
+                <label for="af-risk">Risk associated</label>
+                <input type="text" id="af-risk" name="risk_associated" class="form-control" placeholder="Optional" value="${esc(a.risk_associated)}">
             </div>
             <div class="form-group">
-                <label>Environment</label>
-                <select name="environment" class="form-control">
+                <label for="af-env">Environment</label>
+                <select id="af-env" name="environment" class="form-control">
                     ${ASSET_ENVIRONMENTS.map(e => `<option ${e === a.environment ? 'selected' : ''}>${e}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
-                <label>Classification</label>
-                <select name="classification" class="form-control">
+                <label for="af-class">Classification</label>
+                <select id="af-class" name="classification" class="form-control">
                     ${ASSET_CLASSIFICATIONS.map(c => `<option ${c === a.classification ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
-                <label>Owner</label>
-                <input type="text" name="owner" class="form-control" placeholder="Asset owner" value="${a.owner || ''}">
+                <label for="af-owner">Owner</label>
+                <input type="text" id="af-owner" name="owner" class="form-control" placeholder="Asset owner" value="${esc(a.owner)}">
             </div>
         </div>
     `;
@@ -350,34 +420,29 @@ function showAddAssetModal() {
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             ${assetFormFields()}
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Add Asset</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Add Asset</button>');
 }
 
 function showEditAssetModal(idx) {
     const a = ASSETS[idx];
     openModal('Edit Asset', `
-        <form id="assetForm" method="POST" action="/assets/${a.id}/edit">
+        <form id="assetForm" method="POST" action="/assets/${encodeURIComponent(a.id)}/edit">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             ${assetFormFields(a)}
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Save Changes</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'assetForm\').submit()">Save Changes</button>');
 }
 
 function showAssetInfoModal(idx) {
     const a = ASSETS[idx];
+    const f = (label, v, mono) => `<div><dt>${label}</dt><dd${mono ? ' class="mono"' : ''}>${esc(v || '—')}</dd></div>`;
     openModal(a.name, `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;">
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Resource ID</div><div style="font-family:monospace;word-break:break-all;">${a.resource_id || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Type</div><div>${a.type || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Source</div><div>${a.cloud_provider || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Region</div><div>${a.region || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Risk Associated</div><div>${a.risk_associated || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Status</div><div>${a.status || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Environment</div><div>${a.environment || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Classification</div><div>${a.classification || '—'}</div></div>
-            <div><div class="text-muted" style="font-size:11px;margin-bottom:2px;">Owner</div><div>${a.owner || '—'}</div></div>
-        </div>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Close</button>');
+        <dl class="info-grid">
+            ${f('Resource ID', a.resource_id, true)}${f('Type', a.type)}${f('Source', a.cloud_provider)}${f('Region', a.region)}
+            ${f('Risk associated', a.risk_associated)}${f('Status', a.status)}${f('Environment', a.environment)}
+            ${f('Classification', a.classification)}${f('Owner', a.owner)}
+        </dl>
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>');
 }
 </script>
 {% endblock %}
