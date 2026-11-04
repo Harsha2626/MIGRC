@@ -1,476 +1,516 @@
 {% extends "base.html" %}
 {% block title %}Policies{% endblock %}
-{% block breadcrumb %}<span>Policy Management</span>{% endblock %}
+{% block breadcrumb %}<span>Governance</span><span>/</span><span>Policies</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-b.css') }}">
 {% set needs_attention = status_counts.get('Needs Review', 0) + status_counts.get('Pending Approval', 0) %}
 {% set in_progress = status_counts.get('Draft', 0) + status_counts.get('Not Uploaded', 0) %}
-{% set active_view = request.args.get('view', 'dashboard') %}
+{% set active_view = 'all' if request.args.get('view') == 'all' else 'dashboard' %}
+{% set pill_of = {'Not Uploaded': 'pill-neutral', 'Draft': 'pill-draft', 'Needs Review': 'pill-in-review', 'Pending Approval': 'pill-info', 'Approved': 'pill-primary', 'Published': 'pill-published', 'Retired': 'pill-archived'} %}
+{% set icon_of = {'Not Uploaded': 'fa-file-circle-plus', 'Draft': 'fa-pen', 'Needs Review': 'fa-magnifying-glass', 'Pending Approval': 'fa-hourglass-half', 'Approved': 'fa-circle-check', 'Published': 'fa-globe', 'Retired': 'fa-box-archive'} %}
+{% set has_filters = selected_assignee or selected_department or selected_framework %}
 
 <div class="page-header">
     <div>
-        <h1>Policies <span class="badge badge-neutral" style="font-size:13px;vertical-align:middle;">{{ policies|length }}</span></h1>
-        <p>Create, review, and publish policies through a real approval workflow</p>
+        <div class="page-eyebrow">Governance</div>
+        <h1>Policies</h1>
+        <p>Create, review and publish policies through a real approval workflow.</p>
     </div>
     <div class="page-actions">
-        <a href="/policies/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        <a href="/policies/export" class="btn btn-secondary"><i class="fas fa-download" aria-hidden="true"></i> Export</a>
         {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddPolicyModal()"><i class="fas fa-plus"></i> Add Policy</button>
+        <button type="button" class="btn btn-primary" id="addPolicyBtn"><i class="fas fa-plus" aria-hidden="true"></i> Add policy</button>
         {% endif %}
     </div>
 </div>
 
-<div class="tabs">
-    <button class="tab {{ 'active' if active_view == 'dashboard' }}" onclick="switchPolicyView(this, 'dashboard')"><i class="fas fa-gauge" style="margin-right:6px;"></i>Dashboard</button>
-    <button class="tab {{ 'active' if active_view == 'all' }}" onclick="switchPolicyView(this, 'all')"><i class="fas fa-list" style="margin-right:6px;"></i>All Policies</button>
+<form id="dashboardFilterForm" class="filter-bar" method="GET" action="{{ url_for('policies.policies') }}" role="search" aria-label="Filter policies">
+    <input type="hidden" name="view" id="filterViewInput" value="{{ active_view }}">
+    <select class="filter-select" name="assignee" aria-label="Assignee" data-autosubmit>
+        <option value="">All assignees</option>
+        {% for u in all_users %}<option value="{{ u.name }}" {% if selected_assignee == u.name %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+        <option value="No Assignee" {% if selected_assignee == 'No Assignee' %}selected{% endif %}>No Assignee</option>
+    </select>
+    <select class="filter-select" name="department" aria-label="Department" data-autosubmit>
+        <option value="">All departments</option>
+        {% for d in POLICY_DEPARTMENTS %}<option value="{{ d }}" {% if selected_department == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    <select class="filter-select" name="framework" aria-label="Framework" data-autosubmit>
+        <option value="">All frameworks</option>
+        {% for f in all_frameworks %}<option value="{{ f.name }}" {% if selected_framework == f.name %}selected{% endif %}>{{ f.name }}</option>{% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-secondary btn-sm">Apply</button></noscript>
+    {% if has_filters %}
+    <a href="{{ url_for('policies.policies', view=active_view) }}" class="btn btn-ghost btn-sm"><i class="fas fa-xmark" aria-hidden="true"></i> Clear filters</a>
+    {% endif %}
+    <span class="spacer"></span>
+    <span class="text-sm text-muted" aria-live="polite">{{ policies|length }} polic{{ 'y' if policies|length == 1 else 'ies' }}</span>
+</form>
 
-    <form id="dashboardFilterForm" method="GET" action="{{ url_for('policies.policies') }}" style="margin-left:auto;display:flex;gap:8px;align-self:center;">
-        <input type="hidden" name="view" id="filterViewInput" value="{{ active_view }}">
-        <select class="filter-select" name="assignee" onchange="this.form.submit()">
-            <option value="">Assignee</option>
-            {% for u in all_users %}<option value="{{ u.name }}" {% if selected_assignee == u.name %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
-            <option value="No Assignee" {% if selected_assignee == 'No Assignee' %}selected{% endif %}>No Assignee</option>
-        </select>
-        <select class="filter-select" name="department" onchange="this.form.submit()">
-            <option value="">Department</option>
-            {% for d in POLICY_DEPARTMENTS %}<option value="{{ d }}" {% if selected_department == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
-        </select>
-        <select class="filter-select" name="framework" onchange="this.form.submit()">
-            <option value="">Framework</option>
-            {% for f in all_frameworks %}<option value="{{ f.name }}" {% if selected_framework == f.name %}selected{% endif %}>{{ f.name }}</option>{% endfor %}
-        </select>
-        {% if selected_assignee or selected_department or selected_framework %}
-        <a href="{{ url_for('policies.policies', view=active_view) }}" class="btn btn-secondary btn-sm" title="Clear filters"><i class="fas fa-xmark"></i></a>
-        {% endif %}
-    </form>
-</div>
-
-<!-- ============ DASHBOARD VIEW ============ -->
-<div id="dashboardView" style="{{ '' if active_view == 'dashboard' else 'display:none;' }}">
-    <div class="stats-grid" style="margin-bottom:20px;">
-        <div class="stat-card">
-            <div class="stat-icon blue"><i class="fas fa-file-shield"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Total Policies</div>
-                <div class="stat-value">{{ total_count }}</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Published</div>
-                <div class="stat-value">{{ published_count }}</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon orange"><i class="fas fa-hourglass-half"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Needs Attention</div>
-                <div class="stat-value">{{ needs_attention }}</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon purple"><i class="fas fa-pen-to-square"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">In Progress</div>
-                <div class="stat-value">{{ in_progress }}</div>
-            </div>
-        </div>
+<div data-tabs id="policyTabs">
+    <div class="tabs" role="tablist" aria-label="Policy views">
+        <button type="button" class="tab {{ 'active' if active_view == 'dashboard' }}" role="tab" data-tab="dashboard" id="tabDashboard"><i class="fas fa-gauge" aria-hidden="true"></i> Dashboard</button>
+        <button type="button" class="tab {{ 'active' if active_view == 'all' }}" role="tab" data-tab="all" id="tabAll"><i class="fas fa-list" aria-hidden="true"></i> All policies <span class="count">{{ policies|length }}</span></button>
     </div>
 
-    <div class="grid-2" style="margin-bottom:20px;">
-        <div class="card">
-            <div class="card-header"><h3>Policy Status</h3></div>
-            <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
-                <div class="chart-container" style="width:180px;height:180px;">
-                    <canvas id="policyStatusDonut"></canvas>
-                    <div class="chart-center-label">
-                        <div class="value">{{ (published_count / total_count * 100)|round|int if total_count else 0 }}%</div>
-                        <div class="label">Published</div>
-                    </div>
-                </div>
-                <div>
-                    {% for s in policies_status_flow %}
-                    <div class="legend" style="margin-top:{{ '0' if loop.first else '8' }}px;">
-                        <div class="legend-item"><div class="legend-dot" style="background:{{ STATUS_COLORS[s] }};"></div> {{ s }} ({{ status_counts[s] }})</div>
-                    </div>
-                    {% endfor %}
-                </div>
+    <!-- ============ DASHBOARD VIEW ============ -->
+    <div class="tab-panel" data-panel="dashboard" id="dashboardView" role="tabpanel" aria-labelledby="tabDashboard" {% if active_view != 'dashboard' %}hidden{% endif %}>
+        <div class="kpi-grid">
+            <div class="kpi kpi-accent-primary">
+                <div class="kpi-label"><i class="fas fa-file-shield" aria-hidden="true"></i> Total policies</div>
+                <div class="kpi-value">{{ total_count }}</div>
+            </div>
+            <div class="kpi kpi-accent-success">
+                <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Published</div>
+                <div class="kpi-value">{{ published_count }}</div>
+            </div>
+            <div class="kpi kpi-accent-warning">
+                <div class="kpi-label"><i class="fas fa-hourglass-half" aria-hidden="true"></i> Needs attention</div>
+                <div class="kpi-value">{{ needs_attention }}</div>
+                <div class="kpi-foot"><span>Needs review or pending approval</span></div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label"><i class="fas fa-pen-to-square" aria-hidden="true"></i> In progress</div>
+                <div class="kpi-value">{{ in_progress }}</div>
+                <div class="kpi-foot"><span>Draft or not yet uploaded</span></div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header"><h3>Upcoming Policies for Review <i class="fas fa-circle-info" style="font-size:11px;color:var(--text-muted);margin-left:4px;"></i></h3></div>
-            <div class="card-body no-padding">
-                {% if upcoming_reviews %}
-                <table>
-                    <thead><tr><th>Policy</th><th style="width:120px;">Next Review</th></tr></thead>
-                    <tbody>
-                        {% for p in upcoming_reviews %}
-                        <tr onclick="window.location='{{ url_for('policies.policy_detail', policy_id=p.id) }}'" style="cursor:pointer;">
-                            <td class="font-semibold"><a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" style="color:inherit;text-decoration:none;">{{ p.name }}</a></td>
-                            <td class="text-sm">{{ p.next_review }}</td>
-                        </tr>
+        <div class="dash-grid even">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Policy status</h2>
+                        <div class="card-subtitle">{{ (published_count / total_count * 100)|round|int if total_count else 0 }}% published</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if total_count %}
+                    <div class="stackbar stackbar-lg" role="img" aria-label="Policies by status: {% for s in policies_status_flow %}{{ s }} {{ status_counts[s] }}{{ ', ' if not loop.last }}{% endfor %}">
+                        {% for s in policies_status_flow %}{% if status_counts[s] %}<span class="st-{{ s|lower|replace(' ', '-') }}" style="width:{{ (status_counts[s] / total_count * 100)|round(1) }}%"></span>{% endif %}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <ul class="legend-list mt-16">
+                        {% for s in policies_status_flow %}
+                        <li class="st-{{ s|lower|replace(' ', '-') }}"><span class="swatch swatch-st"></span> {{ s }} <span class="count">{{ status_counts[s] }}</span></li>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Upcoming reviews</h2>
+                        <div class="card-subtitle">Due within the next 30 days</div>
+                    </div>
+                </div>
+                <div class="card-body no-padding">
+                    {% if upcoming_reviews %}
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Policy</th><th>Next review</th></tr></thead>
+                            <tbody>
+                                {% for p in upcoming_reviews %}
+                                <tr>
+                                    <td><a class="cell-title" href="{{ url_for('policies.policy_detail', policy_id=p.id) }}">{{ p.name }}</a></td>
+                                    <td class="text-sm">{{ p.next_review }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-check-circle" aria-hidden="true"></i></div>
+                        <h3>All caught up</h3>
+                        <p>Nothing is due for review in the next 30 days.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Policies by assignee</h2>
+                    <div class="card-subtitle">Status mix per owner</div>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if chart_labels %}
+                {% for label in chart_labels %}
+                {% set row = loop.index0 %}
+                {% set ns = namespace(total=0) %}
+                {% for ds in chart_datasets %}{% set ns.total = ns.total + ds.data[row] %}{% endfor %}
+                <div class="assignee-row">
+                    <div class="truncate">{{ label }}</div>
+                    <div class="stackbar" role="img" aria-label="{{ label }}: {% for ds in chart_datasets %}{% if ds.data[row] %}{{ ds.label }} {{ ds.data[row] }}, {% endif %}{% endfor %}">
+                        {% for ds in chart_datasets %}{% if ds.data[row] %}<span class="st-{{ ds.label|lower|replace(' ', '-') }}" style="width:{{ (ds.data[row] / ns.total * 100)|round(1) }}%"></span>{% endif %}{% endfor %}
+                    </div>
+                    <div class="num">{{ ns.total }}</div>
+                </div>
+                {% endfor %}
+                <ul class="legend-inline">
+                    {% for s in policies_status_flow %}<li class="st-{{ s|lower|replace(' ', '-') }}"><span class="swatch swatch-st"></span>{{ s }}</li>{% endfor %}
+                </ul>
                 {% else %}
-                <div style="padding:32px;text-align:center;color:var(--text-muted);">
-                    <i class="fas fa-check-circle" style="font-size:24px;margin-bottom:8px;opacity:0.3;"></i>
-                    <p style="font-size:13px;">Nothing due for review in the next 30 days.</p>
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-user-group" aria-hidden="true"></i></div>
+                    <h3>No policies to chart</h3>
+                    <p>Add a policy and assign an owner to see the breakdown.</p>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><h3>Policies by Assignee</h3></div>
-        <div class="card-body">
-            <div class="chart-container" style="height:320px;">
-                <canvas id="policiesByAssigneeChart"></canvas>
+    <!-- ============ ALL POLICIES VIEW ============ -->
+    <div class="tab-panel" data-panel="all" id="allPoliciesView" role="tabpanel" aria-labelledby="tabAll" {% if active_view != 'all' %}hidden{% endif %}>
+        <div class="filter-bar">
+            <div class="filter-search input-icon">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" class="form-control filter-input" placeholder="Search policies..." id="policySearch" aria-label="Search policies">
             </div>
-        </div>
-    </div>
-</div>
+            <select class="filter-select" id="policyStatusFilter" aria-label="Status">
+                <option value="">All statuses</option>
+                {% for s in policies_status_flow %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+            </select>
 
-<!-- ============ ALL POLICIES VIEW ============ -->
-<div id="allPoliciesView" style="{{ '' if active_view == 'all' else 'display:none;' }}">
-    <div class="card" style="margin-bottom:16px;">
-        <div class="card-body" style="padding:16px;">
-            <div class="toolbar" style="margin-bottom:0;">
-                <div class="search-input-wrapper">
-                    <i class="fas fa-search"></i>
-                    <input type="text" class="filter-input" placeholder="Search policies..." id="policySearch" oninput="applyPolicyFilters()">
-                </div>
-                <select class="filter-select" id="policyStatusFilter" onchange="applyPolicyFilters()">
-                    <option value="">All Statuses</option>
-                    {% for s in policies_status_flow %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-                </select>
-
-                <div class="dropdown-panel-wrapper">
-                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('policyFiltersPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="policyFiltersPanel"><i class="fas fa-filter" aria-hidden="true"></i> More Filters</button>
-                    <div class="dropdown-panel" id="policyFiltersPanel">
-                        <div class="dropdown-panel-grid">
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label style="font-size:11px;">Assignee</label>
-                                <select class="form-control" id="policyAssigneeFilter" onchange="applyPolicyFilters()">
-                                    <option value="">All Assignees</option>
-                                    {% for u in all_users %}<option value="{{ u.name }}">{{ u.name }}</option>{% endfor %}
-                                    <option value="No Assignee">No Assignee</option>
-                                </select>
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label style="font-size:11px;">Department</label>
-                                <select class="form-control" id="policyDepartmentFilter" onchange="applyPolicyFilters()">
-                                    <option value="">All Departments</option>
-                                    {% for d in POLICY_DEPARTMENTS %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label style="font-size:11px;">Framework</label>
-                                <select class="form-control" id="policyFrameworkFilter" onchange="applyPolicyFilters()">
-                                    <option value="">All Frameworks</option>
-                                    {% for f in all_frameworks %}<option value="{{ f.name }}">{{ f.name }}</option>{% endfor %}
-                                </select>
-                            </div>
+            <div class="dropdown-panel-wrapper">
+                <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('policyFiltersPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="policyFiltersPanel"><i class="fas fa-filter" aria-hidden="true"></i> More filters</button>
+                <div class="dropdown-panel" id="policyFiltersPanel">
+                    <div class="dropdown-panel-grid">
+                        <div class="form-group">
+                            <label for="policyAssigneeFilter">Assignee</label>
+                            <select class="form-control" id="policyAssigneeFilter">
+                                <option value="">All Assignees</option>
+                                {% for u in all_users %}<option value="{{ u.name }}">{{ u.name }}</option>{% endfor %}
+                                <option value="No Assignee">No Assignee</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="policyDepartmentFilter">Department</label>
+                            <select class="form-control" id="policyDepartmentFilter">
+                                <option value="">All Departments</option>
+                                {% for d in POLICY_DEPARTMENTS %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="policyFrameworkFilter">Framework</label>
+                            <select class="form-control" id="policyFrameworkFilter">
+                                <option value="">All Frameworks</option>
+                                {% for f in all_frameworks %}<option value="{{ f.name }}">{{ f.name }}</option>{% endfor %}
+                            </select>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="dropdown-panel-wrapper" style="margin-left:auto;">
-                    <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('policyColumnsPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="policyColumnsPanel">Columns <span class="badge badge-neutral" id="policyColumnsCountBadge">0</span> <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;margin-left:2px;"></i></button>
-                    <div class="dropdown-panel" id="policyColumnsPanel">
-                        {% for key, label in [('effort','Effort Estimate'), ('assignee','Assignee'), ('approver','Approver'), ('added','Added On'), ('department','Department'), ('recurrence','Recurrence')] %}
-                        <label class="dropdown-panel-item">
-                            <input type="checkbox" class="policy-col-toggle" data-col="{{ key }}" onchange="togglePolicyColumn(this)">
-                            {{ label }}
-                        </label>
-                        {% endfor %}
-                    </div>
+            <span class="spacer"></span>
+
+            <div class="dropdown-panel-wrapper">
+                <button class="btn btn-secondary" type="button" onclick="toggleDropdownPanel('policyColumnsPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="policyColumnsPanel">Columns <span class="pill pill-neutral" id="policyColumnsCountBadge">0</span> <i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+                <div class="dropdown-panel" id="policyColumnsPanel">
+                    {% for key, label in [('effort','Effort Estimate'), ('assignee','Assignee'), ('approver','Approver'), ('added','Added On'), ('department','Department'), ('recurrence','Recurrence')] %}
+                    <label class="dropdown-panel-item">
+                        <input type="checkbox" class="policy-col-toggle" data-col-toggle="{{ key }}">
+                        {{ label }}
+                    </label>
+                    {% endfor %}
                 </div>
             </div>
         </div>
-    </div>
 
-    <form id="policyBulkDeleteForm" method="POST" action="{{ url_for('policies.bulk_delete_policies') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div id="policyBulkActionBar" style="display:none;align-items:center;gap:12px;margin-bottom:12px;padding:8px 12px;background:var(--accent-primary-light);border-radius:var(--radius-md);">
-            <span style="font-size:13px;font-weight:500;color:var(--accent-primary);"><span id="policyBulkSelectedCount">0</span> selected</span>
-            {% if current_user.can_delete %}
-            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected policies?');"><i class="fas fa-trash"></i> Delete Selected</button>
-            {% endif %}
-        </div>
+        <form id="policyBulkDeleteForm" method="POST" action="{{ url_for('policies.bulk_delete_policies') }}" data-confirm="Delete the selected policies? This cannot be undone." data-confirm-title="Delete policies" data-confirm-button="Delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="bulk-bar" id="policyBulkActionBar" hidden>
+                <span aria-live="polite"><span id="policyBulkSelectedCount">0</span> selected</span>
+                {% if current_user.can_delete %}
+                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash" aria-hidden="true"></i> Delete selected</button>
+                {% endif %}
+            </div>
 
-        <div class="card">
-            <div class="card-body no-padding">
-                <div class="table-container">
-                    <table id="policyTable">
-                        <thead>
-                            <tr>
-                                <th style="width:36px;"><input type="checkbox" id="policySelectAll" onchange="togglePolicySelectAll(this)"></th>
-                                <th>Policy Name</th>
-                                <th>Status</th>
-                                <th data-col="effort" style="display:none;">Effort Estimate</th>
-                                <th data-col="assignee" style="display:none;">Assignee</th>
-                                <th data-col="approver" style="display:none;">Approver</th>
-                                <th data-col="department" style="display:none;">Department</th>
-                                <th data-col="recurrence" style="display:none;">Recurrence</th>
-                                <th data-col="added" style="display:none;">Added On</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for p in policies %}
-                            <tr data-status="{{ p.status }}" data-assignee="{{ p.assignees[0].name if p.assignees else 'No Assignee' }}" data-department="{{ p.department or '' }}" data-framework="{{ p.framework or '' }}">
-                                <td><input type="checkbox" class="policy-row-checkbox" name="policy_ids" value="{{ p.id }}" onchange="updatePolicyBulkBar()"></td>
-                                <td>
-                                    <div class="flex-center gap-8">
-                                        <div class="avatar" style="width:30px;height:30px;font-size:10px;flex-shrink:0;">{{ p.name.split(' ')[0][0] }}{{ p.name.split(' ')[-1][0] if ' ' in p.name else '' }}</div>
-                                        <div>
-                                            <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="font-semibold" style="text-decoration:none;">{{ p.name }}</a>
-                                            <div class="text-sm text-muted">{{ p.framework or '—' }} &middot; v{{ p.version }}</div>
-                                            {% if review_due_soon.get(p.id) %}<span class="badge badge-warning" style="margin-top:4px;">Review Due Soon</span>{% endif %}
-                                            {% set latest_eval = p.evaluations.first() %}
+            <div class="card">
+                <div class="card-body no-padding">
+                    {% if policies %}
+                    <div class="table-container">
+                        <table id="policyTable">
+                            <caption class="sr-only">All policies</caption>
+                            <thead>
+                                <tr>
+                                    <th class="th-check"><input type="checkbox" id="policySelectAll" aria-label="Select all visible policies"></th>
+                                    <th>Policy name</th>
+                                    <th>Status</th>
+                                    <th data-col="effort" hidden>Effort estimate</th>
+                                    <th data-col="assignee" hidden>Assignee</th>
+                                    <th data-col="approver" hidden>Approver</th>
+                                    <th data-col="department" hidden>Department</th>
+                                    <th data-col="recurrence" hidden>Recurrence</th>
+                                    <th data-col="added" hidden>Added on</th>
+                                    <th class="actions"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in policies %}
+                                {% set latest_eval = p.evaluations.first() %}
+                                <tr data-status="{{ p.status }}" data-assignee="{{ p.assignees[0].name if p.assignees else 'No Assignee' }}" data-department="{{ p.department or '' }}" data-framework="{{ p.framework or '' }}">
+                                    <td><input type="checkbox" class="policy-row-checkbox" name="policy_ids" value="{{ p.id }}" aria-label="Select {{ p.name }}"></td>
+                                    <td>
+                                        <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="cell-title">{{ p.name }}</a>
+                                        <div class="cell-sub">{{ p.framework or '—' }} &middot; <span class="code">v{{ p.version }}</span></div>
+                                        {% if review_due_soon.get(p.id) or latest_eval %}
+                                        <div class="cell-flags">
+                                            {% if review_due_soon.get(p.id) %}<span class="pill pill-warning"><i class="fas fa-clock" aria-hidden="true"></i>Review due soon</span>{% endif %}
                                             {% if latest_eval %}
-                                            <span class="badge {{ latest_eval.badge_class }}" style="margin-top:4px;" title="AI evidence-sufficiency verdict">
+                                            <span class="pill {{ latest_eval.badge_class }}" title="AI evidence-sufficiency verdict">
                                                 {% if latest_eval.verdict_code == 'PASS' %}<i class="fas fa-circle-check" aria-hidden="true"></i>
                                                 {% elif latest_eval.verdict_code == 'FAIL' %}<i class="fas fa-circle-xmark" aria-hidden="true"></i>
                                                 {% else %}<i class="fas fa-magnifying-glass" aria-hidden="true"></i>{% endif %}
-                                                {{ latest_eval.verdict }}
+                                                AI: {{ latest_eval.verdict }}
                                             </span>
                                             {% endif %}
                                         </div>
-                                    </div>
-                                </td>
-                                <td><span class="badge {{ STATUS_BADGE[p.status] }}">{{ p.status }}</span></td>
-                                <td data-col="effort" style="display:none;">
-                                    <span class="dot {% if p.effort_estimate == 'Low' %}green{% elif p.effort_estimate == 'High' %}red{% else %}orange{% endif %}"></span>
-                                    {{ p.effort_estimate }}
-                                </td>
-                                <td data-col="assignee" style="display:none;">{{ p.assignees[0].name if p.assignees else '—' }}</td>
-                                <td data-col="approver" style="display:none;">{{ p.approvers|map(attribute='name')|join(', ') or '—' }}</td>
-                                <td data-col="department" style="display:none;">{{ p.department or '—' }}</td>
-                                <td data-col="recurrence" style="display:none;">{{ p.recurrence }}</td>
-                                <td data-col="added" style="display:none;">{{ p.created_at.strftime('%b %d, %Y') if p.created_at else '—' }}</td>
-                                <td>
-                                    <div class="flex gap-8">
-                                        <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Open"><i class="fas fa-arrow-up-right-from-square"></i></a>
-                                        {% if current_user.can_write %}
-                                        <form method="POST" action="{{ url_for('policies.evaluate_policy_route', policy_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Run an AI evidence-sufficiency evaluation for \'{{ p.name }}\'? This can take a minute or two.');">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Evaluate evidence sufficiency"><i class="fas fa-wand-magic-sparkles"></i></button>
-                                        </form>
                                         {% endif %}
-                                        {% if latest_eval %}
-                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="View evaluation" onclick="viewPolicyEvaluation({{ p.id }}, {{ p.name|tojson }})"><i class="fas fa-eye"></i></button>
-                                        <a href="{{ url_for('policies.download_policy_evaluation', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Download evaluation PDF"><i class="fas fa-download"></i></a>
-                                        {% endif %}
-                                        {% if current_user.can_delete %}
-                                        <form method="POST" action="{{ url_for('policies.delete_policy', policy_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ p.name }}?');">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
-                                        </form>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    </td>
+                                    <td><span class="pill {{ pill_of.get(p.status, 'pill-neutral') }}"><i class="fas {{ icon_of.get(p.status, 'fa-circle') }}" aria-hidden="true"></i>{{ p.status }}</span></td>
+                                    <td data-col="effort" hidden>
+                                        <span class="dot {% if p.effort_estimate == 'Low' %}green{% elif p.effort_estimate == 'High' %}red{% else %}orange{% endif %}"></span>
+                                        {{ p.effort_estimate }}
+                                    </td>
+                                    <td data-col="assignee" hidden>{{ p.assignees[0].name if p.assignees else '—' }}</td>
+                                    <td data-col="approver" hidden>{{ p.approvers|map(attribute='name')|join(', ') or '—' }}</td>
+                                    <td data-col="department" hidden>{{ p.department or '—' }}</td>
+                                    <td data-col="recurrence" hidden>{{ p.recurrence }}</td>
+                                    <td data-col="added" hidden>{{ p.created_at.strftime('%b %d, %Y') if p.created_at else '—' }}</td>
+                                    <td class="actions">
+                                        <div class="row-actions">
+                                            <a href="{{ url_for('policies.policy_detail', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" aria-label="Open {{ p.name }}" title="Open"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+                                            {% if current_user.can_write %}
+                                            <button type="submit" form="evalForm{{ p.id }}" class="btn btn-sm btn-secondary btn-icon" aria-label="Evaluate evidence sufficiency for {{ p.name }}" title="Evaluate evidence sufficiency"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></button>
+                                            {% endif %}
+                                            {% if latest_eval %}
+                                            <button type="button" class="btn btn-sm btn-secondary btn-icon" aria-label="View evaluation for {{ p.name }}" title="View evaluation" data-view-eval="{{ p.id }}" data-policy-name="{{ p.name }}"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                                            <a href="{{ url_for('policies.download_policy_evaluation', policy_id=p.id) }}" class="btn btn-sm btn-secondary btn-icon" aria-label="Download evaluation PDF for {{ p.name }}" title="Download evaluation PDF"><i class="fas fa-download" aria-hidden="true"></i></a>
+                                            {% endif %}
+                                            {% if current_user.can_delete %}
+                                            <button type="submit" form="deleteForm{{ p.id }}" class="btn btn-sm btn-danger btn-icon" aria-label="Delete {{ p.name }}" title="Delete"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty-state" id="policyNoMatch" hidden>
+                        <div class="empty-state-icon"><i class="fas fa-filter-circle-xmark" aria-hidden="true"></i></div>
+                        <h3>No matching policies</h3>
+                        <p>Try a different search or clear the filters.</p>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-file-shield" aria-hidden="true"></i></div>
+                        <h3>No policies{{ ' match these filters' if has_filters else ' yet' }}</h3>
+                        <p>{{ 'Clear the filters to see every policy.' if has_filters else 'Add your first policy to start the review and approval workflow.' }}</p>
+                        {% if has_filters %}<a class="btn btn-secondary btn-sm" href="{{ url_for('policies.policies', view='all') }}">Clear filters</a>{% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-        </div>
-    </form>
+        </form>
+
+        {# Per-row single-action forms live outside the bulk form (nested forms are invalid); row buttons target them via the form attribute. #}
+        {% for p in policies %}
+            {% if current_user.can_write %}
+            <form id="evalForm{{ p.id }}" method="POST" action="{{ url_for('policies.evaluate_policy_route', policy_id=p.id) }}" data-confirm="Run an AI evidence-sufficiency evaluation for '{{ p.name }}'? This can take a minute or two." data-confirm-title="Run AI evaluation" data-confirm-button="Run evaluation" data-confirm-tone="neutral">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            </form>
+            {% endif %}
+            {% if current_user.can_delete %}
+            <form id="deleteForm{{ p.id }}" method="POST" action="{{ url_for('policies.delete_policy', policy_id=p.id) }}" data-confirm="Delete {{ p.name }}? This cannot be undone." data-confirm-title="Delete policy" data-confirm-button="Delete">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            </form>
+            {% endif %}
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function switchPolicyView(el, view) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('dashboardView').style.display = view === 'dashboard' ? '' : 'none';
-    document.getElementById('allPoliciesView').style.display = view === 'all' ? '' : 'none';
-    document.getElementById('filterViewInput').value = view;
-}
-
-// ---- Policy Status donut ----
-new Chart(document.getElementById('policyStatusDonut').getContext('2d'), {
-    type: 'doughnut',
-    data: {
-        labels: {{ policies_status_flow|tojson }},
-        datasets: [{
-            data: [{% for s in policies_status_flow %}{{ status_counts[s] }}{{ ',' if not loop.last }}{% endfor %}],
-            backgroundColor: [{% for s in policies_status_flow %}{{ STATUS_COLORS[s]|tojson }}{{ ',' if not loop.last }}{% endfor %}],
-            borderWidth: 0,
-            cutout: '75%',
-        }],
-    },
-    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } },
-});
-
-// ---- Policies by Assignee chart ----
-new Chart(document.getElementById('policiesByAssigneeChart').getContext('2d'), {
-    type: 'bar',
-    data: {
-        labels: {{ chart_labels|tojson }},
-        datasets: {{ chart_datasets|tojson }},
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } },
-    },
-});
-
-// ---- All Policies: search/filter ----
-function applyPolicyFilters() {
-    const search = document.getElementById('policySearch').value.toLowerCase();
-    const status = document.getElementById('policyStatusFilter').value;
-    const assignee = document.getElementById('policyAssigneeFilter').value;
-    const department = document.getElementById('policyDepartmentFilter').value;
-    const framework = document.getElementById('policyFrameworkFilter').value;
-    document.querySelectorAll('#policyTable tbody tr').forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchStatus = !status || row.dataset.status === status;
-        const matchAssignee = !assignee || row.dataset.assignee === assignee;
-        const matchDepartment = !department || row.dataset.department === department;
-        const matchFramework = !framework || row.dataset.framework === framework;
-        row.style.display = (matchSearch && matchStatus && matchAssignee && matchDepartment && matchFramework) ? '' : 'none';
+(function () {
+    // ---- Tabs <-> server filter form (keeps ?view= in sync) ----
+    document.querySelectorAll('#policyTabs [role="tab"]').forEach(function (t) {
+        t.addEventListener('click', function () {
+            document.getElementById('filterViewInput').value = t.dataset.tab;
+        });
     });
-}
-
-// ---- Columns picker ----
-function togglePolicyColumn(checkbox) {
-    const col = checkbox.dataset.col;
-    document.querySelectorAll(`[data-col="${col}"]`).forEach(el => el.style.display = checkbox.checked ? '' : 'none');
-    document.getElementById('policyColumnsCountBadge').textContent = document.querySelectorAll('.policy-col-toggle:checked').length;
-}
-
-// ---- Bulk select ----
-function togglePolicySelectAll(checkbox) {
-    document.querySelectorAll('#policyTable tbody tr').forEach(row => {
-        if (row.style.display !== 'none') {
-            const cb = row.querySelector('.policy-row-checkbox');
-            if (cb) cb.checked = checkbox.checked;
-        }
+    document.querySelectorAll('[data-autosubmit]').forEach(function (el) {
+        el.addEventListener('change', function () { el.form.submit(); });
     });
-    updatePolicyBulkBar();
-}
-function updatePolicyBulkBar() {
-    const checked = document.querySelectorAll('.policy-row-checkbox:checked').length;
-    document.getElementById('policyBulkActionBar').style.display = checked > 0 ? 'flex' : 'none';
-    document.getElementById('policyBulkSelectedCount').textContent = checked;
-}
 
-// ---- Create Policy modal ----
-const POLICY_FRAMEWORKS = {{ all_frameworks|map(attribute='name')|list|tojson }};
-const POLICY_DEPARTMENTS_JS = {{ POLICY_DEPARTMENTS|tojson }};
+    // ---- All Policies: search/filter ----
+    function applyPolicyFilters() {
+        const search = document.getElementById('policySearch').value.toLowerCase();
+        const status = document.getElementById('policyStatusFilter').value;
+        const assignee = document.getElementById('policyAssigneeFilter').value;
+        const department = document.getElementById('policyDepartmentFilter').value;
+        const framework = document.getElementById('policyFrameworkFilter').value;
+        let shown = 0;
+        document.querySelectorAll('#policyTable tbody tr').forEach(function (row) {
+            const ok = (!search || row.textContent.toLowerCase().includes(search))
+                && (!status || row.dataset.status === status)
+                && (!assignee || row.dataset.assignee === assignee)
+                && (!department || row.dataset.department === department)
+                && (!framework || row.dataset.framework === framework);
+            row.hidden = !ok;
+            if (ok) shown++;
+        });
+        const none = document.getElementById('policyNoMatch');
+        if (none) none.hidden = shown > 0;
+    }
+    ['policySearch'].forEach(function (id) { const el = document.getElementById(id); if (el) el.addEventListener('input', applyPolicyFilters); });
+    ['policyStatusFilter', 'policyAssigneeFilter', 'policyDepartmentFilter', 'policyFrameworkFilter'].forEach(function (id) {
+        const el = document.getElementById(id); if (el) el.addEventListener('change', applyPolicyFilters);
+    });
 
-function showAddPolicyModal() {
-    openModal('Add Policy', `
-        <form id="policyForm" method="POST" action="/policies/add">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label>Policy Name</label>
-                <input type="text" name="name" class="form-control" placeholder="Enter policy name" required>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                <div class="form-group">
-                    <label>Owner</label>
-                    <input type="text" name="owner" class="form-control" placeholder="Policy owner">
-                </div>
-                <div class="form-group">
-                    <label>Framework</label>
-                    <select name="framework" class="form-control">
-                        ${POLICY_FRAMEWORKS.map(f => `<option>${f}</option>`).join('')}
-                        <option value="General">General</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Department</label>
-                    <select name="department" class="form-control">
-                        <option value="">Unassigned</option>
-                        ${POLICY_DEPARTMENTS_JS.map(d => `<option>${d}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Review Cycle (days)</label>
-                    <input type="number" name="review_cycle_days" class="form-control" value="180" min="1">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Requirement (optional)</label>
-                <textarea name="requirement_text" class="form-control" rows="3" placeholder="What should this policy cover?"></textarea>
-            </div>
-            <p class="text-sm text-muted">You'll choose how to start the policy content (blank, upload, or link) on the next screen.</p>
-        </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'policyForm\').submit()">Create Policy</button>');
-}
+    // ---- Columns picker ----
+    document.querySelectorAll('.policy-col-toggle').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            document.querySelectorAll('#policyTable [data-col="' + cb.dataset.colToggle + '"]').forEach(function (el) { el.hidden = !cb.checked; });
+            document.getElementById('policyColumnsCountBadge').textContent = document.querySelectorAll('.policy-col-toggle:checked').length;
+        });
+    });
 
-// ---- Policy evaluation (AI auditor) ----
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str == null ? '' : String(str);
-    return div.innerHTML;
-}
+    // ---- Bulk select ----
+    function updatePolicyBulkBar() {
+        const checked = document.querySelectorAll('.policy-row-checkbox:checked').length;
+        document.getElementById('policyBulkActionBar').hidden = checked === 0;
+        document.getElementById('policyBulkSelectedCount').textContent = checked;
+    }
+    const selectAll = document.getElementById('policySelectAll');
+    if (selectAll) selectAll.addEventListener('change', function () {
+        document.querySelectorAll('#policyTable tbody tr').forEach(function (row) {
+            if (!row.hidden) { const cb = row.querySelector('.policy-row-checkbox'); if (cb) cb.checked = selectAll.checked; }
+        });
+        updatePolicyBulkBar();
+    });
+    document.querySelectorAll('.policy-row-checkbox').forEach(function (cb) { cb.addEventListener('change', updatePolicyBulkBar); });
 
-const SEVERITY_BADGE = { High: 'badge-danger', Medium: 'badge-warning', Low: 'badge-neutral' };
-
-async function viewPolicyEvaluation(policyId, policyName) {
-    let evaluation;
-    try {
-        const resp = await fetch(`/policies/${policyId}/evaluation/latest`);
-        if (!resp.ok) { showToast('No evaluation found for this policy.', 'error'); return; }
-        evaluation = await resp.json();
-    } catch (err) {
-        showToast('Could not load the evaluation.', 'error');
-        return;
+    // ---- Create Policy modal ----
+    const POLICY_FRAMEWORKS = {{ all_frameworks|map(attribute='name')|list|tojson }};
+    const POLICY_DEPARTMENTS_JS = {{ POLICY_DEPARTMENTS|tojson }};
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
     }
 
-    // Prefer the server-normalized badge class (badge-pass/-fail/-review, keyed off verdict_code);
-    // fall back to the old string-matching for evaluations recorded before verdict_code existed.
-    const verdictClass = evaluation.badge_class || (evaluation.verdict === 'Sufficient' ? 'badge-pass'
-        : evaluation.verdict === 'Insufficient' ? 'badge-fail' : 'badge-review');
-    const verdictIcon = evaluation.verdict_code === 'PASS' ? 'fa-circle-check'
-        : evaluation.verdict_code === 'FAIL' ? 'fa-circle-xmark' : 'fa-magnifying-glass';
+    function showAddPolicyModal() {
+        openModal('Add policy', `
+            <form id="policyForm" method="POST" action="/policies/add">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="newPolicyName">Policy name <span class="required-star">*</span></label>
+                    <input type="text" id="newPolicyName" name="name" class="form-control" placeholder="Enter policy name" required>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="newPolicyOwner">Owner</label>
+                        <input type="text" id="newPolicyOwner" name="owner" class="form-control" placeholder="Policy owner">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPolicyFramework">Framework</label>
+                        <select id="newPolicyFramework" name="framework" class="form-control">
+                            ${POLICY_FRAMEWORKS.map(f => `<option>${escapeHtml(f)}</option>`).join('')}
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPolicyDept">Department</label>
+                        <select id="newPolicyDept" name="department" class="form-control">
+                            <option value="">Unassigned</option>
+                            ${POLICY_DEPARTMENTS_JS.map(d => `<option>${escapeHtml(d)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPolicyCycle">Review cycle (days)</label>
+                        <input type="number" id="newPolicyCycle" name="review_cycle_days" class="form-control" value="180" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="newPolicyReq">Requirement (optional)</label>
+                    <textarea id="newPolicyReq" name="requirement_text" class="form-control" rows="3" placeholder="What should this policy cover?"></textarea>
+                </div>
+                <p class="form-help">You'll choose how to start the policy content (blank, upload, or link) on the next screen.</p>
+            </form>
+        `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'policyForm\').submit()">Create policy</button>');
+    }
+    const addBtn = document.getElementById('addPolicyBtn');
+    if (addBtn) addBtn.addEventListener('click', showAddPolicyModal);
 
-    const items = (evaluation.missing_items || []).map(i => `
-        <div style="padding:10px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:8px;">
-            <div class="flex-between">
-                <strong>${escapeHtml(i.control_code)} - ${escapeHtml(i.control_title)}</strong>
-                <span class="badge ${SEVERITY_BADGE[i.severity] || 'badge-neutral'}">${escapeHtml(i.severity)}</span>
+    // ---- Policy evaluation (AI auditor) ----
+    const SEVERITY_PILL = { High: 'pill-danger', Medium: 'pill-warning', Low: 'pill-neutral' };
+
+    async function viewPolicyEvaluation(policyId, policyName) {
+        let evaluation;
+        try {
+            const resp = await fetch(`/policies/${policyId}/evaluation/latest`);
+            if (!resp.ok) { showToast('No evaluation found for this policy.', 'error'); return; }
+            evaluation = await resp.json();
+        } catch (err) {
+            showToast('Could not load the evaluation.', 'error');
+            return;
+        }
+
+        // Prefer the server-normalized badge class (keyed off verdict_code); fall back to string matching for older rows.
+        const verdictClass = evaluation.badge_class || (evaluation.verdict === 'Sufficient' ? 'badge-pass'
+            : evaluation.verdict === 'Insufficient' ? 'badge-fail' : 'badge-review');
+        const verdictIcon = evaluation.verdict_code === 'PASS' ? 'fa-circle-check'
+            : evaluation.verdict_code === 'FAIL' ? 'fa-circle-xmark' : 'fa-magnifying-glass';
+
+        const items = (evaluation.missing_items || []).map(i => `
+            <li class="gap-item">
+                <div class="gap-item-head">
+                    <strong>${escapeHtml(i.control_code)} - ${escapeHtml(i.control_title)}</strong>
+                    <span class="pill ${SEVERITY_PILL[i.severity] || 'pill-neutral'}">${escapeHtml(i.severity)}</span>
+                </div>
+                <div class="gap-item-issue">${escapeHtml(i.issue)}</div>
+            </li>`).join('');
+        const gaps = items ? `<ul class="gap-list">${items}</ul>` : '<p class="text-sm text-muted">No gaps identified.</p>';
+
+        const updatedContent = evaluation.updated_policy_content ? `
+            <h4 class="eval-subtitle">AI-proposed updated policy text</h4>
+            <div class="proposed-text">${escapeHtml(evaluation.updated_policy_content)}</div>
+        ` : '';
+
+        const remediation = evaluation.verdict_code === 'FAIL' ? `
+            <div class="remediation">
+                <div class="remediation-head">
+                    <span><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Remediation task</span>
+                    <span class="pill ${evaluation.remediation_status === 'Resolved' ? 'pill-success' : 'pill-warning'}">${escapeHtml(evaluation.remediation_status || 'Open')}</span>
+                </div>
+                <p class="text-sm text-muted">${evaluation.remediation_assignee ? `Assigned to ${escapeHtml(evaluation.remediation_assignee)}` : 'Not yet assigned'}${evaluation.remediation_due_date ? ` &middot; Due ${escapeHtml(evaluation.remediation_due_date)}` : ''} - <a href="/policies/${policyId}">manage on the policy page</a>.</p>
+            </div>` : '';
+
+        openModal(`Evaluation: ${policyName}`, `
+            <div class="eval-head">
+                <span class="verdict ${verdictClass}"><i class="fas ${verdictIcon}" aria-hidden="true"></i> ${escapeHtml(evaluation.verdict) || 'Unknown'}</span>
             </div>
-            <div class="text-sm text-muted" style="margin-top:4px;">${escapeHtml(i.issue)}</div>
-        </div>`).join('') || '<p class="text-sm text-muted">No gaps identified.</p>';
-
-    const updatedContent = evaluation.updated_policy_content ? `
-        <h4 style="font-size:13px;margin:16px 0 8px;">AI-Proposed Updated Policy Text</h4>
-        <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-tertiary);padding:12px;border-radius:8px;max-height:260px;overflow-y:auto;">${escapeHtml(evaluation.updated_policy_content)}</div>
-    ` : '';
-
-    const remediation = evaluation.verdict_code === 'FAIL' ? `
-        <div style="margin-top:16px;padding:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-tertiary);">
-            <div class="flex-between" style="margin-bottom:4px;">
-                <strong style="font-size:13px;"><i class="fas fa-triangle-exclamation" style="color:var(--accent-danger);"></i> Remediation Task</strong>
-                <span class="badge ${evaluation.remediation_status === 'Resolved' ? 'badge-success' : 'badge-warning'}">${escapeHtml(evaluation.remediation_status || 'Open')}</span>
-            </div>
-            <p class="text-sm text-muted">${evaluation.remediation_assignee ? `Assigned to ${escapeHtml(evaluation.remediation_assignee)}` : 'Not yet assigned'}${evaluation.remediation_due_date ? ` &middot; Due ${escapeHtml(evaluation.remediation_due_date)}` : ''} - <a href="/policies/${policyId}">manage on the policy page</a>.</p>
-        </div>` : '';
-
-    openModal(`Evaluation: ${policyName}`, `
-        <div style="margin-bottom:16px;">
-            <span class="badge ${verdictClass}" style="font-size:16px;padding:8px 18px;"><i class="fas ${verdictIcon}" aria-hidden="true"></i> ${escapeHtml(evaluation.verdict) || 'Unknown'}</span>
-            <p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">${escapeHtml(evaluation.summary)}</p>
-            <p class="text-sm text-muted" style="margin-top:4px;">Evaluated ${escapeHtml(evaluation.created_at)} by ${escapeHtml(evaluation.evaluated_by) || '-'}</p>
-        </div>
-        <h4 style="font-size:13px;margin-bottom:8px;">Gaps Identified</h4>
-        ${items}
-        ${updatedContent}
-        ${remediation}
-    `, `<a href="/policies/${policyId}/evaluation/download" class="btn btn-secondary"><i class="fas fa-download"></i> Download PDF</a><button class="btn btn-primary" onclick="closeModal()">Close</button>`);
-}
+            <p class="eval-summary">${escapeHtml(evaluation.summary)}</p>
+            <p class="eval-meta">Evaluated ${escapeHtml(evaluation.created_at)} by ${escapeHtml(evaluation.evaluated_by) || '-'}</p>
+            <h4 class="eval-subtitle">Gaps identified</h4>
+            ${gaps}
+            ${updatedContent}
+            ${remediation}
+        `, `<a href="/policies/${policyId}/evaluation/download" class="btn btn-secondary"><i class="fas fa-download" aria-hidden="true"></i> Download PDF</a><button type="button" class="btn btn-primary" onclick="closeModal()">Close</button>`);
+    }
+    document.querySelectorAll('[data-view-eval]').forEach(function (b) {
+        b.addEventListener('click', function () { viewPolicyEvaluation(b.dataset.viewEval, b.dataset.policyName); });
+    });
+})();
 </script>
 {% endblock %}
