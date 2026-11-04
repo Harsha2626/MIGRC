@@ -3,107 +3,103 @@
 {% block breadcrumb %}<span>Vendor Management</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-c.css') }}">
+{% set approved_n = vendors|selectattr('status', 'equalto', 'Approved')|list|length %}
+{% set progress_n = vendors|selectattr('status', 'equalto', 'In Progress')|list|length %}
+{% set pending_n = vendors|length - approved_n - progress_n %}
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Third-party risk</div>
         <h1>Vendor Management</h1>
         <p>Assess and monitor third-party vendor security posture</p>
     </div>
     <div class="page-actions">
-        <a href="/vendors/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        <a href="{{ url_for('vendors.questionnaires') }}" class="btn btn-secondary"><i class="fas fa-clipboard-list" aria-hidden="true"></i> Questionnaires</a>
+        <a href="/vendors/export" class="btn btn-secondary"><i class="fas fa-download" aria-hidden="true"></i> Export</a>
         {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddVendorModal()"><i class="fas fa-plus"></i> Add Vendor</button>
+        <button type="button" class="btn btn-primary" onclick="showAddVendorModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Vendor</button>
         {% endif %}
     </div>
 </div>
 
-<!-- Vendor Stats -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-building"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Total Vendors</div>
-            <div class="stat-value">{{ vendors|length }}</div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-building" aria-hidden="true"></i> Total vendors</div>
+        <div class="kpi-value">{{ vendors|length }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Approved</div>
-            <div class="stat-value">{{ vendors|selectattr('status', 'equalto', 'Approved')|list|length }}</div>
-        </div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Approved</div>
+        <div class="kpi-value">{{ approved_n }}</div>
     </div>
-</div>
-
-<!-- Toolbar -->
-<div class="toolbar">
-    <div class="search-input-wrapper">
-        <i class="fas fa-search"></i>
-        <input type="text" class="filter-input" placeholder="Search vendors..." id="vendorSearch" oninput="filterVendors()">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-spinner" aria-hidden="true"></i> Assessment in progress</div>
+        <div class="kpi-value">{{ progress_n }}</div>
+    </div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-clock" aria-hidden="true"></i> Pending review</div>
+        <div class="kpi-value">{{ pending_n }}</div>
     </div>
 </div>
 
-<!-- Vendor Table -->
+<div class="filter-bar">
+    <div class="filter-search input-icon">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input type="search" class="form-control" placeholder="Search vendors" aria-label="Search vendors" id="vendorSearch" oninput="filterVendors()">
+    </div>
+    <select class="filter-select" id="vendorStatusFilter" aria-label="Filter by status" onchange="filterVendors()">
+        <option value="">All statuses</option>
+        {% for s in VENDOR_STATUSES %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+    <span class="spacer"></span>
+    <span class="result-count" id="vendorCount" role="status" aria-live="polite"></span>
+</div>
+
 <div class="card">
     <div class="card-body no-padding">
+        {% if vendors %}
         <div class="table-container">
-            <table id="vendorTable">
+            <table id="vendorTable" class="table-sortable">
                 <thead>
                     <tr>
-                        <th>Vendor</th>
-                        <th>Category</th>
-                        <th>Status</th>
+                        <th data-sort="text">Vendor</th>
+                        <th data-sort="text">Category</th>
+                        <th data-sort="text">Status</th>
                         <th>Compliance</th>
-                        <th>Last Assessment</th>
-                        <th>Actions</th>
+                        <th data-sort="text">Last assessment</th>
+                        <th class="actions"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for v in vendors %}
-                    <tr>
+                    <tr data-status="{{ v.status }}">
+                        <td><a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="link-plain">{{ v.name }}</a></td>
+                        <td class="text-muted">{{ v.category or '—' }}</td>
                         <td>
-                            <a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="font-semibold" style="text-decoration:none;">{{ v.name }}</a>
-                        </td>
-                        <td class="text-muted">{{ v.category }}</td>
-                        <td>
-                            {% if v.status == 'Approved' %}<span class="badge badge-success">{{ v.status }}</span>
-                            {% elif v.status == 'In Progress' %}<span class="badge badge-info">{{ v.status }}</span>
-                            {% else %}<span class="badge badge-warning">{{ v.status }}</span>{% endif %}
+                            {% if v.status == 'Approved' %}<span class="pill pill-approved"><i class="fas fa-check" aria-hidden="true"></i>{{ v.status }}</span>
+                            {% elif v.status == 'In Progress' %}<span class="pill pill-in-progress"><i class="fas fa-spinner" aria-hidden="true"></i>{{ v.status }}</span>
+                            {% else %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>{{ v.status }}</span>{% endif %}
                         </td>
                         <td>
-                            <div class="tag-list">
-                                {% for c in v.compliance %}
-                                <span class="tag">{{ c }}</span>
-                                {% endfor %}
+                            <div class="cert-list">
+                                {% for c in v.compliance %}<span class="tag">{{ c }}</span>{% else %}<span class="cell-sub">None recorded</span>{% endfor %}
                             </div>
                         </td>
-                        <td>
-                            <div class="text-sm">{{ v.last_assessment }}</div>
-                            <div class="text-sm text-muted">Next: {{ v.next_assessment }}</div>
+                        <td data-value="{{ v.last_assessment }}">
+                            <div>{{ v.last_assessment or '—' }}</div>
+                            <div class="cell-sub">Next: {{ v.next_assessment or '—' }}</div>
                         </td>
-                        <td>
-                            <div class="flex gap-8">
-                                <a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Assessments & Documents"><i class="fas fa-diagram-project"></i></a>
+                        <td class="actions">
+                            <div class="row-actions">
+                                <a href="{{ url_for('vendors.vendor_detail', vendor_id=v.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Assessments &amp; documents" aria-label="Assessments and documents for {{ v.name }}"><i class="fas fa-diagram-project" aria-hidden="true"></i></a>
                                 {% if current_user.can_write %}
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditVendorModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
+                                <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit" aria-label="Edit {{ v.name }}" onclick="showEditVendorModal({{ loop.index0 }})"><i class="fas fa-pen" aria-hidden="true"></i></button>
                                 {% endif %}
                                 {% if current_user.can_delete %}
-                                <form method="POST" action="{{ url_for('vendors.delete_vendor', vendor_id=v.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ v.name }}?');">
+                                <form method="POST" action="{{ url_for('vendors.delete_vendor', vendor_id=v.id) }}" data-confirm="Delete vendor &quot;{{ v.name }}&quot;? Its assessments and documents will be removed." data-confirm-title="Delete vendor" data-confirm-button="Delete">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete" aria-label="Delete {{ v.name }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
                                 </form>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" style="padding:0;">
-                            <div class="empty-state">
-                                <div class="empty-state-icon"><i class="fas fa-building-shield" aria-hidden="true"></i></div>
-                                <h3>No vendors yet</h3>
-                                <p>Add your first third-party vendor to start tracking security assessments and compliance documents.</p>
-                                {% if current_user.can_write %}
-                                <button class="btn btn-primary btn-sm" onclick="showAddVendorModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Vendor</button>
                                 {% endif %}
                             </div>
                         </td>
@@ -112,19 +108,49 @@
                 </tbody>
             </table>
         </div>
+        <div class="empty-state is-hidden-row" id="vendorNoMatch">
+            <div class="empty-state-icon"><i class="fas fa-filter" aria-hidden="true"></i></div>
+            <h3>No vendors match these filters</h3>
+            <p>Try a different search term or status.</p>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-building-shield" aria-hidden="true"></i></div>
+            <h3>No vendors yet</h3>
+            <p>Add your first third-party vendor to start tracking security assessments and compliance documents.</p>
+            {% if current_user.can_write %}
+            <button type="button" class="btn btn-primary btn-sm" onclick="showAddVendorModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Vendor</button>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function filterVendors() {
     const search = document.getElementById('vendorSearch').value.toLowerCase();
-    document.querySelectorAll('#vendorTable tbody tr').forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = !search || text.includes(search) ? '' : 'none';
+    const status = document.getElementById('vendorStatusFilter').value;
+    const rows = document.querySelectorAll('#vendorTable tbody tr');
+    let shown = 0;
+    rows.forEach(row => {
+        const ok = (!search || row.textContent.toLowerCase().includes(search)) && (!status || row.dataset.status === status);
+        row.classList.toggle('is-hidden-row', !ok);
+        if (ok) shown++;
     });
+    const nm = document.getElementById('vendorNoMatch');
+    if (nm) nm.classList.toggle('is-hidden-row', shown > 0 || !rows.length);
+    const t = document.getElementById('vendorTable');
+    if (t) t.closest('.table-container').classList.toggle('is-hidden-row', rows.length > 0 && shown === 0);
+    const c = document.getElementById('vendorCount');
+    if (c) c.textContent = rows.length ? `Showing ${shown} of ${rows.length}` : '';
 }
+filterVendors();
 
 const VENDORS = {{ vendor_dicts|tojson }};
 const VENDOR_CATEGORIES = ['Cloud Infrastructure', 'Communication', 'Development', 'CRM', 'Payment Processing', 'Project Management', 'Monitoring', 'Other'];
@@ -136,47 +162,45 @@ function vendorFormFields(v) {
     const compliance = v.compliance || [];
     return `
         <div class="form-group">
-            <label>Vendor Name</label>
-            <input type="text" name="name" class="form-control" placeholder="Enter vendor name" value="${v.name || ''}" required>
+            <label for="vf-name">Vendor name <span class="required-star">*</span></label>
+            <input type="text" id="vf-name" name="name" class="form-control" placeholder="Enter vendor name" value="${esc(v.name)}" required>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-grid-2">
             <div class="form-group">
-                <label>Category</label>
-                <select name="category" class="form-control">
+                <label for="vf-category">Category</label>
+                <select id="vf-category" name="category" class="form-control">
                     ${VENDOR_CATEGORIES.map(c => `<option ${c === v.category ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
-                <label>Status</label>
-                <select name="status" class="form-control">
+                <label for="vf-status">Status</label>
+                <select id="vf-status" name="status" class="form-control">
                     ${VENDOR_STATUSES.map(s => `<option ${s === (v.status || 'Pending') ? 'selected' : ''}>${s}</option>`).join('')}
                 </select>
             </div>
         </div>
         <div class="form-group">
-            <label>Vendor URL</label>
-            <input type="url" name="website" class="form-control" placeholder="https://vendor.com" value="${v.website || ''}">
+            <label for="vf-website">Vendor URL</label>
+            <input type="url" id="vf-website" name="website" class="form-control" placeholder="https://vendor.com" value="${esc(v.website)}">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-grid-2">
             <div class="form-group">
-                <label>POC Name</label>
-                <input type="text" name="contact_name" class="form-control" placeholder="Point of contact" value="${v.contact_name || ''}">
+                <label for="vf-poc">POC name</label>
+                <input type="text" id="vf-poc" name="contact_name" class="form-control" placeholder="Point of contact" value="${esc(v.contact_name)}">
             </div>
             <div class="form-group">
-                <label>POC Email</label>
-                <input type="email" name="contact_email" class="form-control" placeholder="security@vendor.com" value="${v.contact_email || ''}">
+                <label for="vf-email">POC email</label>
+                <input type="email" id="vf-email" name="contact_email" class="form-control" placeholder="security@vendor.com" value="${esc(v.contact_email)}">
             </div>
         </div>
-        <div class="form-group">
-            <label>Compliance Certifications</label>
-            <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        <fieldset class="form-group">
+            <legend class="form-label">Compliance certifications</legend>
+            <div class="check-row">
                 ${VENDOR_COMPLIANCE.map(c => `
-                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;">
-                        <input type="checkbox" name="compliance" value="${c}" ${compliance.includes(c) ? 'checked' : ''}> ${c}
-                    </label>
+                    <label class="form-check"><input type="checkbox" name="compliance" value="${c}" ${compliance.includes(c) ? 'checked' : ''}> ${c}</label>
                 `).join('')}
             </div>
-        </div>
+        </fieldset>
     `;
 }
 
@@ -186,17 +210,17 @@ function showAddVendorModal() {
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             ${vendorFormFields()}
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'vendorForm\').submit()">Add Vendor</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'vendorForm\').submit()">Add Vendor</button>');
 }
 
 function showEditVendorModal(idx) {
     const v = VENDORS[idx];
     openModal('Edit Vendor', `
-        <form id="vendorForm" method="POST" action="/vendors/${v.id}/edit">
+        <form id="vendorForm" method="POST" action="/vendors/${encodeURIComponent(v.id)}/edit">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             ${vendorFormFields(v)}
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'vendorForm\').submit()">Save Changes</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'vendorForm\').submit()">Save Changes</button>');
 }
 </script>
 {% endblock %}
