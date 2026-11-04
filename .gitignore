@@ -10,3 +10,5 @@ migrc.db
 migrc.db-shm
 migrc.db-wal
 uploads/
+gunicorn-*.log
+wsgi.pyc
