@@ -3,29 +3,29 @@
 {% block breadcrumb %}<span>Integrations</span>{% endblock %}
 
 {% block content %}
-<style>
-    .integ-section { margin-bottom: 32px; }
-    .integ-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
-    .integ-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .integ-card-planned { opacity: .85; }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-a.css') }}">
 
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Connections</div>
         <h1>Integrations</h1>
         <p>Google Workspace is the only integration available today. The rest are on the roadmap and are not yet functional.</p>
     </div>
 </div>
 
-<div class="integ-section">
-    <h3>Available now</h3>
+<section class="integ-section" aria-labelledby="integ-available">
+    <h2 id="integ-available">Available now</h2>
     <div class="integration-grid">
         <div class="integration-card">
-            <div class="integration-card-head"><div class="integration-badge green"><i class="fab fa-google"></i></div><h4>Google Workspace</h4></div>
+            <div class="integration-card-head">
+                <div class="integration-badge green"><i class="fab fa-google" aria-hidden="true"></i></div>
+                <h3>Google Workspace</h3>
+            </div>
             <div class="tag-list mb-16"><span class="tag">Employee Directory</span></div>
             {% if google_connection %}
-                <div class="integ-status"><i class="fas fa-circle-check" aria-hidden="true" style="color:var(--accent-success);"></i> Connected as {{ google_connection.google_email }}</div>
-                <div class="text-sm text-muted">
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    Connected as <strong>{{ google_connection.google_email }}</strong><br>
                     {% if google_connection.domain %}Domain: {{ google_connection.domain }}<br>{% endif %}
                     Connected {{ google_connection.connected_at.strftime('%d %b %Y') if google_connection.connected_at else 'recently' }}<br>
                     {% if google_connection.last_synced_at %}Last synced {{ google_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never synced{% endif %}
@@ -33,40 +33,43 @@
                 <div class="integ-actions">
                     <form method="POST" action="{{ url_for('google_oauth.sync_employees') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-primary">Sync Employees</button>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-rotate" aria-hidden="true"></i> Sync employees</button>
                     </form>
-                    <form method="POST" action="{{ url_for('google_oauth.disconnect') }}">
+                    <form method="POST" action="{{ url_for('google_oauth.disconnect') }}"
+                          data-confirm="Disconnect Google Workspace? Employees already imported are kept, but they will no longer sync."
+                          data-confirm-title="Disconnect Google Workspace" data-confirm-button="Disconnect">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
                     </form>
                 </div>
             {% elif google_configured %}
-                <div class="integ-status text-muted"><i class="fas fa-circle" aria-hidden="true"></i> Not connected</div>
-                <div class="integ-actions"><a href="{{ url_for('google_oauth.connect') }}" class="btn btn-sm btn-primary">Connect</a></div>
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <div class="integ-meta">Import your employee directory and keep it in sync.</div>
+                <div class="integ-actions"><a href="{{ url_for('google_oauth.connect') }}" class="btn btn-sm btn-primary"><i class="fas fa-plug" aria-hidden="true"></i> Connect</a></div>
             {% else %}
-                <div class="integ-status text-muted"><i class="fas fa-circle-exclamation" aria-hidden="true"></i> Not configured</div>
-                <div class="text-sm text-muted">The server has no Google OAuth credentials (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET). Ask an administrator to configure them.</div>
+                <div><span class="pill pill-warning"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>Not configured</span></div>
+                <div class="integ-meta">The server has no Google OAuth credentials (<code class="mono">GOOGLE_CLIENT_ID</code> / <code class="mono">GOOGLE_CLIENT_SECRET</code>). Ask an administrator to configure them.</div>
             {% endif %}
         </div>
     </div>
-</div>
+</section>
 
 {% for category, items in planned_categories %}
-<div class="integ-section">
-    <h3>{{ category }} <span class="text-sm text-muted">(roadmap)</span></h3>
+<section class="integ-section" aria-labelledby="integ-cat-{{ loop.index }}">
+    <h2 id="integ-cat-{{ loop.index }}">{{ category }} <span class="text-sm text-muted">(roadmap)</span></h2>
     <div class="integration-grid">
         {% for item in items %}
-        <div class="integration-card integ-card-planned">
+        <div class="integration-card is-planned">
             <div class="integration-card-head">
-                <div class="integration-badge {{ item.color }}">{% if item.icon %}<i class="{{ item.icon }}"></i>{% else %}{{ item.badge }}{% endif %}</div>
-                <h4>{{ item.name }}</h4>
+                <div class="integration-badge {{ item.color }}" aria-hidden="true">{% if item.icon %}<i class="{{ item.icon }}"></i>{% else %}{{ item.badge }}{% endif %}</div>
+                <h3>{{ item.name }}</h3>
             </div>
             <div class="tag-list mb-16">{% for c in item.capabilities %}<span class="tag">{{ c }}</span>{% endfor %}</div>
-            <span class="badge badge-review"><span>Planned</span></span>
-            <div class="text-sm text-muted mt-4">Not available yet. Tell your administrator if this is a priority for you.</div>
+            <div><span class="pill pill-in-review"><i class="fas fa-clock" aria-hidden="true"></i>Planned</span></div>
+            <div class="integ-meta">Not available yet. Tell your administrator if this is a priority for you.</div>
         </div>
         {% endfor %}
     </div>
-</div>
+</section>
 {% endfor %}
 {% endblock %}

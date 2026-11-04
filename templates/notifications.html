@@ -3,43 +3,56 @@
 {% block breadcrumb %}<span>Notifications</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-a.css') }}">
+
+{% set unread_n = notifications|rejectattr('is_read')|list|length if notifications else 0 %}
+
 <div class="page-header">
     <div>
         <h1>Notifications</h1>
-        <p>Deadlines, escalations, and review activity that need your attention</p>
+        <p>Deadlines, escalations, and review activity that need your attention.</p>
     </div>
     <div class="page-actions">
+        {% if notifications %}
         <form method="POST" action="/notifications/mark-all-read">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-secondary"><i class="fas fa-check-double"></i> Mark all read</button>
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-check-double" aria-hidden="true"></i> Mark all read</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
 <div class="card">
+    {% if notifications %}
+    <div class="card-header">
+        <div>
+            <h2 class="card-title">Inbox</h2>
+            <div class="card-subtitle">{{ unread_n }} unread of {{ notifications|length }}</div>
+        </div>
+    </div>
     <div class="card-body no-padding">
-        {% if notifications %}
         <div class="table-container">
             <table>
+                <caption class="sr-only">Notifications</caption>
                 <thead>
-                    <tr><th></th><th>Notification</th><th>When</th><th></th></tr>
+                    <tr><th><span class="sr-only">Type</span></th><th>Notification</th><th>When</th><th class="actions"><span class="sr-only">Actions</span></th></tr>
                 </thead>
                 <tbody>
                     {% for n in notifications %}
-                    <tr style="{% if not n.is_read %}background: var(--accent-primary-light);{% endif %}">
-                        <td style="width:36px;"><i class="fas {{ {'deadline_approaching':'fa-clock','evidence_rejected':'fa-file-circle-xmark','risk_escalated':'fa-triangle-exclamation','policy_review_due':'fa-file-shield','finding_assigned':'fa-magnifying-glass-chart'}.get(n.type, 'fa-bell') }}" style="color: var(--accent-primary);"></i></td>
+                    <tr class="notif-row{{ ' is-unread' if not n.is_read }}">
+                        <td class="notif-icon"><i class="fas {{ {'deadline_approaching':'fa-clock','evidence_rejected':'fa-file-circle-xmark','risk_escalated':'fa-triangle-exclamation','policy_review_due':'fa-file-shield','finding_assigned':'fa-magnifying-glass-chart'}.get(n.type, 'fa-bell') }}" aria-hidden="true"></i></td>
                         <td>
-                            <div class="font-semibold" style="font-size:13px;">{{ n.title }}</div>
-                            {% if n.message %}<div class="text-sm text-muted">{{ n.message }}</div>{% endif %}
+                            <div class="cell-title">{% if not n.is_read %}<span class="sr-only">Unread: </span>{% endif %}{{ n.title }}</div>
+                            {% if n.message %}<div class="cell-sub">{{ n.message }}</div>{% endif %}
                         </td>
-                        <td class="text-sm text-muted" style="white-space:nowrap;">{{ n.created_at|timesince }}</td>
-                        <td style="white-space:nowrap;">
-                            <form method="POST" action="/notifications/{{ n.id }}/read" style="display:inline;">
+                        <td class="text-sm text-muted nowrap">{{ n.created_at|timesince }}</td>
+                        <td class="actions nowrap">
+                            <form method="POST" action="/notifications/{{ n.id }}/read">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 {% if n.link %}
-                                <button type="submit" class="btn btn-sm btn-secondary">Open</button>
+                                <button type="submit" class="btn btn-sm btn-secondary">Open <span class="sr-only">{{ n.title }}</span></button>
                                 {% elif not n.is_read %}
-                                <button type="submit" class="btn btn-sm btn-secondary" title="Mark read"><i class="fas fa-check"></i></button>
+                                <button type="submit" class="btn btn-sm btn-ghost" aria-label="Mark '{{ n.title }}' as read" data-tooltip="Mark read"><i class="fas fa-check" aria-hidden="true"></i></button>
                                 {% endif %}
                             </form>
                         </td>
@@ -48,13 +61,15 @@
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-bell-slash"></i>
-            <h3>No notifications</h3>
-            <p>You're all caught up. New deadlines and alerts will show up here.</p>
-        </div>
-        {% endif %}
     </div>
+    {% else %}
+    <div class="card-body">
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-bell-slash" aria-hidden="true"></i></div>
+            <h3>You're all caught up</h3>
+            <p>New deadlines, escalations and review alerts will show up here.</p>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
