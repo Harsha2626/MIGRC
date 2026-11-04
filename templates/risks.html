@@ -3,486 +3,517 @@
 {% block breadcrumb %}<span>Risk Management</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-c.css') }}">
+{% set level_rank = {'Negligible': 1, 'Low': 2, 'Medium': 3, 'High': 4, 'Critical': 5} %}
+{% set open_n = risks|selectattr('status', 'equalto', 'Open')|list|length %}
+{% set treat_n = risks|selectattr('status', 'equalto', 'In Treatment')|list|length %}
+{% set accepted_n = risks|selectattr('status', 'equalto', 'Accepted')|list|length %}
+{% set critical_n = risks|selectattr('score', 'ge', 20)|list|length %}
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Governance</div>
         <h1>Risk Management</h1>
         <p>Identify, assess, and manage organizational risks</p>
     </div>
     <div class="page-actions">
-        <a href="/risks/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export</a>
+        <a href="/risks/export" class="btn btn-secondary"><i class="fas fa-download" aria-hidden="true"></i> Export</a>
         {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddRiskModal()"><i class="fas fa-plus"></i> Add Risk</button>
+        <button type="button" class="btn btn-primary" onclick="showAddRiskModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Risk</button>
         {% endif %}
     </div>
 </div>
 
-<!-- Risk Stats -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-exclamation-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Total Risks</div>
-            <div class="stat-value">{{ risks|length }}</div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Total risks</div>
+        <div class="kpi-value">{{ risks|length }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-fire"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Open</div>
-            <div class="stat-value">{{ risks|selectattr('status', 'equalto', 'Open')|list|length }}</div>
-        </div>
+    <div class="kpi kpi-accent-danger">
+        <div class="kpi-label"><i class="fas fa-fire" aria-hidden="true"></i> Open</div>
+        <div class="kpi-value">{{ open_n }}</div>
+        <div class="kpi-foot"><span>{{ critical_n }} critical (score 20+)</span></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-wrench"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">In Treatment</div>
-            <div class="stat-value">{{ risks|selectattr('status', 'equalto', 'In Treatment')|list|length }}</div>
-        </div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-wrench" aria-hidden="true"></i> In treatment</div>
+        <div class="kpi-value">{{ treat_n }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Accepted</div>
-            <div class="stat-value">{{ risks|selectattr('status', 'equalto', 'Accepted')|list|length }}</div>
-        </div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Accepted</div>
+        <div class="kpi-value">{{ accepted_n }}</div>
     </div>
 </div>
 
-<!-- Tabs -->
-<div class="tabs">
-    <button class="tab active" onclick="switchRiskView(this, 'register')">Risk Register</button>
-    <button class="tab" onclick="switchRiskView(this, 'matrix')">Risk Matrix</button>
-    <button class="tab" onclick="switchRiskView(this, 'tasks')">Mitigation Tasks</button>
-    <button class="tab" onclick="switchRiskView(this, 'discovery')">Risk Discovery</button>
-</div>
-
-<!-- Risk Register View -->
-<div id="registerView">
-    <div class="toolbar">
-        <div class="search-input-wrapper">
-            <i class="fas fa-search"></i>
-            <input type="text" class="filter-input" placeholder="Search risks..." id="riskSearch" oninput="filterRisks()">
-        </div>
-        <select class="filter-select" id="riskStatusFilter" onchange="filterRisks()">
-            <option value="">All Statuses</option>
-            <option value="Open">Open</option>
-            <option value="In Treatment">In Treatment</option>
-            <option value="Accepted">Accepted</option>
-        </select>
-        <select class="filter-select" id="riskImpactFilter" onchange="filterRisks()">
-            <option value="">All Impacts</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-        </select>
+<div data-tabs id="riskTabs">
+    <div class="tabs" role="tablist" aria-label="Risk views">
+        <button type="button" class="tab active" role="tab" data-tab="register" id="tab-register" aria-controls="panel-register">Risk Register <span class="count">{{ risks|length }}</span></button>
+        <button type="button" class="tab" role="tab" data-tab="matrix" id="tab-matrix" aria-controls="panel-matrix">Risk Matrix</button>
+        <button type="button" class="tab" role="tab" data-tab="tasks" id="tab-tasks" aria-controls="panel-tasks">Mitigation Tasks <span class="count">{{ tasks|length }}</span></button>
+        <button type="button" class="tab" role="tab" data-tab="discovery" id="tab-discovery" aria-controls="panel-discovery">Risk Discovery <span class="count">{{ catalog|length }}</span></button>
     </div>
 
-    <div class="card">
-        <div class="card-body no-padding">
-            <div class="table-container">
-                <table id="riskTable">
-                    <thead>
-                        <tr>
-                            <th>Risk</th>
-                            <th>Category</th>
-                            <th>Impact</th>
-                            <th>Likelihood</th>
-                            <th>Score</th>
-                            <th>Owner</th>
-                            <th>Treatment</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for r in risks %}
-                        <tr data-status="{{ r.status }}" data-impact="{{ r.impact }}">
-                            <td>
-                                <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="font-semibold" style="text-decoration:none;">{{ r.title }}</a>
-                                <div class="text-sm text-muted">Created {{ r.created }}</div>
-                            </td>
-                            <td><span class="badge badge-neutral">{{ r.category }}</span></td>
-                            <td>
-                                {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
-                                {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
-                                {% elif r.impact == 'Medium' %}<span class="badge badge-info">{{ r.impact }}</span>
-                                {% else %}<span class="badge badge-success">{{ r.impact }}</span>{% endif %}
-                            </td>
-                            <td>{{ r.likelihood }}</td>
-                            <td>
-                                <strong style="font-size:var(--text-lg);{% if r.score >= 20 %}color:var(--accent-danger){% elif r.score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ r.score }}</strong>
-                            </td>
-                            <td>{{ r.owner }}</td>
-                            <td><span class="badge badge-neutral">{{ r.treatment }}</span></td>
-                            <td>
-                                {% if r.status == 'Open' %}<span class="badge badge-danger">{{ r.status }}</span>
-                                {% elif r.status == 'In Treatment' %}<span class="badge badge-warning">{{ r.status }}</span>
-                                {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
-                            </td>
-                            <td>
-                                <div class="flex gap-8">
-                                    <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Treatment & Controls"><i class="fas fa-diagram-project"></i></a>
-                                    {% if current_user.can_write %}
-                                    <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditRiskModal({{ loop.index0 }})"><i class="fas fa-pen"></i></button>
-                                    {% endif %}
-                                    {% if current_user.can_delete %}
-                                    <form method="POST" action="{{ url_for('risks.delete_risk', risk_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ r.title }}?');">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="9" style="padding:0;">
-                                <div class="empty-state">
-                                    <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
-                                    <h3>No risks logged yet</h3>
-                                    <p>Add a risk manually, or pull one in from the Risk Discovery library to start building your register.</p>
-                                    {% if current_user.can_write %}
-                                    <button class="btn btn-primary btn-sm" onclick="showAddRiskModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Risk</button>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <!-- Register -->
+    <div class="tab-panel" data-panel="register" id="panel-register" role="tabpanel" aria-labelledby="tab-register">
+        <div class="filter-bar">
+            <div class="filter-search input-icon">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" class="form-control" placeholder="Search risks" aria-label="Search risks" id="riskSearch" oninput="filterRisks()">
+            </div>
+            <select class="filter-select" id="riskStatusFilter" aria-label="Filter by status" onchange="filterRisks()">
+                <option value="">All statuses</option>
+                <option value="Open">Open</option>
+                <option value="In Treatment">In Treatment</option>
+                <option value="Accepted">Accepted</option>
+            </select>
+            <select class="filter-select" id="riskImpactFilter" aria-label="Filter by impact" onchange="filterRisks()">
+                <option value="">All impacts</option>
+                <option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Negligible">Negligible</option>
+            </select>
+            <select class="filter-select" id="riskLikelihoodFilter" aria-label="Filter by likelihood" onchange="filterRisks()">
+                <option value="">All likelihoods</option>
+                <option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Negligible">Negligible</option>
+            </select>
+            <button type="button" class="btn btn-ghost btn-sm" id="riskClearFilters" onclick="clearRiskFilters()" hidden>Clear filters</button>
+            <span class="spacer"></span>
+            <span class="result-count" id="riskResultCount" role="status" aria-live="polite"></span>
+        </div>
+
+        <div class="card">
+            <div class="card-body no-padding">
+                {% if risks %}
+                <div class="table-container">
+                    <table id="riskTable" class="table-sortable">
+                        <thead>
+                            <tr>
+                                <th data-sort="text">Risk</th>
+                                <th data-sort="text">Category</th>
+                                <th data-sort="num">Impact</th>
+                                <th data-sort="num">Likelihood</th>
+                                <th data-sort="num" class="num">Score</th>
+                                <th data-sort="text">Owner</th>
+                                <th>Treatment</th>
+                                <th data-sort="text">Status</th>
+                                <th class="actions"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in risks %}
+                            {% set my_tasks = tasks|selectattr('risk_id', 'equalto', r.id)|list %}
+                            {% set done_tasks = my_tasks|selectattr('status', 'equalto', 'Completed')|list|length %}
+                            <tr data-status="{{ r.status }}" data-impact="{{ r.impact }}" data-likelihood="{{ r.likelihood }}">
+                                <td>
+                                    <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="link-plain">{{ r.title }}</a>
+                                    <div class="cell-sub">Created {{ r.created }}</div>
+                                </td>
+                                <td><span class="pill pill-neutral">{{ r.category }}</span></td>
+                                <td data-value="{{ level_rank.get(r.impact, 0) }}">
+                                    {% if r.impact == 'Critical' %}<span class="pill pill-critical"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>{{ r.impact }}</span>
+                                    {% elif r.impact == 'High' %}<span class="pill pill-warning"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>{{ r.impact }}</span>
+                                    {% elif r.impact == 'Medium' %}<span class="pill pill-info"><i class="fas fa-circle-info" aria-hidden="true"></i>{{ r.impact }}</span>
+                                    {% else %}<span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>{{ r.impact }}</span>{% endif %}
+                                </td>
+                                <td data-value="{{ level_rank.get(r.likelihood, 0) }}">{{ r.likelihood }}</td>
+                                <td class="num" data-value="{{ r.score }}">
+                                    {% if r.score >= 20 %}<span class="pill pill-critical" title="Critical band, 20 or more">{{ r.score }}</span>
+                                    {% elif r.score >= 12 %}<span class="pill pill-warning" title="High band, 12 to 19">{{ r.score }}</span>
+                                    {% elif r.score >= 6 %}<span class="pill pill-info" title="Medium band, 6 to 11">{{ r.score }}</span>
+                                    {% else %}<span class="pill pill-success" title="Low band, under 6">{{ r.score }}</span>{% endif %}
+                                </td>
+                                <td>{{ r.owner or '—' }}</td>
+                                <td>
+                                    <div class="cell-sub">{{ r.treatment }}</div>
+                                    {% if my_tasks %}
+                                    <div class="tp" title="{{ done_tasks }} of {{ my_tasks|length }} treatment tasks completed">
+                                        <div class="progress is-success" role="progressbar" aria-label="Treatment progress for {{ r.title }}" aria-valuemin="0" aria-valuemax="{{ my_tasks|length }}" aria-valuenow="{{ done_tasks }}"><span style="width: {{ (done_tasks * 100 / my_tasks|length)|round|int }}%"></span></div>
+                                        <span class="tp-label">{{ done_tasks }}/{{ my_tasks|length }}</span>
+                                    </div>
+                                    {% else %}<span class="tp-label">No tasks</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if r.status == 'Open' %}<span class="pill pill-danger"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>{{ r.status }}</span>
+                                    {% elif r.status == 'In Treatment' %}<span class="pill pill-warning"><i class="fas fa-wrench" aria-hidden="true"></i>{{ r.status }}</span>
+                                    {% else %}<span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>{{ r.status }}</span>{% endif %}
+                                </td>
+                                <td class="actions">
+                                    <div class="row-actions">
+                                        <a href="{{ url_for('risks.risk_detail', risk_id=r.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Treatment &amp; controls" aria-label="Treatment and controls for {{ r.title }}"><i class="fas fa-diagram-project" aria-hidden="true"></i></a>
+                                        {% if current_user.can_write %}
+                                        <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit" aria-label="Edit {{ r.title }}" onclick="showEditRiskModal({{ loop.index0 }})"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                                        {% endif %}
+                                        {% if current_user.can_delete %}
+                                        <form method="POST" action="{{ url_for('risks.delete_risk', risk_id=r.id) }}" data-confirm="Delete risk &quot;{{ r.title }}&quot;? This cannot be undone." data-confirm-title="Delete risk" data-confirm-button="Delete">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete" aria-label="Delete {{ r.title }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-state is-hidden-row" id="riskNoMatch">
+                    <div class="empty-state-icon"><i class="fas fa-filter" aria-hidden="true"></i></div>
+                    <h3>No risks match these filters</h3>
+                    <p>Try a different search term or clear the filters.</p>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearRiskFilters()">Clear filters</button>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
+                    <h3>No risks logged yet</h3>
+                    <p>Add a risk manually, or pull one in from the Risk Discovery library to start building your register.</p>
+                    {% if current_user.can_write %}
+                    <button type="button" class="btn btn-primary btn-sm" onclick="showAddRiskModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Risk</button>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
-</div>
 
-<!-- Risk Matrix View -->
-<div id="matrixView" style="display:none;">
-    <div class="card">
-        <div class="card-header">
-            <h3>Risk Heatmap</h3>
-            <span class="text-sm text-muted">Likelihood &times; Impact &mdash; {{ risks|length }} risk{{ 's' if risks|length != 1 else '' }}</span>
-        </div>
-        <div class="card-body">
-            {% if risks %}
-            <div style="display:flex;justify-content:center;">
-                <div style="display:flex;gap:var(--space-4);align-items:center;">
-                    <div class="axis-label" style="font-size:var(--text-xs);font-weight:var(--font-weight-semibold);color:var(--text-secondary);writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);text-transform:uppercase;letter-spacing:0.06em;">Likelihood &uarr;</div>
-                    <div>
-                        <div id="riskMatrixGrid" class="risk-matrix"><!-- populated by JS --></div>
-                        <div class="x-label" style="margin-top:var(--space-2);padding-left:90px;justify-content:flex-start;">Impact &rarr;</div>
-                    </div>
+    <!-- Matrix -->
+    <div class="tab-panel" data-panel="matrix" id="panel-matrix" role="tabpanel" aria-labelledby="tab-matrix" hidden>
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Risk heatmap</h2>
+                    <div class="card-subtitle">Likelihood &times; impact, {{ risks|length }} risk{{ 's' if risks|length != 1 else '' }}. Select a cell with risks to list them in the register.</div>
                 </div>
             </div>
-            <div class="legend" style="justify-content:center;margin-top:var(--space-6);">
-                <span class="legend-item"><span class="legend-dot negligible"></span> Negligible</span>
-                <span class="legend-item"><span class="legend-dot low"></span> Low</span>
-                <span class="legend-item"><span class="legend-dot medium"></span> Medium</span>
-                <span class="legend-item"><span class="legend-dot high"></span> High</span>
-                <span class="legend-item"><span class="legend-dot critical"></span> Critical</span>
+            <div class="card-body">
+                {% if risks %}
+                <div class="rk-matrix">
+                    <div class="rk-matrix-y" aria-hidden="true">Likelihood</div>
+                    <div class="rk-matrix-main">
+                        <div id="riskMatrixGrid" class="heatmap" role="group" aria-label="Risk heatmap, likelihood by impact"></div>
+                        <div class="hm-axis">Impact</div>
+                    </div>
+                </div>
+                <div class="rk-legend" id="riskMatrixLegend"></div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-chart-simple" aria-hidden="true"></i></div>
+                    <h3>No risks to plot yet</h3>
+                    <p>Once risks are added to the register, this heatmap will place them by likelihood and impact.</p>
+                </div>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="empty-state">
-                <div class="empty-state-icon"><i class="fas fa-chart-simple" aria-hidden="true"></i></div>
-                <h3>No risks to plot yet</h3>
-                <p>Once risks are added to the register, this heatmap will place them by likelihood and impact.</p>
+        </div>
+    </div>
+
+    <!-- Tasks -->
+    <div class="tab-panel" data-panel="tasks" id="panel-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden>
+        <div class="kpi-grid">
+            <div class="kpi kpi-accent-primary"><div class="kpi-label"><i class="fas fa-list-check" aria-hidden="true"></i> Open</div><div class="kpi-value">{{ task_counts.open }}</div></div>
+            <div class="kpi kpi-accent-danger"><div class="kpi-label"><i class="fas fa-clock" aria-hidden="true"></i> Overdue</div><div class="kpi-value">{{ task_counts.overdue }}</div></div>
+            <div class="kpi kpi-accent-warning"><div class="kpi-label"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Needs attention</div><div class="kpi-value">{{ task_counts.needs_attention }}</div></div>
+            <div class="kpi kpi-accent-success"><div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Completed</div><div class="kpi-value">{{ task_counts.completed }}</div></div>
+        </div>
+
+        <div class="filter-bar">
+            <div class="filter-search input-icon">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" class="form-control" placeholder="Search tasks" aria-label="Search tasks" id="taskSearch" oninput="filterTasks()">
             </div>
+            <select class="filter-select" id="taskStatusFilter" aria-label="Filter by task status" onchange="filterTasks()">
+                <option value="">All statuses</option>
+                <option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Pending Approval">Pending Approval</option><option value="Needs Revision">Needs Revision</option><option value="Completed">Completed</option><option value="Overdue">Overdue</option>
+            </select>
+            <span class="spacer"></span>
+            {% if current_user.can_write %}
+            <button type="button" class="btn btn-primary btn-sm" onclick="showAddTaskModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Task</button>
             {% endif %}
         </div>
-    </div>
-</div>
 
-<!-- Mitigation Tasks View -->
-<div id="tasksView" style="display:none;">
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon blue"><i class="fas fa-list-check"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Open</div>
-                <div class="stat-value">{{ task_counts.open }}</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon red"><i class="fas fa-clock"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Overdue</div>
-                <div class="stat-value">{{ task_counts.overdue }}</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Needs Attention</div>
-                <div class="stat-value">{{ task_counts.needs_attention }}</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
-            <div class="stat-info">
-                <div class="stat-label">Completed</div>
-                <div class="stat-value">{{ task_counts.completed }}</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="toolbar">
-        <div class="search-input-wrapper">
-            <i class="fas fa-search"></i>
-            <input type="text" class="filter-input" placeholder="Search tasks..." id="taskSearch" oninput="filterTasks()">
-        </div>
-        <select class="filter-select" id="taskStatusFilter" onchange="filterTasks()">
-            <option value="">All Statuses</option>
-            <option value="Planned">Planned</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Pending Approval">Pending Approval</option>
-            <option value="Needs Revision">Needs Revision</option>
-            <option value="Completed">Completed</option>
-            <option value="Overdue">Overdue</option>
-        </select>
-        {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddTaskModal()" style="margin-left:auto;"><i class="fas fa-plus"></i> Add Task</button>
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <div class="card-body no-padding">
-            <div class="table-container">
-                <table id="taskTable">
-                    <thead>
-                        <tr>
-                            <th>Mitigation Task</th>
-                            <th>Risk</th>
-                            <th>Strategy</th>
-                            <th>Status</th>
-                            <th>Due Date</th>
-                            <th>Assignee</th>
-                            <th>Department</th>
-                            {% if current_user.can_write %}<th>Update Status</th>{% endif %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for t in tasks %}
-                        <tr data-status="{{ 'Overdue' if t.overdue else t.status }}">
-                            <td>{{ t.action }}</td>
-                            <td><a href="{{ url_for('risks.risk_detail', risk_id=t.risk_id) }}" style="text-decoration:none;">{{ t.risk_title }}</a></td>
-                            <td><span class="badge badge-neutral">{{ t.treatment_strategy }}</span></td>
-                            <td>
-                                {% if t.overdue %}<span class="badge badge-danger">Overdue</span>
-                                {% elif t.status == 'Completed' %}<span class="badge badge-success">Completed</span>
-                                {% elif t.status in ['Pending Approval', 'Needs Revision'] %}<span class="badge badge-warning">{{ t.status }}</span>
-                                {% else %}<span class="badge badge-info">{{ t.status }}</span>{% endif %}
-                            </td>
-                            <td>{{ t.deadline or '—' }}</td>
-                            <td>{{ t.owner or '—' }}</td>
-                            <td>{{ t.department or 'No Department' }}</td>
-                            {% if current_user.can_write %}
-                            <td>
-                                <form method="POST" action="{{ url_for('risks.update_treatment_status', risk_id=t.risk_id, treatment_id=t.id) }}" style="display:inline;">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="next" value="tasks">
-                                    <select name="status" class="form-control" style="padding:4px 8px;font-size:12px;" onchange="this.form.submit()">
-                                        {% for s in task_statuses %}<option value="{{ s }}" {% if s == t.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
-                                    </select>
-                                </form>
-                            </td>
-                            {% endif %}
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="8" style="padding:0;">
-                                <div class="empty-state">
-                                    <div class="empty-state-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
-                                    <h3>No mitigation tasks yet</h3>
-                                    <p>Add one here, or open a risk's detail page to attach a treatment plan.</p>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Risk Discovery View -->
-<div id="discoveryView" style="display:none;">
-    <div class="toolbar">
-        <div class="search-input-wrapper">
-            <i class="fas fa-search"></i>
-            <input type="text" class="filter-input" placeholder="Search risk library..." id="discoverySearch" oninput="filterDiscovery()">
-        </div>
-        <select class="filter-select" id="discoveryCategoryFilter" onchange="filterDiscovery()">
-            <option value="">All Categories</option>
-            {% for c in ['Customer','Governance','Operations','Others','People','Regulatory','Reporting','Resilience','Technology','Vendor Management'] %}
-            <option value="{{ c }}">{{ c }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div class="card">
-        <div class="card-body no-padding">
-            <div class="table-container">
-                <table id="discoveryTable">
-                    <thead>
-                        <tr>
-                            <th>Risk</th>
-                            <th>Category</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in catalog %}
-                        <tr data-category="{{ item.category }}">
-                            <td>
-                                <div class="font-semibold">{{ item.title }}</div>
-                                <div class="text-sm text-muted">{{ item.description }}</div>
-                            </td>
-                            <td><span class="badge badge-neutral">{{ item.category }}</span></td>
-                            <td>
-                                {% if item.in_register %}
-                                <span class="badge badge-success"><i class="fas fa-check"></i> In Register</span>
-                                {% elif current_user.can_write %}
-                                <form method="POST" action="{{ url_for('risks.add_from_catalog') }}">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="hidden" name="title" value="{{ item.title }}">
-                                    <input type="hidden" name="category" value="{{ item.category }}">
-                                    <input type="hidden" name="description" value="{{ item.description }}">
-                                    <button type="submit" class="btn btn-sm btn-secondary">Add to Register</button>
-                                </form>
+        <div class="card">
+            <div class="card-body no-padding">
+                {% if tasks %}
+                <div class="table-container">
+                    <table id="taskTable" class="table-sortable">
+                        <thead>
+                            <tr>
+                                <th data-sort="text">Mitigation task</th>
+                                <th data-sort="text">Risk</th>
+                                <th data-sort="text">Strategy</th>
+                                <th data-sort="text">Status</th>
+                                <th data-sort="text">Due date</th>
+                                <th data-sort="text">Assignee</th>
+                                <th data-sort="text">Department</th>
+                                {% if current_user.can_write %}<th>Update status</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in tasks %}
+                            <tr data-status="{{ 'Overdue' if t.overdue else t.status }}">
+                                <td>{{ t.action }}</td>
+                                <td><a href="{{ url_for('risks.risk_detail', risk_id=t.risk_id) }}" class="link-plain">{{ t.risk_title }}</a></td>
+                                <td><span class="pill pill-neutral">{{ t.treatment_strategy }}</span></td>
+                                <td>
+                                    {% if t.overdue %}<span class="pill pill-overdue"><i class="fas fa-clock" aria-hidden="true"></i>Overdue</span>
+                                    {% elif t.status == 'Completed' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>Completed</span>
+                                    {% elif t.status in ['Pending Approval', 'Needs Revision'] %}<span class="pill pill-warning"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i>{{ t.status }}</span>
+                                    {% else %}<span class="pill pill-in-progress"><i class="fas fa-spinner" aria-hidden="true"></i>{{ t.status }}</span>{% endif %}
+                                </td>
+                                <td>{{ t.deadline or '—' }}</td>
+                                <td>{{ t.owner or '—' }}</td>
+                                <td>{{ t.department or 'No Department' }}</td>
+                                {% if current_user.can_write %}
+                                <td>
+                                    <form method="POST" action="{{ url_for('risks.update_treatment_status', risk_id=t.risk_id, treatment_id=t.id) }}" class="inline-form">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="next" value="tasks">
+                                        <select name="status" class="form-control select-sm table-inline-select" aria-label="Status for task {{ t.action }}" onchange="this.form.submit()">
+                                            {% for s in task_statuses %}<option value="{{ s }}" {% if s == t.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                                        </select>
+                                    </form>
+                                </td>
                                 {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
+                    <h3>No mitigation tasks yet</h3>
+                    <p>Add one here, or open a risk's detail page to attach a treatment plan.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
+    </div>
+
+    <!-- Discovery (catalog) -->
+    <div class="tab-panel" data-panel="discovery" id="panel-discovery" role="tabpanel" aria-labelledby="tab-discovery" hidden>
+        <div class="filter-bar">
+            <div class="filter-search input-icon">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" class="form-control" placeholder="Search risk library" aria-label="Search risk library" id="discoverySearch" oninput="filterDiscovery()">
+            </div>
+            <select class="filter-select" id="discoveryCategoryFilter" aria-label="Filter by category" onchange="filterDiscovery()">
+                <option value="">All categories</option>
+                {% for c in ['Customer','Governance','Operations','Others','People','Regulatory','Reporting','Resilience','Technology','Vendor Management'] %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+            </select>
+            <span class="spacer"></span>
+            <span class="result-count" id="discoveryCount" role="status" aria-live="polite"></span>
+        </div>
+
+        {% if catalog %}
+        <div class="catalog-grid" id="discoveryGrid">
+            {% for item in catalog %}
+            <article class="catalog-card" data-category="{{ item.category }}">
+                <div><span class="pill pill-neutral">{{ item.category }}</span></div>
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.description }}</p>
+                <div class="foot">
+                    {% if item.in_register %}
+                    <span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>In register</span>
+                    {% elif current_user.can_write %}
+                    <form method="POST" action="{{ url_for('risks.add_from_catalog') }}" class="inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="title" value="{{ item.title }}">
+                        <input type="hidden" name="category" value="{{ item.category }}">
+                        <input type="hidden" name="description" value="{{ item.description }}">
+                        <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-plus" aria-hidden="true"></i> Add to register</button>
+                    </form>
+                    {% else %}
+                    <span class="pill pill-neutral">Not in register</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="empty-state is-hidden-row" id="discoveryNoMatch">
+            <div class="empty-state-icon"><i class="fas fa-filter" aria-hidden="true"></i></div>
+            <h3>No library risks match</h3>
+            <p>Try a different search term or category.</p>
+        </div>
+        {% else %}
+        <div class="card"><div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-book-open" aria-hidden="true"></i></div>
+            <h3>Risk library is empty</h3>
+            <p>No catalog risks are available.</p>
+        </div></div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Populate 5x5 risk matrix
 const risks = {{ risks|tojson }};
 const MATRIX_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];
 const MATRIX_SCORES = { Negligible: 1, Low: 2, Medium: 3, High: 4, Critical: 5 };
+const BANDS = [
+    { cls: 'l0', name: 'Negligible', range: '1-2', min: 0 },
+    { cls: 'l1', name: 'Low', range: '3-5', min: 3 },
+    { cls: 'l2', name: 'Medium', range: '6-11', min: 6 },
+    { cls: 'l3', name: 'High', range: '12-19', min: 12 },
+    { cls: 'l4', name: 'Critical', range: '20-25', min: 20 }
+];
+
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function bandFor(score) {
+    let b = BANDS[0];
+    BANDS.forEach(x => { if (score >= x.min) b = x; });
+    return b;
+}
+function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 
 function buildRiskMatrix() {
     const grid = document.getElementById('riskMatrixGrid');
-    if (!grid) return; // no risks yet - the empty-state is rendered instead
-
+    if (!grid) return;
     const counts = {};
     MATRIX_LEVELS.forEach(l => { counts[l] = {}; MATRIX_LEVELS.forEach(i => counts[l][i] = 0); });
+    const bandCounts = {};
+    BANDS.forEach(b => bandCounts[b.cls] = 0);
     risks.forEach(r => {
         if (counts[r.likelihood] && counts[r.likelihood][r.impact] !== undefined) {
             counts[r.likelihood][r.impact]++;
+            bandCounts[bandFor(MATRIX_SCORES[r.likelihood] * MATRIX_SCORES[r.impact]).cls]++;
         }
     });
-
-    let html = '<div></div>';
-    MATRIX_LEVELS.forEach(impact => {
-        html += `<div class="x-label">${impact}</div>`;
-    });
+    let html = '<div class="hm-head"></div>';
+    MATRIX_LEVELS.forEach(impact => { html += `<div class="hm-head">${impact}</div>`; });
     [...MATRIX_LEVELS].reverse().forEach(likelihood => {
-        html += `<div class="y-label">${likelihood}</div>`;
+        html += `<div class="hm-head hm-row">${likelihood}</div>`;
         MATRIX_LEVELS.forEach(impact => {
-            const severity = MATRIX_SCORES[likelihood] * MATRIX_SCORES[impact];
-            const cls = severity >= 20 ? 'critical' : severity >= 12 ? 'high' : severity >= 6 ? 'medium' : severity >= 3 ? 'low' : 'negligible';
+            const score = MATRIX_SCORES[likelihood] * MATRIX_SCORES[impact];
+            const band = bandFor(score);
             const count = counts[likelihood][impact];
-            html += `<div class="risk-cell ${cls}" title="${likelihood} likelihood × ${impact} impact: ${count} risk${count === 1 ? '' : 's'}" aria-label="${likelihood} likelihood × ${impact} impact: ${count} risk${count === 1 ? '' : 's'}">${count}</div>`;
+            const label = `${likelihood} likelihood, ${impact} impact, score ${score} (${band.name}): ${plural(count, 'risk')}`;
+            const inner = `${count}<small>${score}</small>`;
+            if (count > 0) {
+                html += `<button type="button" class="hm-cell has-risks ${band.cls}" data-likelihood="${likelihood}" data-impact="${impact}" aria-label="${label}. Show in register" title="${label}">${inner}</button>`;
+            } else {
+                html += `<div class="hm-cell zero ${band.cls}" role="img" aria-label="${label}" title="${label}">${inner}</div>`;
+            }
         });
     });
     grid.innerHTML = html;
+    grid.querySelectorAll('.has-risks').forEach(btn => btn.addEventListener('click', () => {
+        document.getElementById('riskLikelihoodFilter').value = btn.dataset.likelihood;
+        document.getElementById('riskImpactFilter').value = btn.dataset.impact;
+        document.getElementById('riskStatusFilter').value = '';
+        document.getElementById('riskSearch').value = '';
+        filterRisks();
+        selectRiskTab('register');
+    }));
+    document.getElementById('riskMatrixLegend').innerHTML = BANDS.map(b =>
+        `<span><i class="${b.cls}" aria-hidden="true"></i>${b.name} (score ${b.range}): ${plural(bandCounts[b.cls], 'risk')}</span>`).join('') +
+        '<span>Cell: risk count, then score</span>';
 }
 buildRiskMatrix();
 
-function switchRiskView(el, view) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('registerView').style.display = view === 'register' ? '' : 'none';
-    document.getElementById('matrixView').style.display = view === 'matrix' ? '' : 'none';
-    document.getElementById('tasksView').style.display = view === 'tasks' ? '' : 'none';
-    document.getElementById('discoveryView').style.display = view === 'discovery' ? '' : 'none';
-    history.replaceState(null, '', view === 'register' ? location.pathname : `#${view}`);
+function selectRiskTab(view) {
+    const tab = document.getElementById('tab-' + view);
+    if (tab) tab.click();
 }
 
-// Deep-link support: land on the right tab after a redirect (e.g. /risks#tasks)
-(function() {
+// Deep links (/risks#tasks) and hash sync. Runs after app.js has wired the tabs.
+function initRiskTabs() {
+    document.querySelectorAll('#riskTabs [role="tab"]').forEach(t => t.addEventListener('click', () => {
+        const view = t.dataset.tab;
+        history.replaceState(null, '', view === 'register' ? location.pathname : '#' + view);
+    }));
     const view = location.hash.replace('#', '');
-    const tabIndex = { register: 0, matrix: 1, tasks: 2, discovery: 3 }[view];
-    if (tabIndex !== undefined && tabIndex > 0) {
-        const tab = document.querySelectorAll('.tab')[tabIndex];
-        if (tab) switchRiskView(tab, view);
-    }
-})();
+    if (view && view !== 'register') selectRiskTab(view);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initRiskTabs); else initRiskTabs();
 
 function filterRisks() {
     const search = document.getElementById('riskSearch').value.toLowerCase();
     const status = document.getElementById('riskStatusFilter').value;
     const impact = document.getElementById('riskImpactFilter').value;
-    document.querySelectorAll('#riskTable tbody tr').forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchStatus = !status || row.dataset.status === status;
-        const matchImpact = !impact || row.dataset.impact === impact;
-        row.style.display = matchSearch && matchStatus && matchImpact ? '' : 'none';
+    const likelihood = document.getElementById('riskLikelihoodFilter').value;
+    const rows = document.querySelectorAll('#riskTable tbody tr');
+    let shown = 0;
+    rows.forEach(row => {
+        const ok = (!search || row.textContent.toLowerCase().includes(search)) &&
+            (!status || row.dataset.status === status) &&
+            (!impact || row.dataset.impact === impact) &&
+            (!likelihood || row.dataset.likelihood === likelihood);
+        row.classList.toggle('is-hidden-row', !ok);
+        if (ok) shown++;
     });
+    const filtered = !!(search || status || impact || likelihood);
+    const clear = document.getElementById('riskClearFilters');
+    if (clear) clear.hidden = !filtered;
+    const nm = document.getElementById('riskNoMatch');
+    if (nm) nm.classList.toggle('is-hidden-row', shown > 0);
+    const tbl = document.querySelector('#riskTable');
+    if (tbl) tbl.closest('.table-container').classList.toggle('is-hidden-row', shown === 0);
+    const c = document.getElementById('riskResultCount');
+    if (c) c.textContent = rows.length ? `Showing ${shown} of ${rows.length}` : '';
 }
+function clearRiskFilters() {
+    ['riskSearch', 'riskStatusFilter', 'riskImpactFilter', 'riskLikelihoodFilter'].forEach(id => document.getElementById(id).value = '');
+    filterRisks();
+}
+filterRisks();
 
 function filterTasks() {
     const search = document.getElementById('taskSearch').value.toLowerCase();
     const status = document.getElementById('taskStatusFilter').value;
     document.querySelectorAll('#taskTable tbody tr').forEach(row => {
-        if (!row.dataset.status) return;
-        const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchStatus = !status || row.dataset.status === status;
-        row.style.display = matchSearch && matchStatus ? '' : 'none';
+        const ok = (!search || row.textContent.toLowerCase().includes(search)) && (!status || row.dataset.status === status);
+        row.classList.toggle('is-hidden-row', !ok);
     });
 }
 
 function filterDiscovery() {
     const search = document.getElementById('discoverySearch').value.toLowerCase();
     const category = document.getElementById('discoveryCategoryFilter').value;
-    document.querySelectorAll('#discoveryTable tbody tr').forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchCategory = !category || row.dataset.category === category;
-        row.style.display = matchSearch && matchCategory ? '' : 'none';
+    const cards = document.querySelectorAll('#discoveryGrid .catalog-card');
+    let shown = 0;
+    cards.forEach(card => {
+        const ok = (!search || card.textContent.toLowerCase().includes(search)) && (!category || card.dataset.category === category);
+        card.classList.toggle('is-hidden-row', !ok);
+        if (ok) shown++;
     });
+    const nm = document.getElementById('discoveryNoMatch');
+    if (nm) nm.classList.toggle('is-hidden-row', shown > 0);
+    const c = document.getElementById('discoveryCount');
+    if (c && cards.length) c.textContent = `Showing ${shown} of ${cards.length}`;
 }
+filterDiscovery();
 
 function showAddTaskModal() {
-    const riskOptions = risks.map(r => `<option value="${r.id}">${r.title}</option>`).join('');
+    const riskOptions = risks.map(r => `<option value="${esc(r.id)}">${esc(r.title)}</option>`).join('');
     openModal('Add Mitigation Task', `
         <form id="taskForm" method="POST" action="/risks/tasks/add">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Risk</label>
-                <select name="risk_id" class="form-control" required>${riskOptions}</select>
+                <label for="tf-risk">Risk <span class="required-star">*</span></label>
+                <select id="tf-risk" name="risk_id" class="form-control" required>${riskOptions}</select>
             </div>
             <div class="form-group">
-                <label>Task</label>
-                <input type="text" name="action" class="form-control" placeholder="e.g. Enable MFA for all admin accounts" required>
+                <label for="tf-action">Task <span class="required-star">*</span></label>
+                <input type="text" id="tf-action" name="action" class="form-control" placeholder="e.g. Enable MFA for all admin accounts" required>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Assignee</label>
-                    <input type="text" name="owner" class="form-control" placeholder="Who owns this task?">
+                    <label for="tf-owner">Assignee</label>
+                    <input type="text" id="tf-owner" name="owner" class="form-control" placeholder="Who owns this task?">
                 </div>
                 <div class="form-group">
-                    <label>Department</label>
-                    <input type="text" name="department" class="form-control" placeholder="e.g. IT, HR">
+                    <label for="tf-dept">Department</label>
+                    <input type="text" id="tf-dept" name="department" class="form-control" placeholder="e.g. IT, HR">
                 </div>
             </div>
             <div class="form-group">
-                <label>Due Date</label>
-                <input type="date" name="deadline" class="form-control">
+                <label for="tf-deadline">Due date</label>
+                <input type="date" id="tf-deadline" name="deadline" class="form-control">
             </div>
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'taskForm\').submit()">Add Task</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'taskForm\').submit()">Add Task</button>');
 }
 
 const RISK_LEVELS = ['Negligible', 'Low', 'Medium', 'High', 'Critical'];
@@ -491,7 +522,6 @@ const RISK_CATEGORIES = ['Customer', 'Governance', 'Operations', 'Others', 'Peop
 function levelOptions(selected) {
     return RISK_LEVELS.map(l => `<option ${l === selected ? 'selected' : ''}>${l}</option>`).join('');
 }
-
 function categoryOptions(selected) {
     return RISK_CATEGORIES.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`).join('');
 }
@@ -500,36 +530,36 @@ function riskFormFields(r) {
     r = r || {};
     return `
         <div class="form-group">
-            <label>Risk Title</label>
-            <input type="text" name="title" class="form-control" placeholder="Describe the risk..." value="${r.title || ''}" required>
+            <label for="rf-title">Risk title <span class="required-star">*</span></label>
+            <input type="text" id="rf-title" name="title" class="form-control" placeholder="Describe the risk..." value="${esc(r.title)}" required>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-grid-2">
             <div class="form-group">
-                <label>Category</label>
-                <select name="category" class="form-control">${categoryOptions(r.category)}</select>
+                <label for="rf-category">Category</label>
+                <select id="rf-category" name="category" class="form-control">${categoryOptions(r.category)}</select>
             </div>
             <div class="form-group">
-                <label>Owner</label>
-                <input type="text" name="owner" class="form-control" placeholder="Risk owner" value="${r.owner || ''}">
+                <label for="rf-owner">Owner</label>
+                <input type="text" id="rf-owner" name="owner" class="form-control" placeholder="Risk owner" value="${esc(r.owner)}">
             </div>
             <div class="form-group">
-                <label>Impact</label>
-                <select name="impact" class="form-control">${levelOptions(r.impact || 'Medium')}</select>
+                <label for="rf-impact">Impact</label>
+                <select id="rf-impact" name="impact" class="form-control">${levelOptions(r.impact || 'Medium')}</select>
             </div>
             <div class="form-group">
-                <label>Likelihood</label>
-                <select name="likelihood" class="form-control">${levelOptions(r.likelihood || 'Medium')}</select>
+                <label for="rf-likelihood">Likelihood</label>
+                <select id="rf-likelihood" name="likelihood" class="form-control">${levelOptions(r.likelihood || 'Medium')}</select>
             </div>
         </div>
         <div class="form-group">
-            <label>Treatment Plan</label>
-            <select name="treatment" class="form-control">
+            <label for="rf-treatment">Treatment plan</label>
+            <select id="rf-treatment" name="treatment" class="form-control">
                 ${['Mitigate', 'Transfer', 'Accept', 'Avoid'].map(t => `<option ${t === r.treatment ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
         </div>
         <div class="form-group">
-            <label>Description</label>
-            <textarea name="description" class="form-control" placeholder="Detailed description of the risk and its potential impact...">${r.description || ''}</textarea>
+            <label for="rf-description">Description</label>
+            <textarea id="rf-description" name="description" class="form-control" placeholder="Detailed description of the risk and its potential impact...">${esc(r.description)}</textarea>
         </div>
     `;
 }
@@ -540,17 +570,17 @@ function showAddRiskModal() {
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             ${riskFormFields()}
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'riskForm\').submit()">Add Risk</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'riskForm\').submit()">Add Risk</button>');
 }
 
 function showEditRiskModal(idx) {
     const r = risks[idx];
     openModal('Edit Risk', `
-        <form id="riskForm" method="POST" action="/risks/${r.id}/edit">
+        <form id="riskForm" method="POST" action="/risks/${encodeURIComponent(r.id)}/edit">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             ${riskFormFields(r)}
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'riskForm\').submit()">Save Changes</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'riskForm\').submit()">Save Changes</button>');
 }
 </script>
 {% endblock %}
