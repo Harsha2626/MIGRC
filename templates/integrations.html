@@ -3,157 +3,70 @@
 {% block breadcrumb %}<span>Integrations</span>{% endblock %}
 
 {% block content %}
+<style>
+    .integ-section { margin-bottom: 32px; }
+    .integ-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    .integ-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .integ-card-planned { opacity: .85; }
+</style>
+
 <div class="page-header">
     <div>
         <h1>Integrations</h1>
-        <p>Connect your cloud, identity, and workplace tools to automate evidence collection</p>
+        <p>Google Workspace is the only integration available today. The rest are on the roadmap and are not yet functional.</p>
     </div>
 </div>
 
-<div class="integrations-toolbar">
-    <div class="tabs" style="margin-bottom:0;border-bottom:none;">
-        <button class="tab-pill" onclick="switchIntegrationsTab(this, 'connected')">Connected Integrations</button>
-        <button class="tab-pill active" onclick="switchIntegrationsTab(this, 'library')">Integrations Library</button>
-    </div>
-    <div class="integrations-toolbar-right">
-        <div class="search-input-wrapper">
-            <i class="fas fa-search"></i>
-            <input type="text" class="filter-input" placeholder="Search by name..." id="integrationSearch" oninput="filterIntegrations()">
-        </div>
-        <select class="filter-select" id="integrationsForFilter" onchange="jumpToCategoryValue(this.value)">
-            <option value="">Integrations For</option>
-            <option value="cat-cloud">Cloud Providers</option>
-            <option value="cat-identity">Identity Providers</option>
-        </select>
-    </div>
-</div>
-
-<div id="panel-connected" class="settings-panel">
-    <div class="empty-state">
-        <div class="empty-state-icon"><i class="fas fa-plug" aria-hidden="true"></i></div>
-        <h3>No integrations connected yet</h3>
-        <p>Browse the Integrations Library and connect one to get started.</p>
-    </div>
-</div>
-
-<div id="panel-library" class="settings-panel active">
-    <div class="integrations-layout" id="integrationsLayout">
-        <!-- Categories -->
-        <div class="categories-panel" id="categoriesPanel">
-            <div class="categories-panel-header">
-                <span>CATEGORIES</span>
-                <button type="button" class="categories-collapse-btn" id="categoriesCollapseBtn" onclick="toggleCategoriesPanel()"><i class="fas fa-angles-left"></i></button>
-            </div>
-            <div class="categories-list">
-                <a href="#cat-cloud" class="settings-nav-item active" onclick="jumpToCategory(event, this)" data-label="Cloud Providers"><i class="fas fa-cloud"></i><span>Cloud Providers</span></a>
-                <a href="#cat-identity" class="settings-nav-item" onclick="jumpToCategory(event, this)" data-label="Identity Providers"><i class="fas fa-id-badge"></i><span>Identity Providers</span></a>
-            </div>
-        </div>
-
-        <!-- Catalog -->
-        <div class="integrations-catalog">
-
-            <div class="integration-category" id="cat-cloud">
-                <h3>Cloud Providers</h3>
-                <p class="text-sm text-muted mb-16">Integrate with your cloud instances to automatically scan for security misconfigurations and vulnerabilities.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="amazon web services aws">
-                        <div class="integration-card-head"><div class="integration-badge orange"><i class="fab fa-aws"></i></div><h4>Amazon Web Services</h4></div>
-                        <div class="tag-list mb-16">
-                            <span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span>
-                            <span class="tag">User Access Data</span><span class="tag">Asset Management</span>
-                            <span class="tag">Vulnerability Management</span>
-                        </div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Amazon Web Services')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="google cloud platform gcp">
-                        <div class="integration-card-head"><div class="integration-badge red"><i class="fab fa-google"></i></div><h4>Google Cloud</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span><span class="tag">Asset Management</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Google Cloud')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="microsoft azure">
-                        <div class="integration-card-head"><div class="integration-badge blue"><i class="fab fa-microsoft"></i></div><h4>Microsoft Azure</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Automated Tests</span><span class="tag">Continuous Monitoring</span><span class="tag">Asset Management</span><span class="tag">User Access Data</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Microsoft Azure')">Integrate</button>
-                    </div>
+<div class="integ-section">
+    <h3>Available now</h3>
+    <div class="integration-grid">
+        <div class="integration-card">
+            <div class="integration-card-head"><div class="integration-badge green"><i class="fab fa-google"></i></div><h4>Google Workspace</h4></div>
+            <div class="tag-list mb-16"><span class="tag">Employee Directory</span></div>
+            {% if google_connection %}
+                <div class="integ-status"><i class="fas fa-circle-check" aria-hidden="true" style="color:var(--accent-success);"></i> Connected as {{ google_connection.google_email }}</div>
+                <div class="text-sm text-muted">
+                    {% if google_connection.domain %}Domain: {{ google_connection.domain }}<br>{% endif %}
+                    Connected {{ google_connection.connected_at.strftime('%d %b %Y') if google_connection.connected_at else 'recently' }}<br>
+                    {% if google_connection.last_synced_at %}Last synced {{ google_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never synced{% endif %}
                 </div>
-            </div>
-
-            <div class="integration-category" id="cat-identity">
-                <h3>Identity Providers</h3>
-                <p class="text-sm text-muted mb-16">Integrate with your identity provider to sync employee information and track compliance across your workforce.</p>
-                <div class="integration-grid">
-                    <div class="integration-card" data-name="google workspace sso">
-                        <div class="integration-card-head"><div class="integration-badge green"><i class="fab fa-google"></i></div><h4>Google Workspace</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Employee Directory</span><span class="tag">Automated Tests</span><span class="tag">User Access Data</span><span class="tag">SSO</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Google Workspace')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="okta">
-                        <div class="integration-card-head"><div class="integration-badge blue">OK</div><h4>Okta</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">User Access Data</span><span class="tag">SSO</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Okta')">Integrate</button>
-                    </div>
-                    <div class="integration-card" data-name="microsoft entra id azure ad">
-                        <div class="integration-card-head"><div class="integration-badge blue"><i class="fab fa-microsoft"></i></div><h4>Microsoft Entra ID</h4></div>
-                        <div class="tag-list mb-16"><span class="tag">Employee Directory</span><span class="tag">User Access Data</span><span class="tag">SSO</span></div>
-                        <button class="btn btn-sm btn-primary" onclick="configureIntegration('Microsoft Entra ID')">Integrate</button>
-                    </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('google_oauth.sync_employees') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary">Sync Employees</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('google_oauth.disconnect') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
                 </div>
-            </div>
-
+            {% elif google_configured %}
+                <div class="integ-status text-muted"><i class="fas fa-circle" aria-hidden="true"></i> Not connected</div>
+                <div class="integ-actions"><a href="{{ url_for('google_oauth.connect') }}" class="btn btn-sm btn-primary">Connect</a></div>
+            {% else %}
+                <div class="integ-status text-muted"><i class="fas fa-circle-exclamation" aria-hidden="true"></i> Not configured</div>
+                <div class="text-sm text-muted">The server has no Google OAuth credentials (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET). Ask an administrator to configure them.</div>
+            {% endif %}
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-function switchIntegrationsTab(el, tab) {
-    document.querySelectorAll('.tab-pill').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('panel-library').classList.toggle('active', tab === 'library');
-    document.getElementById('panel-connected').classList.toggle('active', tab === 'connected');
-}
-
-function jumpToCategory(e, el) {
-    e.preventDefault();
-    document.querySelectorAll('.categories-list .settings-nav-item').forEach(i => i.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('integrationsForFilter').value = el.getAttribute('href').slice(1);
-    document.querySelector(el.getAttribute('href')).scrollIntoView({behavior: 'smooth', block: 'start'});
-}
-
-function jumpToCategoryValue(id) {
-    if (!id) return;
-    const link = document.querySelector(`.categories-list a[href="#${id}"]`);
-    if (link) {
-        document.querySelectorAll('.categories-list .settings-nav-item').forEach(i => i.classList.remove('active'));
-        link.classList.add('active');
-    }
-    document.getElementById('cat-' + id.replace('cat-', '')).scrollIntoView({behavior: 'smooth', block: 'start'});
-}
-
-function toggleCategoriesPanel() {
-    const panel = document.getElementById('categoriesPanel');
-    panel.classList.toggle('collapsed');
-    const icon = document.querySelector('#categoriesCollapseBtn i');
-    icon.classList.toggle('fa-angles-left');
-    icon.classList.toggle('fa-angles-right');
-}
-
-function filterIntegrations() {
-    const search = document.getElementById('integrationSearch').value.toLowerCase();
-    document.querySelectorAll('.integration-card').forEach(card => {
-        card.style.display = !search || card.dataset.name.includes(search) ? '' : 'none';
-    });
-    document.querySelectorAll('.integration-category').forEach(cat => {
-        const anyVisible = Array.from(cat.querySelectorAll('.integration-card')).some(c => c.style.display !== 'none');
-        cat.style.display = anyVisible ? '' : 'none';
-    });
-}
-
-function configureIntegration(name) {
-    showToast(`${name} integration setup is coming soon.`, 'info');
-}
-</script>
+{% for category, items in planned_categories %}
+<div class="integ-section">
+    <h3>{{ category }} <span class="text-sm text-muted">(roadmap)</span></h3>
+    <div class="integration-grid">
+        {% for item in items %}
+        <div class="integration-card integ-card-planned">
+            <div class="integration-card-head">
+                <div class="integration-badge {{ item.color }}">{% if item.icon %}<i class="{{ item.icon }}"></i>{% else %}{{ item.badge }}{% endif %}</div>
+                <h4>{{ item.name }}</h4>
+            </div>
+            <div class="tag-list mb-16">{% for c in item.capabilities %}<span class="tag">{{ c }}</span>{% endfor %}</div>
+            <span class="badge badge-review"><span>Planned</span></span>
+            <div class="text-sm text-muted mt-4">Not available yet. Tell your administrator if this is a priority for you.</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
 {% endblock %}
