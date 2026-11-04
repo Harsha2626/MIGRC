@@ -12,3 +12,4 @@ migrc.db-wal
 uploads/
 gunicorn-*.log
 wsgi.pyc
+.claude/worktrees/
