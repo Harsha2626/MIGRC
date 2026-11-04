@@ -87,7 +87,7 @@ def audit_detail(audit_id):
     # For each in-scope control, find already-uploaded Evidence mapped to it (for the "link existing" dropdown)
     existing_evidence_by_control = {}
     for item in evidence_items:
-        mappings = EvidenceMapping.query.filter_by(control_id=item.control_id).all()
+        mappings = EvidenceMapping.for_org(audit.organization_id, item.control_id).all()
         existing_evidence_by_control[item.control_id] = [m.evidence for m in mappings]
 
     findings = audit.finding_items.order_by(AuditFinding.created_at.desc()).all()
@@ -224,9 +224,20 @@ def add_finding(audit_id):
         return redirect(url_for('audits.audit_detail', audit_id=audit_id))
 
     control_id = request.form.get('control_id')
+    control_id_int = None
+    if control_id:
+        try:
+            control_id_int = int(control_id)
+        except ValueError:
+            control_id_int = None
+        visible_fw_ids = [fw.id for fw in Framework.visible_to(audit.organization_id).all()]
+        if control_id_int is None or not Control.query.filter(
+                Control.id == control_id_int, Control.framework_id.in_(visible_fw_ids)).first():
+            flash('Invalid control selected.', 'error')
+            return redirect(url_for('audits.audit_detail', audit_id=audit_id))
     finding = AuditFinding(
         audit_id=audit.id,
-        control_id=int(control_id) if control_id else None,
+        control_id=control_id_int,
         type=request.form.get('type', 'Observation'),
         severity=request.form.get('severity', 'Medium'),
         description=description,

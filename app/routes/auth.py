@@ -1,10 +1,39 @@
+import threading
+import time
 from datetime import datetime
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, g
+from flask import current_app, Blueprint, render_template, redirect, url_for, flash, request, session, g
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import db, User, OrganizationMembership
 from app.utils import require_permission
 
 auth_bp = Blueprint('auth', __name__)
+
+# In-memory failed-login tracker keyed by (ip, email). Per-process; good enough as a brute-force
+# brake (use Redis/Flask-Limiter storage if running many workers).
+_failed_logins = {}
+_failed_lock = threading.Lock()
+
+
+def _login_key(email):
+    return (request.remote_addr or '', email)
+
+
+def _login_blocked(key):
+    window = current_app.config.get('LOGIN_WINDOW_SECONDS', 900)
+    limit = current_app.config.get('LOGIN_MAX_ATTEMPTS', 10)
+    now = time.time()
+    with _failed_lock:
+        attempts = [t for t in _failed_logins.get(key, []) if now - t < window]
+        if attempts:
+            _failed_logins[key] = attempts
+        else:
+            _failed_logins.pop(key, None)
+        return len(attempts) >= limit
+
+
+def _record_failed_login(key):
+    with _failed_lock:
+        _failed_logins.setdefault(key, []).append(time.time())
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -16,9 +45,16 @@ def login():
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
 
+        key = _login_key(email)
+        if _login_blocked(key):
+            flash('Too many failed login attempts. Please try again later.', 'error')
+            return render_template('login.html'), 429
+
         user = User.query.filter_by(email=email).first()
 
         if user and user.check_password(password):
+            with _failed_lock:
+                _failed_logins.pop(key, None)
             login_user(user)
             user.last_login = datetime.utcnow()
             db.session.commit()
@@ -31,6 +67,7 @@ def login():
             next_page = request.args.get('next')
             return redirect(next_page or url_for('main.dashboard'))
 
+        _record_failed_login(key)
         flash('Invalid email or password.', 'error')
 
     return render_template('login.html')

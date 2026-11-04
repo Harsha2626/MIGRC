@@ -387,7 +387,7 @@ def campaign_detail(campaign_id):
                     pass
         completed_within_sla = round((on_time / campaign.total_enrolled) * 100)
 
-    audit_logs = ActivityLog.query.filter_by(entity_type='TrainingCampaign', entity_name=campaign.name).order_by(ActivityLog.created_at.desc()).all()
+    audit_logs = ActivityLog.query.filter_by(entity_type='TrainingCampaign', entity_name=campaign.name, organization_id=campaign.organization_id).order_by(ActivityLog.created_at.desc()).all()
     all_employees = Employee.query.filter_by(organization_id=campaign.organization_id).order_by(Employee.name).all()
     enrolled_ids = {e.employee_id for e in enrollments}
     # Needed so the Settings tab can show/edit which training materials are

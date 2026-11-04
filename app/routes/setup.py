@@ -50,8 +50,6 @@ SETUP_PHASES = [
              'description': 'Select an owner for each department to manage its artifacts.'},
             {'key': 'connect_cloud_providers', 'title': 'Connect Your Cloud Providers',
              'description': 'Integrate with your cloud instances so MIGRC AI can automatically scan for security misconfigurations and vulnerabilities.'},
-            {'key': 'schedule_audit', 'title': 'Schedule Internal Audits',
-             'description': 'Select tentative internal audit dates for each framework. You can modify these later in the Audit Center.'},
         ],
     },
     {
@@ -60,6 +58,8 @@ SETUP_PHASES = [
             {'key': 'choose_frameworks', 'title': 'Choose Your Compliance Frameworks',
              'description': 'Select the frameworks (ISO 27001, SOC 2, etc.) you need to comply with.',
              'link_endpoint': 'compliance.compliance', 'link_label': 'Go to Compliance'},
+            {'key': 'schedule_audit', 'title': 'Schedule Internal Audits',
+             'description': 'Once you have chosen frameworks, select tentative internal audit dates for each framework. You can modify these later in the Audit Center.'},
             {'key': 'add_policies', 'title': 'Add Your Policies',
              'description': 'Create or upload the policies your organization follows.',
              'link_endpoint': 'policies.policies', 'link_label': 'Go to Policies'},

@@ -6,7 +6,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
     db, Policy, PolicyAcknowledgement, PolicyVersion, PolicyReview, PolicyComment, PolicyApproval,
-    Employee, User, Control, Framework, ActivityLog, PolicyEvaluation,
+    Employee, User, Control, Framework, ActivityLog, PolicyEvaluation, OrganizationMembership,
 )
 from app.services.activity import log_activity
 from app.services.csv_export import csv_response
@@ -527,13 +527,28 @@ def sign_off_approval(policy_id):
 
 # ---- ASSIGNEES / APPROVERS ROSTER ----
 
+def _org_user_ids(org_id, raw_ids):
+    """Intersect submitted user ids with members of the given organization."""
+    wanted = set()
+    for i in raw_ids:
+        try:
+            wanted.add(int(i))
+        except (TypeError, ValueError):
+            pass
+    if not wanted:
+        return []
+    return [m.user for m in OrganizationMembership.query.filter(
+        OrganizationMembership.organization_id == org_id,
+        OrganizationMembership.user_id.in_(wanted)).all()]
+
+
 @policies_bp.route('/policies/<int:policy_id>/assignees', methods=['POST'])
 @login_required
 @require_permission('write')
 def update_assignees(policy_id):
     policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
     user_ids = request.form.getlist('user_ids')
-    policy.assignees = User.query.filter(User.id.in_([int(i) for i in user_ids])).all() if user_ids else []
+    policy.assignees = _org_user_ids(policy.organization_id, user_ids)
     log_activity('updated', 'Policy', policy.name, f'{current_user.name} updated assignees for policy "{policy.name}"')
     db.session.commit()
     flash('Assignees updated.', 'success')
@@ -549,7 +564,7 @@ def update_approvers(policy_id):
         flash('Cannot change approvers while a sign-off is in progress — reject it back to Draft first.', 'error')
         return redirect(url_for('policies.policy_detail', policy_id=policy_id))
     user_ids = request.form.getlist('user_ids')
-    policy.approvers = User.query.filter(User.id.in_([int(i) for i in user_ids])).all() if user_ids else []
+    policy.approvers = _org_user_ids(policy.organization_id, user_ids)
     log_activity('updated', 'Policy', policy.name, f'{current_user.name} updated approvers for policy "{policy.name}"')
     db.session.commit()
     flash('Approvers updated.', 'success')
@@ -758,8 +773,8 @@ def link_controls(policy_id):
 @require_permission('write')
 def unlink_control(policy_id, control_id):
     policy = Policy.query.filter_by(id=policy_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
-    control = Control.query.get_or_404(control_id)
-    if control in policy.controls:
+    control = next((c for c in policy.controls if c.id == control_id), None)
+    if control is not None:
         policy.controls.remove(control)
         db.session.commit()
         flash('Control unlinked.', 'info')
