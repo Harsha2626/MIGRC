@@ -3,94 +3,106 @@
 {% block breadcrumb %}<span>Tests</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-a.css') }}">
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Monitoring</div>
         <h1>Tests</h1>
-        <p>Every ongoing compliance check in one place &mdash; control assessments and policy publication status</p>
+        <p>Every ongoing compliance check in one place: control assessments and policy publication status.</p>
     </div>
 </div>
 
-<!-- Stats -->
-<div class="stats-grid">
-    <div class="stat-card stat-card-filter" data-stat-status="Passing" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="false" onclick="filterByStatCard(this, 'Passing')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); filterByStatCard(this, 'Passing'); }">
-        <div class="stat-icon green"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Passing</div>
-            <div class="stat-value">{{ counts.passing }}</div>
-        </div>
-    </div>
-    <div class="stat-card stat-card-filter" data-stat-status="Fix Required" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="false" onclick="filterByStatCard(this, 'Fix Required')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); filterByStatCard(this, 'Fix Required'); }">
-        <div class="stat-icon red"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Fix Required</div>
-            <div class="stat-value">{{ counts.fix_required }}</div>
-        </div>
-    </div>
-    <div class="stat-card stat-card-filter" data-stat-status="Ignored" style="cursor:pointer;" role="button" tabindex="0" aria-pressed="false" onclick="filterByStatCard(this, 'Ignored')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); filterByStatCard(this, 'Ignored'); }">
-        <div class="stat-icon blue"><i class="fas fa-eye-slash" aria-hidden="true"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Ignored</div>
-            <div class="stat-value">{{ counts.ignored }}</div>
-        </div>
-    </div>
-</div>
-
-<!-- Tabs -->
-<div class="tabs">
-    <button class="tab active" onclick="switchTestType(this, '')">All</button>
-    <button class="tab" onclick="switchTestType(this, 'Control')">Controls</button>
-    <button class="tab" onclick="switchTestType(this, 'Policy')">Policies</button>
-</div>
-
-<div class="toolbar">
-    <div class="search-input-wrapper">
-        <i class="fas fa-search"></i>
-        <input type="text" class="filter-input" placeholder="Search tests..." id="testSearch" oninput="filterTests()">
-    </div>
-    <select class="filter-select" id="testStatusFilter" onchange="filterTests()">
-        <option value="">All Statuses</option>
-        <option value="Passing">Passing</option>
-        <option value="Fix Required">Fix Required</option>
-        <option value="Ignored">Ignored</option>
-    </select>
+<!-- Summary tiles double as status filters -->
+<div class="kpi-grid" role="group" aria-label="Filter tests by status">
+    <button type="button" class="kpi kpi-accent-success stat-card-filter" data-stat-status="Passing" aria-pressed="false" onclick="filterByStatCard(this, 'Passing')">
+        <span class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Passing</span>
+        <span class="kpi-value">{{ counts.passing }}</span>
+        <span class="kpi-foot"><span>Select to filter</span></span>
+    </button>
+    <button type="button" class="kpi {% if counts.fix_required %}kpi-accent-danger{% endif %} stat-card-filter" data-stat-status="Fix Required" aria-pressed="false" onclick="filterByStatCard(this, 'Fix Required')">
+        <span class="kpi-label"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Fix required</span>
+        <span class="kpi-value">{{ counts.fix_required }}</span>
+        <span class="kpi-foot"><span>{{ 'Needs attention' if counts.fix_required else 'All clear' }}</span></span>
+    </button>
+    <button type="button" class="kpi stat-card-filter" data-stat-status="Ignored" aria-pressed="false" onclick="filterByStatCard(this, 'Ignored')">
+        <span class="kpi-label"><i class="fas fa-eye-slash" aria-hidden="true"></i> Ignored</span>
+        <span class="kpi-value">{{ counts.ignored }}</span>
+        <span class="kpi-foot"><span>Select to filter</span></span>
+    </button>
 </div>
 
 <div class="card">
+    <div class="card-body">
+        <div class="tabs" role="group" aria-label="Test type">
+            <button type="button" class="tab active" aria-pressed="true" onclick="switchTestType(this, '')">All</button>
+            <button type="button" class="tab" aria-pressed="false" onclick="switchTestType(this, 'Control')">Controls</button>
+            <button type="button" class="tab" aria-pressed="false" onclick="switchTestType(this, 'Policy')">Policies</button>
+        </div>
+
+        <div class="filter-bar">
+            <div class="filter-search input-icon">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" class="form-control" placeholder="Search tests" id="testSearch" aria-label="Search tests" oninput="filterTests()">
+            </div>
+            <select class="filter-select" id="testStatusFilter" aria-label="Filter by status" onchange="filterTests()">
+                <option value="">All statuses</option>
+                <option value="Passing">Passing</option>
+                <option value="Fix Required">Fix required</option>
+                <option value="Ignored">Ignored</option>
+            </select>
+            <span class="spacer"></span>
+            <span class="text-sm text-muted" id="testCount" aria-live="polite">{{ rows|length }} tests</span>
+        </div>
+    </div>
+
+    {% if rows %}
     <div class="card-body no-padding">
         <div class="table-container">
-            <table id="testTable">
+            <table id="testTable" class="table-sortable">
                 <thead>
                     <tr>
-                        <th>Test Name</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Effort Estimate</th>
-                        <th>Assignee</th>
-                        <th>Framework</th>
+                        <th data-sort="text">Test name</th>
+                        <th data-sort="text">Type</th>
+                        <th data-sort="text">Status</th>
+                        <th data-sort="text">Effort estimate</th>
+                        <th data-sort="text">Assignee</th>
+                        <th data-sort="text">Framework</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for r in rows %}
                     <tr data-type="{{ r.type }}" data-status="{{ r.status }}">
-                        <td><a href="{{ r.link }}" class="font-semibold" style="text-decoration:none;">{{ r.name }}</a></td>
-                        <td><span class="badge badge-neutral">{{ r.type }}</span></td>
+                        <td><a href="{{ r.link }}" class="cell-title">{{ r.name }}</a></td>
+                        <td><span class="pill pill-neutral">{{ r.type }}</span></td>
                         <td>
-                            {% if r.status == 'Passing' %}<span class="badge badge-success">Passing</span>
-                            {% elif r.status == 'Fix Required' %}<span class="badge badge-danger">Fix Required</span>
-                            {% else %}<span class="badge badge-neutral">Ignored</span>{% endif %}
+                            {% if r.status == 'Passing' %}<span class="pill pill-passing"><i class="fas fa-check" aria-hidden="true"></i>Passing</span>
+                            {% elif r.status == 'Fix Required' %}<span class="pill pill-failing"><i class="fas fa-xmark" aria-hidden="true"></i>Fix required</span>
+                            {% else %}<span class="pill pill-neutral"><i class="fas fa-eye-slash" aria-hidden="true"></i>Ignored</span>{% endif %}
                         </td>
                         <td>{{ r.effort or '—' }}</td>
                         <td>{{ r.assignee or '—' }}</td>
                         <td>{{ r.framework or '—' }}</td>
                     </tr>
                     {% endfor %}
-                    {% if not rows %}
-                    <tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-secondary);">No tests yet. Tests are generated from your Controls and Policies as you add them.</td></tr>
-                    {% endif %}
                 </tbody>
             </table>
         </div>
     </div>
+    <div class="empty-state" id="testNoMatch" hidden>
+        <div class="empty-state-icon"><i class="fas fa-filter-circle-xmark" aria-hidden="true"></i></div>
+        <h3>No tests match these filters</h3>
+        <p>Clear the search or status filter to see everything.</p>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="clearTestFilters()">Clear filters</button>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon"><i class="fas fa-vial-circle-check" aria-hidden="true"></i></div>
+        <h3>No tests yet</h3>
+        <p>Tests are generated from your controls and policies as you add them.</p>
+        <a class="btn btn-primary btn-sm" href="/compliance"><i class="fas fa-shield-halved" aria-hidden="true"></i> Go to compliance</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -100,8 +112,12 @@ let currentTestType = '';
 
 function switchTestType(el, type) {
     currentTestType = type;
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.parentElement.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-pressed', 'false');
+    });
     el.classList.add('active');
+    el.setAttribute('aria-pressed', 'true');
     filterTests();
 }
 
@@ -109,27 +125,36 @@ function filterTests() {
     const search = document.getElementById('testSearch').value.toLowerCase();
     const status = document.getElementById('testStatusFilter').value;
     document.querySelectorAll('.stat-card-filter').forEach(card => {
-        card.classList.toggle('stat-card-active', card.dataset.statStatus === status);
+        card.setAttribute('aria-pressed', card.dataset.statStatus === status ? 'true' : 'false');
     });
+    let shown = 0;
     document.querySelectorAll('#testTable tbody tr').forEach(row => {
         if (!row.dataset.type) return;
         const text = row.textContent.toLowerCase();
-        const matchSearch = !search || text.includes(search);
-        const matchStatus = !status || row.dataset.status === status;
-        const matchType = !currentTestType || row.dataset.type === currentTestType;
-        row.style.display = matchSearch && matchStatus && matchType ? '' : 'none';
+        const ok = (!search || text.includes(search)) && (!status || row.dataset.status === status) && (!currentTestType || row.dataset.type === currentTestType);
+        row.hidden = !ok;
+        if (ok) shown++;
     });
+    const count = document.getElementById('testCount');
+    if (count) count.textContent = shown + (shown === 1 ? ' test' : ' tests');
+    const none = document.getElementById('testNoMatch');
+    if (none) none.hidden = shown > 0;
+    const table = document.querySelector('.table-container');
+    if (table) table.hidden = shown === 0;
 }
 
 function filterByStatCard(el, status) {
     const statusFilter = document.getElementById('testStatusFilter');
-    // Clicking the already-active card clears the filter; otherwise selects it
+    // Clicking the already-active tile clears the filter; otherwise selects it
     statusFilter.value = statusFilter.value === status ? '' : status;
     filterTests();
-    document.querySelectorAll('.stat-card-filter').forEach(card => {
-        card.setAttribute('aria-pressed', card.dataset.statStatus === statusFilter.value ? 'true' : 'false');
-    });
-    document.querySelector('.table-container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearTestFilters() {
+    document.getElementById('testSearch').value = '';
+    document.getElementById('testStatusFilter').value = '';
+    const all = document.querySelector('.tabs .tab');
+    switchTestType(all, '');
 }
 </script>
 {% endblock %}

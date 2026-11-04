@@ -3,211 +3,213 @@
 {% block breadcrumb %}<span>Compliance Frameworks</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-a.css') }}">
+
+{% set total_ctrl = frameworks|sum(attribute='total_controls') %}
+{% set total_pass = frameworks|sum(attribute='passing') %}
+{% set total_fail = frameworks|sum(attribute='failing') %}
+{% set total_na = frameworks|sum(attribute='not_applicable') %}
+{% set assessable = total_ctrl - total_na %}
+
 <div class="page-header">
     <div>
-        <h1>Compliance Frameworks <span class="badge badge-neutral" style="font-size:13px;vertical-align:middle;">{{ frameworks|length }}</span></h1>
-        <p>Manage and monitor your compliance across multiple frameworks</p>
+        <div class="page-eyebrow">Governance</div>
+        <h1>Compliance Frameworks</h1>
+        <p>Manage and monitor your compliance across multiple frameworks.</p>
     </div>
     <div class="page-actions">
         {% if current_user.can_write %}
-        <button class="btn btn-primary" onclick="showAddFrameworkModal()"><i class="fas fa-plus"></i> Add Custom Framework</button>
+        <button type="button" class="btn btn-secondary" onclick="showAddFrameworkModal()"><i class="fas fa-plus" aria-hidden="true"></i> Custom framework</button>
         {% endif %}
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('frameworksLibraryTab').click()"><i class="fas fa-book" aria-hidden="true"></i> Browse library</button>
     </div>
 </div>
 
-<div class="tabs">
-    <button class="tab active" id="myFrameworksTab" onclick="switchFrameworksView(this, 'my')"><i class="fas fa-list-check" style="margin-right:6px;"></i>My Frameworks</button>
-    <button class="tab" id="frameworksLibraryTab" onclick="switchFrameworksView(this, 'library')"><i class="fas fa-book" style="margin-right:6px;"></i>Frameworks Library <span class="badge badge-neutral">{{ library|length }}</span></button>
-</div>
-
-<!-- ============ MY FRAMEWORKS VIEW ============ -->
-<div id="myFrameworksView">
-<div class="grid-3" id="frameworkGrid">
-    {% for fw in frameworks %}
-    <div class="framework-card" data-category="{{ fw.category|lower }}" onclick="window.location='/compliance/{{ fw.id }}'" style="cursor:pointer;position:relative;">
-        {% if current_user.can_delete %}
-        <form method="POST" action="/compliance/{{ fw.id }}/delete" onclick="event.stopPropagation();" onsubmit="return confirm('{% if fw.is_shared %}Remove \'{{ fw.name }}\' from your organization? It will be removed from your compliance tracking, but kept in the shared library.{% else %}Delete \'{{ fw.name }}\'?{% endif %}');" style="position:absolute;bottom:16px;right:20px;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="{% if fw.is_shared %}Remove from organization{% else %}Delete framework{% endif %}"><i class="fas fa-trash"></i></button>
-        </form>
-        {% endif %}
-        <div class="framework-card-header">
-            <div>
-                <h4><a href="/compliance/{{ fw.id }}" style="color:inherit;text-decoration:none;">{{ fw.name }}</a></h4>
-                <span class="fw-category">{{ fw.category }} &middot; {{ fw.total_controls }} controls</span>
-                <div style="margin-top:6px;"><span class="badge {% if fw.is_shared %}badge-info{% else %}badge-neutral{% endif %}" style="font-size:10px;">{% if fw.is_shared %}Shared Library{% else %}Your Organization{% endif %}</span></div>
-            </div>
-            <div class="fw-icon stat-icon {% if fw.category == 'Security' %}blue{% elif fw.category == 'Privacy' %}purple{% elif fw.category == 'Healthcare' %}green{% else %}orange{% endif %}">
-                <i class="fas fa-{{ fw.icon }}"></i>
-            </div>
-        </div>
-
-        <!-- Progress -->
-        {% set has_controls = fw.total_controls > 0 %}
-        <div style="margin-bottom:12px;">
-            <div class="flex-between mb-8">
-                <span class="text-sm text-muted">Compliance Progress</span>
-                <span class="font-semibold" style="font-size:15px;color:var(--accent-success);">{{ ((fw.passing / fw.total_controls) * 100)|round|int if has_controls else 0 }}%</span>
-            </div>
-            <div class="progress-stacked">
-                <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--accent-success);"></div>
-                <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--accent-danger);"></div>
-                <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--text-muted);"></div>
-            </div>
-        </div>
-
-        <div class="framework-stats">
-            <div class="fw-stat"><div class="dot green"></div> {{ fw.passing }} Passing</div>
-            <div class="fw-stat"><div class="dot red"></div> {{ fw.failing }} Failing</div>
-            <div class="fw-stat"><div class="dot gray"></div> {{ fw.not_applicable }} N/A</div>
-        </div>
+{% if frameworks %}
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-layer-group" aria-hidden="true"></i> Frameworks tracked</div>
+        <div class="kpi-value">{{ frameworks|length }}</div>
+        <div class="kpi-foot"><span>{{ total_ctrl }} controls in total</span></div>
     </div>
-    {% endfor %}
-</div>
-{% if not frameworks %}
-<div class="card" style="text-align:center;padding:48px 24px;">
-    <i class="fas fa-book" style="font-size:28px;color:var(--text-muted);margin-bottom:12px;"></i>
-    <h3 style="margin-bottom:6px;">No frameworks added yet</h3>
-    <p class="text-sm text-muted" style="margin-bottom:16px;">Browse the Frameworks Library and add the ones your organization needs to track.</p>
-    <button class="btn btn-primary" onclick="switchFrameworksView(document.getElementById('frameworksLibraryTab'), 'library')"><i class="fas fa-book"></i> Browse Frameworks Library</button>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Controls passing</div>
+        <div class="kpi-value">{{ ((total_pass / assessable * 100)|round|int) if assessable > 0 else 0 }}<small>%</small></div>
+        <div class="kpi-foot"><span>{{ total_pass }} of {{ assessable }} applicable</span></div>
+    </div>
+    <div class="kpi {% if total_fail %}kpi-accent-danger{% endif %}">
+        <div class="kpi-label"><i class="fas fa-circle-xmark" aria-hidden="true"></i> Controls failing</div>
+        <div class="kpi-value">{{ total_fail }}</div>
+        <div class="kpi-foot"><span>{{ 'Needs remediation' if total_fail else 'Nothing failing' }}</span></div>
+    </div>
 </div>
 {% endif %}
-</div>
 
-<!-- ============ FRAMEWORKS LIBRARY VIEW ============ -->
-<div id="frameworksLibraryView" style="display:none;">
-    <div class="card" style="margin-bottom:16px;">
-        <div class="card-body" style="padding:16px;">
-            <div class="search-input-wrapper">
-                <i class="fas fa-search"></i>
-                <input type="text" class="filter-input" placeholder="Search the library by name or category..." id="librarySearch" oninput="applyLibraryFilter()">
-            </div>
-        </div>
+<div data-tabs>
+    <div class="tabs" role="tablist" aria-label="Framework views">
+        <button type="button" class="tab active" role="tab" id="myFrameworksTab" data-tab="my"><i class="fas fa-list-check" aria-hidden="true"></i> My frameworks <span class="count">{{ frameworks|length }}</span></button>
+        <button type="button" class="tab" role="tab" id="frameworksLibraryTab" data-tab="library"><i class="fas fa-book" aria-hidden="true"></i> Frameworks library <span class="count">{{ library|length }}</span></button>
     </div>
-    <div class="grid-3" id="libraryGrid">
-        {% for fw in library %}
-        <div class="framework-card" data-name="{{ fw.name|lower }}" data-category="{{ (fw.category or '')|lower }}" style="position:relative;">
-            <div class="framework-card-header">
-                <div>
-                    <h4>{{ fw.name }}</h4>
-                    <span class="fw-category">{{ fw.category }} &middot; {{ fw.total_controls }} controls</span>
+
+    <!-- ============ MY FRAMEWORKS ============ -->
+    <div class="tab-panel" data-panel="my" id="myFrameworksView" role="tabpanel" aria-labelledby="myFrameworksTab">
+        {% if frameworks %}
+        <div class="grid-3" id="frameworkGrid">
+            {% for fw in frameworks %}
+            {% set has_controls = fw.total_controls > 0 %}
+            {% set pct = ((fw.passing / fw.total_controls * 100)|round|int) if has_controls else 0 %}
+            <article class="fw-card" data-category="{{ fw.category|lower }}">
+                <div class="fw-card-top">
+                    <div class="fw-card-icon {% if fw.category == 'Privacy' %}is-privacy{% elif fw.category == 'Healthcare' %}is-healthcare{% elif fw.category != 'Security' %}is-other{% endif %}" aria-hidden="true">
+                        <i class="fas fa-{{ fw.icon }}"></i>
+                    </div>
+                    <div>
+                        <h2 class="fw-card-title"><a href="/compliance/{{ fw.id }}">{{ fw.name }}</a></h2>
+                        <div class="fw-card-meta">{{ fw.category }} &middot; {{ fw.total_controls }} controls</div>
+                    </div>
+                    <div class="fw-card-pct">{{ pct }}<small>%</small></div>
                 </div>
-                <div class="fw-icon stat-icon {% if fw.category == 'Security' %}blue{% elif fw.category == 'Privacy' %}purple{% elif fw.category == 'Healthcare' %}green{% else %}orange{% endif %}" style="position:relative;">
-                    <i class="fas fa-{{ fw.icon }}"></i>
-                    <i class="fas fa-lock" style="position:absolute;bottom:-4px;right:-4px;font-size:9px;background:var(--bg-secondary);color:var(--text-muted);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-color);"></i>
+
+                <div class="progress-stacked" role="img" aria-label="{{ fw.passing }} passing, {{ fw.failing }} failing, {{ fw.not_applicable }} not applicable">
+                    <div class="segment" style="width:{{ (fw.passing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--accent-success);"></div>
+                    <div class="segment" style="width:{{ (fw.failing / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--accent-danger);"></div>
+                    <div class="segment" style="width:{{ (fw.not_applicable / fw.total_controls * 100)|round if has_controls else 0 }}%;background:var(--text-muted);"></div>
                 </div>
-            </div>
-            <p class="text-sm text-muted" style="margin:10px 0 16px;min-height:36px;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ fw.description or 'No description provided.' }}</p>
-            {% if current_user.can_write %}
-            <form method="POST" action="{{ url_for('compliance.add_framework') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="framework_id" value="{{ fw.id }}">
-                <button type="submit" class="btn btn-sm btn-primary" style="width:100%;"><i class="fas fa-plus"></i> Add to My Frameworks</button>
-            </form>
-            {% endif %}
+
+                <div class="fw-card-legend">
+                    <span><i class="lg-pass" aria-hidden="true"></i>{{ fw.passing }} passing</span>
+                    <span><i class="lg-fail" aria-hidden="true"></i>{{ fw.failing }} failing</span>
+                    <span><i class="lg-na" aria-hidden="true"></i>{{ fw.not_applicable }} N/A</span>
+                </div>
+
+                <div class="fw-card-foot">
+                    <span class="pill {% if fw.is_shared %}pill-info{% else %}pill-neutral{% endif %}">{% if fw.is_shared %}Shared library{% else %}Your organization{% endif %}</span>
+                    {% if current_user.can_delete %}
+                    <div class="fw-card-delete">
+                        <form method="POST" action="/compliance/{{ fw.id }}/delete"
+                              data-confirm="{% if fw.is_shared %}Remove '{{ fw.name }}' from your organization? It will be removed from your compliance tracking, but kept in the shared library.{% else %}Delete '{{ fw.name }}'? This cannot be undone.{% endif %}"
+                              data-confirm-title="{% if fw.is_shared %}Remove framework{% else %}Delete framework{% endif %}"
+                              data-confirm-button="{% if fw.is_shared %}Remove{% else %}Delete{% endif %}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-ghost btn-icon" aria-label="{% if fw.is_shared %}Remove {{ fw.name }} from organization{% else %}Delete {{ fw.name }}{% endif %}" data-tooltip="{% if fw.is_shared %}Remove from organization{% else %}Delete framework{% endif %}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
         </div>
-        {% endfor %}
+        {% else %}
+        <div class="card"><div class="card-body">
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-book" aria-hidden="true"></i></div>
+                <h3>No frameworks added yet</h3>
+                <p>Browse the Frameworks Library and add the ones your organization needs to track.</p>
+                <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('frameworksLibraryTab').click()"><i class="fas fa-book" aria-hidden="true"></i> Browse frameworks library</button>
+            </div>
+        </div></div>
+        {% endif %}
     </div>
-    {% if not library %}
-    <div class="card" style="text-align:center;padding:48px 24px;">
-        <i class="fas fa-circle-check" style="font-size:28px;color:var(--accent-success);margin-bottom:12px;"></i>
-        <p class="text-sm text-muted">Every framework in the shared library has already been added to My Frameworks.</p>
+
+    <!-- ============ FRAMEWORKS LIBRARY ============ -->
+    <div class="tab-panel" data-panel="library" id="frameworksLibraryView" role="tabpanel" aria-labelledby="frameworksLibraryTab" hidden>
+        {% if library %}
+        <div class="filter-bar">
+            <div class="filter-search input-icon">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" class="form-control" placeholder="Search the library by name or category" id="librarySearch" aria-label="Search the frameworks library" oninput="applyLibraryFilter()">
+            </div>
+            <span class="spacer"></span>
+            <span class="text-sm text-muted" id="libraryCount" aria-live="polite">{{ library|length }} available</span>
+        </div>
+        <div class="grid-3" id="libraryGrid">
+            {% for fw in library %}
+            <article class="fw-card" data-name="{{ fw.name|lower }}" data-category="{{ (fw.category or '')|lower }}">
+                <div class="fw-card-top">
+                    <div class="fw-card-icon {% if fw.category == 'Privacy' %}is-privacy{% elif fw.category == 'Healthcare' %}is-healthcare{% elif fw.category != 'Security' %}is-other{% endif %}" aria-hidden="true">
+                        <i class="fas fa-{{ fw.icon }}"></i>
+                    </div>
+                    <div>
+                        <h2 class="fw-card-title">{{ fw.name }}</h2>
+                        <div class="fw-card-meta">{{ fw.category }} &middot; {{ fw.total_controls }} controls</div>
+                    </div>
+                </div>
+                <p class="fw-card-desc">{{ fw.description or 'No description provided.' }}</p>
+                {% if current_user.can_write %}
+                <form method="POST" action="{{ url_for('compliance.add_framework') }}" class="fw-card-foot">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="framework_id" value="{{ fw.id }}">
+                    <button type="submit" class="btn btn-sm btn-secondary w-full"><i class="fas fa-plus" aria-hidden="true"></i> Add to my frameworks</button>
+                </form>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        <div class="empty-state" id="libraryNoMatch" hidden>
+            <div class="empty-state-icon"><i class="fas fa-magnifying-glass" aria-hidden="true"></i></div>
+            <h3>No frameworks match your search</h3>
+            <p>Try a different name or category.</p>
+        </div>
+        {% else %}
+        <div class="card"><div class="card-body">
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
+                <h3>Everything is added</h3>
+                <p>Every framework in the shared library has already been added to My frameworks.</p>
+            </div>
+        </div></div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-const frameworks = {{ frameworks|tojson }};
-
-function showFrameworkDetail(idx) {
-    const fw = frameworks[idx];
-    const pct = Math.round((fw.passing / fw.total_controls) * 100);
-    openModal(fw.name, `
-        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px;">${fw.description}</p>
-        <div style="text-align:center;margin-bottom:24px;">
-            <div style="font-size:48px;font-weight:700;color:var(--accent-success);">${pct}%</div>
-            <div style="color:var(--text-secondary);font-size:13px;">Overall Compliance</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center;margin-bottom:20px;">
-            <div style="padding:16px;background:var(--accent-success-light);border-radius:10px;">
-                <div style="font-size:24px;font-weight:700;color:var(--green-700);">${fw.passing}</div>
-                <div style="font-size:12px;color:var(--green-700);">Passing</div>
-            </div>
-            <div style="padding:16px;background:var(--accent-danger-light);border-radius:10px;">
-                <div style="font-size:24px;font-weight:700;color:var(--red-700);">${fw.failing}</div>
-                <div style="font-size:12px;color:var(--red-700);">Failing</div>
-            </div>
-            <div style="padding:16px;background:var(--bg-tertiary);border-radius:10px;">
-                <div style="font-size:24px;font-weight:700;color:var(--text-secondary);">${fw.not_applicable}</div>
-                <div style="font-size:12px;color:var(--text-secondary);">N/A</div>
-            </div>
-        </div>
-        <div style="padding:14px;background:var(--bg-tertiary);border-radius:10px;margin-bottom:20px;">
-            <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:6px;">Control Structure</h4>
-            <p style="font-size:13px;color:var(--text-primary);line-height:1.6;">${fw.controls_detail}</p>
-        </div>
-        <h4 style="font-size:13px;margin-bottom:8px;">Total Controls: <strong>${fw.total_controls}</strong></h4>
-        <div style="width:100%;height:10px;background:var(--bg-tertiary);border-radius:100px;overflow:hidden;display:flex;">
-            <div style="width:${(fw.passing/fw.total_controls*100).toFixed(1)}%;background:var(--accent-success);"></div>
-            <div style="width:${(fw.failing/fw.total_controls*100).toFixed(1)}%;background:var(--accent-danger);"></div>
-            <div style="width:${(fw.not_applicable/fw.total_controls*100).toFixed(1)}%;background:var(--text-muted);"></div>
-        </div>
-        <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-secondary);">
-            <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent-success);border-radius:2px;margin-right:4px;"></span>Passing (${fw.passing})</span>
-            <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent-danger);border-radius:2px;margin-right:4px;"></span>Failing (${fw.failing})</span>
-            <span><span style="display:inline-block;width:8px;height:8px;background:var(--text-muted);border-radius:2px;margin-right:4px;"></span>N/A (${fw.not_applicable})</span>
-        </div>
-    `);
-}
-
 function showAddFrameworkModal() {
-    openModal('Add Custom Framework', `
+    openModal('Add custom framework', `
         <form id="frameworkForm" method="POST" action="/compliance/add">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="framework_id" value="__custom__">
-            <p class="text-sm text-muted" style="margin-bottom:16px;">Looking for a standard like ISO 27001 or SOC 2? Check the <strong>Frameworks Library</strong> tab instead — this form is only for a framework specific to your organization.</p>
+            <div class="alert alert-info"><i class="fas fa-circle-info" aria-hidden="true"></i><div>Looking for a standard like ISO 27001 or SOC 2? Check the <strong>Frameworks library</strong> tab instead. This form is only for a framework specific to your organization.</div></div>
             <div class="form-group">
-                <label>Custom Framework Name</label>
-                <input type="text" name="custom_name" class="form-control" placeholder="e.g. Internal Security Baseline" required>
+                <label for="cfName">Framework name <span class="required-star">*</span></label>
+                <input type="text" id="cfName" name="custom_name" class="form-control" placeholder="e.g. Internal Security Baseline" required>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="cfCategory">Category</label>
+                    <select id="cfCategory" name="category" class="form-control">
+                        <option>Security</option>
+                        <option>Privacy</option>
+                        <option>Healthcare</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cfTarget">Target completion date</label>
+                    <input type="date" id="cfTarget" name="target_date" class="form-control">
+                </div>
             </div>
             <div class="form-group">
-                <label>Category</label>
-                <select name="category" class="form-control">
-                    <option>Security</option>
-                    <option>Privacy</option>
-                    <option>Healthcare</option>
-                    <option>Other</option>
-                </select>
+                <label for="cfOwner">Owner</label>
+                <input type="text" id="cfOwner" name="owner" class="form-control" placeholder="Framework owner name">
+                <div class="form-help">Custom frameworks start with no controls; controls are not authored from the UI.</div>
             </div>
-            <div class="form-group">
-                <label>Owner</label>
-                <input type="text" name="owner" class="form-control" placeholder="Framework owner name">
-            </div>
-            <div class="form-group">
-                <label>Target Completion Date</label>
-                <input type="date" name="target_date" class="form-control">
-            </div>
-            <p class="text-sm text-muted">Note: custom frameworks start with no controls — controls aren't authored from the UI.</p>
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'frameworkForm\').submit()">Add Framework</button>');
-}
-
-// ---- My Frameworks / Frameworks Library tabs ----
-function switchFrameworksView(el, view) {
-    document.getElementById('myFrameworksTab').classList.toggle('active', view === 'my');
-    document.getElementById('frameworksLibraryTab').classList.toggle('active', view === 'library');
-    document.getElementById('myFrameworksView').style.display = view === 'my' ? '' : 'none';
-    document.getElementById('frameworksLibraryView').style.display = view === 'library' ? '' : 'none';
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="var f=document.getElementById(\'frameworkForm\'); if (f.reportValidity()) f.submit()">Add framework</button>');
+    setTimeout(function () { var i = document.getElementById('cfName'); if (i) i.focus(); }, 50);
 }
 
 function applyLibraryFilter() {
     const search = document.getElementById('librarySearch').value.toLowerCase();
-    document.querySelectorAll('#libraryGrid .framework-card').forEach(card => {
+    let shown = 0;
+    document.querySelectorAll('#libraryGrid .fw-card').forEach(card => {
         const matches = !search || card.dataset.name.includes(search) || card.dataset.category.includes(search);
-        card.style.display = matches ? '' : 'none';
+        card.hidden = !matches;
+        if (matches) shown++;
     });
+    document.getElementById('libraryCount').textContent = shown + ' available';
+    document.getElementById('libraryNoMatch').hidden = shown > 0;
 }
 </script>
 {% endblock %}

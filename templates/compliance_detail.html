@@ -1,133 +1,141 @@
 {% extends "base.html" %}
 {% block title %}{{ framework.name }}{% endblock %}
-{% block breadcrumb %}<a href="/compliance" style="color:var(--text-secondary);text-decoration:none;">Compliance</a> <i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i> <span>{{ framework.name }}</span>{% endblock %}
+{% block breadcrumb %}<a href="/compliance">Compliance</a><span>/</span><span>{{ framework.name }}</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-a.css') }}">
+
+{% set cat_icons = {'Organizational':'fa-sitemap','People':'fa-users','Physical':'fa-building-shield','Technological':'fa-microchip','Context of the organization':'fa-compass','Leadership':'fa-crown','Planning':'fa-list-check','Support':'fa-hands-helping','Operation':'fa-gears','Performance evaluation':'fa-chart-line','Improvement':'fa-arrow-trend-up'} %}
+
 <div class="page-header">
     <div>
-        <h1>{{ framework.name }} <span class="badge {% if framework.is_shared %}badge-info{% else %}badge-neutral{% endif %}" style="font-size:11px;vertical-align:middle;">{% if framework.is_shared %}Shared Library{% else %}Your Organization{% endif %}</span></h1>
-        <p>{{ framework.description }}</p>
+        <h1>{{ framework.name }} <span class="pill {% if framework.is_shared %}pill-info{% else %}pill-neutral{% endif %}">{% if framework.is_shared %}Shared library{% else %}Your organization{% endif %}</span></h1>
+        {% if framework.description %}<p>{{ framework.description }}</p>{% endif %}
     </div>
     <div class="page-actions">
-        <a href="/compliance/{{ framework.id }}/report.pdf" class="btn btn-secondary"><i class="fas fa-file-pdf"></i> Download Report</a>
         {% if current_user.can_delete %}
-        <form method="POST" action="/compliance/{{ framework.id }}/delete" style="display:inline;" onsubmit="return confirm('{% if framework.is_shared %}Remove \'{{ framework.name }}\' from your organization? It will be removed from your compliance tracking, but kept in the shared library.{% else %}Delete \'{{ framework.name }}\'?{% endif %}');">
+        <form method="POST" action="/compliance/{{ framework.id }}/delete"
+              data-confirm="{% if framework.is_shared %}Remove '{{ framework.name }}' from your organization? It will be removed from your compliance tracking, but kept in the shared library.{% else %}Delete '{{ framework.name }}'? This cannot be undone.{% endif %}"
+              data-confirm-title="{% if framework.is_shared %}Remove framework{% else %}Delete framework{% endif %}"
+              data-confirm-button="{% if framework.is_shared %}Remove{% else %}Delete{% endif %}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> {% if framework.is_shared %}Remove from Organization{% else %}Delete{% endif %}</button>
+            <button type="submit" class="btn btn-danger-outline"><i class="fas fa-trash" aria-hidden="true"></i> {% if framework.is_shared %}Remove from organization{% else %}Delete{% endif %}</button>
         </form>
         {% endif %}
-        <a href="/compliance" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="/compliance/{{ framework.id }}/report.pdf" class="btn btn-primary"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download report</a>
     </div>
 </div>
 
-<!-- Framework Summary -->
-<div class="stats-grid" style="margin-bottom:24px;">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-shield-halved"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Compliance Score</div>
-            <div class="stat-value">{{ framework.compliance_score }}%</div>
-            <div class="stat-change neutral">Passing / (Total - N/A)</div>
-        </div>
+<!-- Framework summary -->
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-shield-halved" aria-hidden="true"></i> Compliance score</div>
+        <div class="kpi-value">{{ framework.compliance_score }}<small>%</small></div>
+        <div class="kpi-foot"><span>Passing / (total - N/A)</span></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Passing</div>
-            <div class="stat-value" style="color:var(--accent-success);">{{ framework.passing }}</div>
-        </div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Passing</div>
+        <div class="kpi-value">{{ framework.passing }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Failing</div>
-            <div class="stat-value" style="color:var(--accent-danger);">{{ framework.failing }}</div>
-        </div>
+    <div class="kpi {% if framework.failing %}kpi-accent-danger{% endif %}">
+        <div class="kpi-label"><i class="fas fa-circle-xmark" aria-hidden="true"></i> Failing</div>
+        <div class="kpi-value">{{ framework.failing }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon gray"><i class="fas fa-question-circle"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Not Assessed</div>
-            <div class="stat-value" style="color:var(--text-secondary);">{{ framework.not_assessed }}</div>
-        </div>
+    <div class="kpi {% if framework.not_assessed %}kpi-accent-warning{% endif %}">
+        <div class="kpi-label"><i class="fas fa-circle-question" aria-hidden="true"></i> Not assessed</div>
+        <div class="kpi-value">{{ framework.not_assessed }}</div>
     </div>
 </div>
 
-<!-- Controls by Category -->
+<!-- Controls by category -->
+<div class="flex-between mb-16">
+    <h2 class="card-title">Controls by category</h2>
+    {% if categories %}
+    <div class="btn-group">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="setAllCategories(true)">Expand all</button>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="setAllCategories(false)">Collapse all</button>
+    </div>
+    {% endif %}
+</div>
+
 {% for category, cat_controls in categories.items() %}
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-header" style="cursor:pointer;" role="button" tabindex="0" aria-expanded="false" aria-controls="cat-panel-{{ loop.index }}" onclick="toggleControlCategory(this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleControlCategory(this); }">
-        <h3>
-            {% if category == 'Organizational' %}<i class="fas fa-sitemap" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'People' %}<i class="fas fa-users" style="margin-right:8px;color:var(--accent-warning);"></i>
-            {% elif category == 'Physical' %}<i class="fas fa-building-shield" style="margin-right:8px;color:var(--accent-success);"></i>
-            {% elif category == 'Technological' %}<i class="fas fa-microchip" style="margin-right:8px;color:var(--accent-danger);"></i>
-            {% elif category == 'Context of the organization' %}<i class="fas fa-compass" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'Leadership' %}<i class="fas fa-crown" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'Planning' %}<i class="fas fa-list-check" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'Support' %}<i class="fas fa-hands-helping" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'Operation' %}<i class="fas fa-gears" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'Performance evaluation' %}<i class="fas fa-chart-line" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% elif category == 'Improvement' %}<i class="fas fa-arrow-trend-up" style="margin-right:8px;color:var(--accent-primary);"></i>
-            {% endif %}
-            {% if category in ['Organizational', 'People', 'Physical', 'Technological'] %}
-            {{ category }} Controls ({{ cat_controls|length }})
-            {% else %}
-            {{ category }} ({{ cat_controls|length }})
-            {% endif %}
-        </h3>
-        <i class="fas fa-chevron-down category-toggle-chevron" aria-hidden="true" style="transition:transform 0.2s;color:var(--text-secondary);"></i>
-    </div>
-    <div class="card-body no-padding" style="display:none;" id="cat-panel-{{ loop.index }}">
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:90px;">Code</th>
-                    <th>Control</th>
-                    <th style="width:130px;">Status</th>
-                    <th style="width:90px;">Evidence</th>
-                    <th style="width:120px;">Owner</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in cat_controls %}
-                <tr onclick="window.location='/compliance/{{ framework.id }}/control/{{ c.id }}'" style="cursor:pointer;" title="Click to view control details & upload evidence">
-                    <td><a href="/compliance/{{ framework.id }}/control/{{ c.id }}" style="color:inherit;text-decoration:none;"><strong>{{ c.code }}</strong></a></td>
-                    <td>{{ c.title }}</td>
-                    <td>
-                        <span class="badge {% if c.org_status == 'Passing' %}badge-success{% elif c.org_status == 'Failing' %}badge-danger{% elif c.org_status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}">
-                            {{ c.org_status }}
-                        </span>
-                    </td>
-                    <td>
-                        {% set count = evidence_counts.get(c.id, 0) %}
-                        {% if count > 0 %}
-                        <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent-primary);font-weight:600;">
-                            <i class="fas fa-file-lines"></i> {{ count }}
-                        </span>
-                        {% else %}
-                        <span style="font-size:11px;color:var(--text-muted);">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-muted">{{ c.org_owner or '—' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% set passing_n = cat_controls|selectattr('org_status', 'equalto', 'Passing')|list|length %}
+{% set na_n = cat_controls|selectattr('org_status', 'equalto', 'Not Applicable')|list|length %}
+{% set denom = cat_controls|length - na_n %}
+{% set cat_pct = ((passing_n / denom * 100)|round|int) if denom > 0 else 0 %}
+<div class="card cat-card">
+    <button type="button" class="cat-toggle" aria-expanded="false" aria-controls="cat-panel-{{ loop.index }}" onclick="toggleControlCategory(this)">
+        <span class="cat-toggle-title">
+            <i class="fas {{ cat_icons.get(category, 'fa-folder') }}" aria-hidden="true"></i>
+            <span>{% if category in ['Organizational', 'People', 'Physical', 'Technological'] %}{{ category }} controls{% else %}{{ category }}{% endif %} <span class="count">{{ cat_controls|length }}</span></span>
+        </span>
+        <span class="cat-toggle-meta">
+            <span>{{ cat_pct }}% passing</span>
+            <span class="progress is-success" role="progressbar" aria-valuenow="{{ cat_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ category }} passing"><span style="width:{{ cat_pct }}%"></span></span>
+            <i class="fas fa-chevron-down cat-chevron" aria-hidden="true"></i>
+        </span>
+    </button>
+    <div class="card-body no-padding" hidden id="cat-panel-{{ loop.index }}">
+        <div class="table-container">
+            <table class="table-sortable">
+                <caption class="sr-only">{{ category }} controls</caption>
+                <thead>
+                    <tr>
+                        <th data-sort="text">Code</th>
+                        <th data-sort="text">Control</th>
+                        <th data-sort="text">Status</th>
+                        <th data-sort="num" class="num">Evidence</th>
+                        <th data-sort="text">Owner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in cat_controls %}
+                    {% set count = evidence_counts.get(c.id, 0) %}
+                    <tr class="is-link" onclick="window.location='/compliance/{{ framework.id }}/control/{{ c.id }}'">
+                        <td class="code-cell"><a href="/compliance/{{ framework.id }}/control/{{ c.id }}">{{ c.code }}</a></td>
+                        <td>{{ c.title }}</td>
+                        <td>
+                            {% if c.org_status == 'Passing' %}<span class="pill pill-passing"><i class="fas fa-check" aria-hidden="true"></i>Passing</span>
+                            {% elif c.org_status == 'Failing' %}<span class="pill pill-failing"><i class="fas fa-xmark" aria-hidden="true"></i>Failing</span>
+                            {% elif c.org_status == 'Not Applicable' %}<span class="pill pill-na">Not applicable</span>
+                            {% else %}<span class="pill pill-not-assessed"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i>{{ c.org_status }}</span>{% endif %}
+                        </td>
+                        <td class="num" data-value="{{ count }}">
+                            {% if count > 0 %}<span class="evidence-count"><i class="fas fa-file-lines" aria-hidden="true"></i> {{ count }}<span class="sr-only"> evidence files</span></span>{% else %}<span class="text-muted" aria-label="No evidence">&mdash;</span>{% endif %}
+                        </td>
+                        <td class="text-muted">{{ c.org_owner or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
+{% else %}
+<div class="card"><div class="card-body">
+    <div class="empty-state">
+        <div class="empty-state-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
+        <h3>No controls yet</h3>
+        <p>This framework has no controls. Custom frameworks start empty because controls are not authored from the UI.</p>
+        <a href="/compliance" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to frameworks</a>
+    </div>
+</div></div>
 {% endfor %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function toggleControlCategory(header) {
-    const body = header.nextElementSibling;
-    const chevron = header.querySelector('.category-toggle-chevron');
-    const collapsed = body.style.display === 'none';
-    body.style.display = collapsed ? '' : 'none';
-    chevron.style.transform = collapsed ? 'rotate(180deg)' : 'rotate(0deg)';
-    header.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+function setCategory(btn, open) {
+    const panel = document.getElementById(btn.getAttribute('aria-controls'));
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.closest('.cat-card').classList.toggle('is-open', open);
+}
+function toggleControlCategory(btn) {
+    setCategory(btn, btn.getAttribute('aria-expanded') !== 'true');
+}
+function setAllCategories(open) {
+    document.querySelectorAll('.cat-toggle').forEach(b => setCategory(b, open));
 }
 </script>
 {% endblock %}
