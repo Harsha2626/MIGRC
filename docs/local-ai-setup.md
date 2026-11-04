@@ -129,3 +129,51 @@ Then open any policy and click **Evaluate** to run a real evaluation.
   it never blocks another developer's idle server. See the docstring on
   `AiAuditorLock` in `app/models.py` and `_machine_lock_id()` in
   `app/services/ai_opencode_policy_evaluation.py` for details.
+
+## Model path: OpenCode server first, Cline-direct opt-in
+
+All AI-assist features (policy evaluation, evidence review, vendor questionnaire suggestions)
+share `app/services/ai_dispatch.py`.
+
+- **Primary path (default): the local OpenCode server's free `opencode` (Zen) models.** With
+  `OPENCODE_MODEL` unset, MIGRC asks the live server which `opencode`-provider models are
+  currently active and free (`GET /api/model`, cached 5 minutes), keeps the static preference
+  order in `DEFAULT_FREE_MODELS` for those still active, appends any newly added free models, and
+  tries them in turn until one returns parseable output. If discovery fails it uses the static
+  list. As of 2026-11-04 the order is: `nemotron-3.5-super-vl-free`, `beam-free`,
+  `crouton-alpha-free`, `pulse-alpha-free`, `flint-40b-free`, `nemotron-3.5-lightning-free`,
+  `glm-5.3-flash-free`, `deepseek-v4.1-flash-free`, `mimo-v2.6-flash-free`, `big-pickle`.
+  Check what your server offers with `opencode models opencode`.
+- **Pinning:** `OPENCODE_MODEL=providerID/modelID` (plus optional `OPENCODE_MODEL_VARIANT`) uses
+  that single model. Add `OPENCODE_MODEL_FALLBACK=1` to fall back to the free list if it fails.
+- **Cline-direct (opt-in only):** set `OPENCODE_MODEL=clinedirect/<cline-model-id>` and
+  `CLINE_API_KEY`. This bypasses the OpenCode server and calls api.cline.bot directly. It is
+  never used unless you set that variable. Remove `OPENCODE_MODEL` from your `.env` to return to
+  the OpenCode-server path.
+- Every path fails open (returns no suggestion, never an error) and a human always decides.
+- Session cleanup uses `DELETE /session/{id}` (verified against the live server;
+  `DELETE /api/session/{id}` is not routed and returns the web UI HTML).
+
+### Which path is active
+
+`GET /ai/status` (login required) returns secret-free JSON, e.g.
+`{"server": "connected", "path": "opencode-server", "primary_model": "opencode/nemotron-3.5-super-vl-free", "fallback_count": 9, "pinned": false}`.
+`path` is `opencode-server` or `cline-direct`. The Setup Wizard can read this (or call
+`ai_dispatch.get_ai_status()`); the password and API keys are never included.
+
+## AI vendor questionnaire answering
+
+On a vendor assessment page, **AI suggest answers** (needs write permission) drafts an answer per
+question from *your organization's own* Published policies and Approved evidence (titles and
+descriptions only; other organizations' data is never queried). Each suggestion shows confidence
+and the policies/evidence it cites. Suggestions are **drafts rendered in the page response and
+are not stored** (no schema change). **Accept suggestion** only fills the answer box (with an
+"[AI-suggested ...]" source note); nothing is saved until you click Save Progress. Answers citing
+a nonexistent policy/evidence id are discarded, confidence is clamped to 0-1, and answers with no
+valid citation are capped at 25% and flagged. See `app/services/ai_questionnaire.py`.
+
+## Live smoke test
+
+`python scripts/ai_smoke.py [--env /path/to/.env]` exercises the real server (status, a trivial
+dispatch, and the questionnaire suggester against a throwaway sqlite DB). It is not run in CI.
+Unit tests (`test_ai_services.py`) mock the HTTP layer.
