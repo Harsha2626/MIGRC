@@ -1,90 +1,83 @@
 {% extends "base.html" %}
 {% block title %}{{ campaign.name }}{% endblock %}
-{% block breadcrumb %}
-<a href="{{ url_for('people.training_campaigns') }}" style="color:var(--text-secondary);text-decoration:none;">Training Campaigns</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<span>{{ campaign.name }}</span>
-{% endblock %}
+{% block breadcrumb %}<span>People</span><span>/</span><a href="{{ url_for('people.training_campaigns') }}">Training Campaigns</a><span>/</span><span>{{ campaign.name }}</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-d.css') }}">
 <div class="page-header">
-    <div class="flex-center gap-12">
-        <a href="{{ url_for('people.training_campaigns') }}" aria-label="Back to training campaigns" style="color:var(--text-primary);font-size:18px;text-decoration:none;"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
-        <h1 style="margin:0;">{{ campaign.name }}</h1>
-        {% if campaign.status == 'Completed' %}<span class="badge badge-success">{{ campaign.status }}</span>
-        {% elif campaign.status == 'In Progress' %}<span class="badge badge-primary">{{ campaign.status }}</span>
-        {% elif campaign.status == 'Upcoming' %}<span class="badge badge-info">{{ campaign.status }}</span>
-        {% else %}<span class="badge badge-neutral">{{ campaign.status }}</span>{% endif %}
+    <div>
+        <div class="pd-title-row">
+            <h1>{{ campaign.name }}</h1>
+            {% if campaign.status == 'Completed' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>{{ campaign.status }}</span>
+            {% elif campaign.status == 'In Progress' %}<span class="pill pill-in-progress"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i>{{ campaign.status }}</span>
+            {% elif campaign.status == 'Upcoming' %}<span class="pill pill-info"><i class="fas fa-calendar" aria-hidden="true"></i>{{ campaign.status }}</span>
+            {% else %}<span class="pill pill-draft pill-dot">{{ campaign.status }}</span>{% endif %}
+        </div>
     </div>
     <div class="page-actions">
-        <form method="POST" action="{{ url_for('people.delete_training_campaign', campaign_id=campaign.id) }}" onsubmit="return confirm('Delete {{ campaign.name }}?');">
+        <a href="{{ url_for('people.training_campaigns') }}" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> All campaigns</a>
+        <form method="POST" action="{{ url_for('people.delete_training_campaign', campaign_id=campaign.id) }}" class="pd-inline" data-confirm="Delete {{ campaign.name }}?" data-confirm-title="Delete campaign" data-confirm-button="Delete">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete Campaign</button>
+            <button type="submit" class="btn btn-danger-outline"><i class="fas fa-trash" aria-hidden="true"></i> Delete Campaign</button>
         </form>
     </div>
 </div>
 
-<div class="info-banner"><i class="fas fa-stopwatch"></i> {{ banner }}</div>
+<div class="info-banner"><i class="fas fa-stopwatch" aria-hidden="true"></i> {{ banner }}</div>
 
-<div class="tabs">
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}">Overview</a>
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='employees') }}" class="tab {% if tab == 'employees' %}active{% endif %}">Employees</a>
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='audit') }}" class="tab {% if tab == 'audit' %}active{% endif %}">Audit Log</a>
-    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='settings') }}" class="tab {% if tab == 'settings' %}active{% endif %}">Settings</a>
+<div class="tabs" role="navigation" aria-label="Campaign sections">
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}" {% if tab == 'overview' %}aria-current="page"{% endif %}>Overview</a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='employees') }}" class="tab {% if tab == 'employees' %}active{% endif %}" {% if tab == 'employees' %}aria-current="page"{% endif %}>Employees <span class="count">{{ campaign.total_enrolled }}</span></a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='audit') }}" class="tab {% if tab == 'audit' %}active{% endif %}" {% if tab == 'audit' %}aria-current="page"{% endif %}>Audit Log</a>
+    <a href="{{ url_for('people.campaign_detail', campaign_id=campaign.id, tab='settings') }}" class="tab {% if tab == 'settings' %}active{% endif %}" {% if tab == 'settings' %}aria-current="page"{% endif %}>Settings</a>
 </div>
 
 {% if tab == 'overview' %}
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Completion rate</div>
+        <div class="kpi-value">{{ campaign.completion_rate }}<small>%</small></div>
+        <div class="kpi-foot"><span>{{ campaign.completed_count }} of {{ campaign.total_enrolled }} completed</span></div>
+    </div>
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-stopwatch" aria-hidden="true"></i> Completed within SLA</div>
+        <div class="kpi-value">{% if completed_within_sla is not none %}{{ completed_within_sla }}<small>%</small>{% else %}&mdash;{% endif %}</div>
+        <div class="kpi-foot"><span>{% if completed_within_sla is not none %}{{ campaign.sla_days }}-day SLA{% elif not campaign.sla_days %}No SLA set{% else %}No completions yet{% endif %}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label"><i class="fas fa-users" aria-hidden="true"></i> Assigned employees</div>
+        <div class="kpi-value">{{ campaign.total_enrolled }}</div>
+    </div>
+</div>
+
 <div class="card mb-16">
-    <div class="card-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px;">
-        <div>
-            <div class="text-sm text-muted mb-8">Campaign Description</div>
-            <div class="font-semibold">{{ campaign.description or '—' }}</div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">Launch Date &amp; Time</div>
-            <div class="font-semibold">{{ campaign.launch_date.replace('T', ' ') if campaign.launch_date else '—' }}</div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">Timezone</div>
-            <div class="font-semibold">{{ campaign.timezone or '—' }}</div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">End Date &amp; Time</div>
-            <div class="font-semibold">{{ 'No end date' if campaign.no_end_date else (campaign.end_date.replace('T', ' ') if campaign.end_date else '—') }}</div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">Training Type</div>
-            <div class="font-semibold">{% if campaign.materials %}{{ campaign.materials|map(attribute='type')|unique|join(', ') }}{% else %}—{% endif %}</div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">Training Selected</div>
-            <div class="tag-list">
-                {% for m in campaign.materials %}<span class="tag">{{ m.title }}</span>{% else %}<span class="text-sm text-muted">—</span>{% endfor %}
-            </div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">Assigned Employees</div>
-            <div class="font-semibold">{{ campaign.total_enrolled }}</div>
-        </div>
-        <div>
-            <div class="text-sm text-muted mb-8">SLA in days</div>
-            <div class="font-semibold">{{ campaign.sla_days if campaign.sla_days else '—' }}</div>
-        </div>
+    <div class="card-header"><h2 class="card-title">Campaign details</h2></div>
+    <div class="card-body">
+        <dl class="pd-kv">
+            <div><dt>Description</dt><dd>{{ campaign.description or '—' }}</dd></div>
+            <div><dt>Launch date &amp; time</dt><dd>{{ campaign.launch_date.replace('T', ' ') if campaign.launch_date else '—' }}</dd></div>
+            <div><dt>Timezone</dt><dd>{{ campaign.timezone or '—' }}</dd></div>
+            <div><dt>End date &amp; time</dt><dd>{{ 'No end date' if campaign.no_end_date else (campaign.end_date.replace('T', ' ') if campaign.end_date else '—') }}</dd></div>
+            <div><dt>Training type</dt><dd>{% if campaign.materials %}{{ campaign.materials|map(attribute='type')|unique|join(', ') }}{% else %}—{% endif %}</dd></div>
+            <div><dt>Training selected</dt><dd><div class="tag-list">{% for m in campaign.materials %}<span class="tag">{{ m.title }}</span>{% else %}—{% endfor %}</div></dd></div>
+            <div><dt>SLA in days</dt><dd>{{ campaign.sla_days if campaign.sla_days else '—' }}</dd></div>
+        </dl>
     </div>
 </div>
 
 <div class="grid-2">
     <div class="card">
-        <div class="card-header"><h3>Completion Rate</h3></div>
+        <div class="card-header"><h2 class="card-title">Completion rate</h2></div>
         <div class="card-body">
             {% if campaign.total_enrolled %}
-            <div style="text-align:center;padding:20px 0;">
-                <div style="font-size:40px;font-weight:700;color:var(--accent-success);">{{ campaign.completion_rate }}%</div>
-                <div class="text-sm text-muted">{{ campaign.completed_count }} of {{ campaign.total_enrolled }} completed</div>
+            <div class="pd-big">
+                <div class="num good">{{ campaign.completion_rate }}%</div>
+                <div class="sub">{{ campaign.completed_count }} of {{ campaign.total_enrolled }} completed</div>
+                <div class="progress is-success" role="progressbar" aria-valuenow="{{ campaign.completion_rate }}" aria-valuemin="0" aria-valuemax="100" aria-label="Completion rate"><span style="width:{{ campaign.completion_rate }}%"></span></div>
             </div>
             {% else %}
             <div class="empty-state">
-                <i class="fas fa-magnifying-glass"></i>
+                <div class="empty-state-icon"><i class="fas fa-magnifying-glass" aria-hidden="true"></i></div>
                 <h3>No data to display</h3>
                 <p>Assign employees to this campaign to start tracking completion.</p>
             </div>
@@ -92,16 +85,17 @@
         </div>
     </div>
     <div class="card">
-        <div class="card-header"><h3>% Completed Within SLA</h3></div>
+        <div class="card-header"><h2 class="card-title">% Completed within SLA</h2></div>
         <div class="card-body">
             {% if completed_within_sla is not none %}
-            <div style="text-align:center;padding:20px 0;">
-                <div style="font-size:40px;font-weight:700;color:var(--accent-primary);">{{ completed_within_sla }}%</div>
-                <div class="text-sm text-muted">Completed within the {{ campaign.sla_days }}-day SLA</div>
+            <div class="pd-big">
+                <div class="num brand">{{ completed_within_sla }}%</div>
+                <div class="sub">Completed within the {{ campaign.sla_days }}-day SLA</div>
+                <div class="progress" role="progressbar" aria-valuenow="{{ completed_within_sla }}" aria-valuemin="0" aria-valuemax="100" aria-label="Completed within SLA"><span style="width:{{ completed_within_sla }}%"></span></div>
             </div>
             {% else %}
             <div class="empty-state">
-                <i class="fas fa-magnifying-glass"></i>
+                <div class="empty-state-icon"><i class="fas fa-magnifying-glass" aria-hidden="true"></i></div>
                 <h3>No data to display</h3>
                 <p>{% if not campaign.sla_days %}Set a campaign SLA in Settings to track this.{% else %}No completions recorded yet.{% endif %}</p>
             </div>
@@ -113,48 +107,56 @@
 {% elif tab == 'employees' %}
 <div class="card">
     <div class="card-header">
-        <h3>Enrolled Employees ({{ enrollments|length }})</h3>
-        <button class="btn btn-sm btn-primary" onclick="document.getElementById('manageEmployeesBox').style.display='block'"><i class="fas fa-user-plus"></i> Manage Employees</button>
+        <div><h2 class="card-title">Enrolled employees</h2><div class="card-subtitle">{{ enrollments|length }} enrolled</div></div>
+        <button type="button" class="btn btn-sm btn-primary" id="manageEmployeesBtn" aria-expanded="false" aria-controls="manageEmployeesBox"><i class="fas fa-user-plus" aria-hidden="true"></i> Manage Employees</button>
     </div>
-    <div id="manageEmployeesBox" style="display:none;padding:16px 20px;border-bottom:1px solid var(--border-color);">
+    <div id="manageEmployeesBox" class="pd-manage" hidden>
         <form method="POST" action="{{ url_for('people.update_campaign_employees', campaign_id=campaign.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="flex gap-12 mb-16" style="flex-wrap:wrap;max-height:180px;overflow-y:auto;">
-                {% for e in all_employees %}
-                <label class="form-check" style="width:auto;">
-                    <input type="checkbox" name="employee_ids" value="{{ e.id }}" {% if e.id in enrolled_ids %}checked{% endif %}> {{ e.name }}
-                </label>
-                {% else %}
-                <span class="text-sm text-muted">No employees exist yet.</span>
-                {% endfor %}
-            </div>
+            <fieldset class="pd-fieldset">
+                <legend>Select employees to enroll</legend>
+                <div class="pd-check-list pd-scroll mb-16">
+                    {% for e in all_employees %}
+                    <label class="form-check">
+                        <input type="checkbox" name="employee_ids" value="{{ e.id }}" {% if e.id in enrolled_ids %}checked{% endif %}> {{ e.name }}
+                    </label>
+                    {% else %}
+                    <span class="text-sm text-muted">No employees exist yet.</span>
+                    {% endfor %}
+                </div>
+            </fieldset>
             <button type="submit" class="btn btn-sm btn-primary">Save</button>
         </form>
     </div>
     <div class="card-body no-padding">
         {% if enrollments %}
-        <table>
-            <thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Completed On</th><th></th></tr></thead>
-            <tbody>
-                {% for e in enrollments %}
-                <tr>
-                    <td class="font-semibold">{{ e.employee.name }}</td>
-                    <td class="text-sm text-muted">{{ e.employee.department or '-' }}</td>
-                    <td><span class="badge {% if e.completed %}badge-success{% else %}badge-neutral{% endif %}">{{ 'Completed' if e.completed else 'Pending' }}</span></td>
-                    <td class="text-sm text-muted">{{ e.completed_at.strftime('%d %b %Y') if e.completed_at else '-' }}</td>
-                    <td>
-                        <form method="POST" action="{{ url_for('people.toggle_enrollment_completed', campaign_id=campaign.id, enrollment_id=e.id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-secondary">{{ 'Mark Pending' if e.completed else 'Mark Complete' }}</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-container">
+            <table class="table-sortable">
+                <thead><tr><th data-sort="text">Employee</th><th data-sort="text">Department</th><th data-sort="text">Status</th><th data-sort="text">Completed on</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    {% for e in enrollments %}
+                    <tr>
+                        <td class="cell-title">{{ e.employee.name }}</td>
+                        <td class="text-sm text-muted">{{ e.employee.department or '-' }}</td>
+                        <td>
+                            {% if e.completed %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>Completed</span>
+                            {% else %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>Pending</span>{% endif %}
+                        </td>
+                        <td class="text-sm text-muted">{{ e.completed_at.strftime('%d %b %Y') if e.completed_at else '-' }}</td>
+                        <td class="actions">
+                            <form method="POST" action="{{ url_for('people.toggle_enrollment_completed', campaign_id=campaign.id, enrollment_id=e.id) }}" class="pd-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-secondary">{{ 'Mark Pending' if e.completed else 'Mark Complete' }}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-users"></i>
+            <div class="empty-state-icon"><i class="fas fa-users" aria-hidden="true"></i></div>
             <h3>No employees enrolled</h3>
             <p>Click "Manage Employees" to enroll employees in this campaign.</p>
         </div>
@@ -166,23 +168,26 @@
 <div class="card">
     <div class="card-body no-padding">
         {% if audit_logs %}
-        <table>
-            <thead><tr><th>When</th><th>User</th><th>Action</th><th>Description</th></tr></thead>
-            <tbody>
-                {% for log in audit_logs %}
-                <tr>
-                    <td class="text-sm text-muted">{{ log.created_at.strftime('%d %b %Y %H:%M') if log.created_at else '-' }}</td>
-                    <td>{{ log.user.name if log.user else '-' }}</td>
-                    <td><span class="badge badge-info">{{ log.action }}</span></td>
-                    <td class="text-sm text-muted">{{ log.description or '-' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-container">
+            <table>
+                <thead><tr><th>When</th><th>User</th><th>Action</th><th>Description</th></tr></thead>
+                <tbody>
+                    {% for log in audit_logs %}
+                    <tr>
+                        <td class="text-sm text-muted pd-nowrap">{{ log.created_at.strftime('%d %b %Y %H:%M') if log.created_at else '-' }}</td>
+                        <td>{{ log.user.name if log.user else '-' }}</td>
+                        <td><span class="pill pill-info">{{ log.action }}</span></td>
+                        <td class="text-sm text-muted">{{ log.description or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
         <div class="empty-state">
             <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
             <h3>No activity yet</h3>
+            <p>Changes to this campaign will be recorded here.</p>
         </div>
         {% endif %}
     </div>
@@ -190,61 +195,83 @@
 
 {% elif tab == 'settings' %}
 <div class="card">
-    <div class="card-header"><h3>Campaign Settings</h3></div>
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('people.edit_training_campaign', campaign_id=campaign.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-header"><h2 class="card-title">Campaign settings</h2></div>
+    <form method="POST" action="{{ url_for('people.edit_training_campaign', campaign_id=campaign.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="card-body">
             <div class="form-group">
-                <label>Campaign Name <span class="required-star">*</span></label>
-                <input type="text" name="name" class="form-control" maxlength="100" value="{{ campaign.name }}" required>
+                <label for="settingsCampName">Campaign Name <span class="required-star">*</span></label>
+                <input type="text" id="settingsCampName" name="name" class="form-control" maxlength="100" value="{{ campaign.name }}" required>
             </div>
             <div class="form-group">
-                <label>Description (Optional)</label>
-                <textarea name="description" class="form-control" rows="3" maxlength="500">{{ campaign.description or '' }}</textarea>
+                <label for="settingsCampDescription">Description (Optional)</label>
+                <textarea id="settingsCampDescription" name="description" class="form-control" rows="3" maxlength="500">{{ campaign.description or '' }}</textarea>
             </div>
-            <div class="form-group">
-                <label>Training Selected</label>
+            <fieldset class="form-group pd-fieldset">
+                <legend>Training Selected</legend>
                 <p class="text-sm text-muted mb-8">Choose which training material from your library is attached to this campaign.</p>
                 <div class="material-picker-grid">
                     {% for m in materials %}
                     <label class="material-picker-card">
                         <input type="checkbox" name="material_ids" value="{{ m.id }}" {% if m in campaign.materials %}checked{% endif %}>
-                        <i class="fas {{ m.icon }}"></i>
+                        <i class="fas {{ m.icon }}" aria-hidden="true"></i>
                         <span>{{ m.title }}</span>
                     </label>
                     {% else %}
                     <div class="text-sm text-muted">Your training library is empty. Add materials from the Training Campaigns page first.</div>
                     {% endfor %}
                 </div>
-            </div>
+            </fieldset>
             <div class="grid-2">
                 <div class="form-group">
-                    <label>Launch Date &amp; Time <span class="required-star">*</span></label>
+                    <label for="settingsCampLaunch">Launch Date &amp; Time <span class="required-star">*</span></label>
                     <input type="datetime-local" name="launch_date" id="settingsCampLaunch" class="form-control" value="{{ campaign.launch_date or '' }}" required>
                 </div>
                 <div class="form-group">
-                    <label>Timezone</label>
-                    <select name="timezone" class="form-control">
+                    <label for="settingsCampTz">Timezone</label>
+                    <select name="timezone" id="settingsCampTz" class="form-control">
                         {% for tz in timezones %}<option value="{{ tz }}" {% if campaign.timezone == tz %}selected{% endif %}>{{ tz }}</option>{% endfor %}
                     </select>
                 </div>
             </div>
             <div class="grid-2">
                 <div class="form-group">
-                    <label>End Date &amp; Time</label>
+                    <label for="settingsCampEnd">End Date &amp; Time</label>
                     <input type="datetime-local" name="end_date" id="settingsCampEnd" class="form-control" value="{{ campaign.end_date or '' }}" {% if campaign.no_end_date %}disabled{% endif %}>
                 </div>
             </div>
             <label class="form-check mb-16">
-                <input type="checkbox" name="no_end_date" id="settingsCampNoEndDate" {% if campaign.no_end_date %}checked{% endif %} onchange="document.getElementById('settingsCampEnd').disabled = this.checked;"> This campaign does not have an end date
+                <input type="checkbox" name="no_end_date" id="settingsCampNoEndDate" {% if campaign.no_end_date %}checked{% endif %}> This campaign does not have an end date
             </label>
-            <label class="form-check mb-16">
-                <input type="checkbox" name="sla_enabled" id="settingsCampSlaEnabled" {% if campaign.sla_days %}checked{% endif %} onchange="document.getElementById('settingsCampSlaDays').disabled = !this.checked;"> Set a campaign SLA
-                <input type="number" name="sla_days" id="settingsCampSlaDays" class="form-control" style="width:90px;" min="1" value="{{ campaign.sla_days or 0 }}" {% if not campaign.sla_days %}disabled{% endif %}>
-            </label>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save Changes</button>
-        </form>
-    </div>
+            <div class="form-check pd-sla">
+                <input type="checkbox" name="sla_enabled" id="settingsCampSlaEnabled" {% if campaign.sla_days %}checked{% endif %}>
+                <label for="settingsCampSlaEnabled">Set a campaign SLA</label>
+                <input type="number" name="sla_days" id="settingsCampSlaDays" class="form-control pd-w-sm" min="1" value="{{ campaign.sla_days or 0 }}" aria-label="SLA days" {% if not campaign.sla_days %}disabled{% endif %}>
+            </div>
+        </div>
+        <div class="card-footer pd-save-bar">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save Changes</button>
+        </div>
+    </form>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var btn = document.getElementById('manageEmployeesBtn');
+    var box = document.getElementById('manageEmployeesBox');
+    if (btn && box) {
+        btn.addEventListener('click', function() {
+            box.hidden = !box.hidden;
+            btn.setAttribute('aria-expanded', box.hidden ? 'false' : 'true');
+        });
+    }
+    var noEnd = document.getElementById('settingsCampNoEndDate');
+    if (noEnd) noEnd.addEventListener('change', function() { document.getElementById('settingsCampEnd').disabled = this.checked; });
+    var sla = document.getElementById('settingsCampSlaEnabled');
+    if (sla) sla.addEventListener('change', function() { document.getElementById('settingsCampSlaDays').disabled = !this.checked; });
+})();
+</script>
 {% endblock %}
