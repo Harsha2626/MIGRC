@@ -1,62 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Access Reviews{% endblock %}
-{% block breadcrumb %}<span>Access Reviews</span>{% endblock %}
+{% block breadcrumb %}<span>People</span><span>/</span><span>Access Reviews</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-d.css') }}">
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">People</div>
         <h1>Access Reviews</h1>
-        <p>Validate and audit access privileges across integrated platforms</p>
+        <p>Validate and audit access privileges across integrated platforms.</p>
     </div>
     <div class="page-actions">
         {% if tab == 'reviews' %}
-        <button class="btn btn-primary" onclick="showAddReviewModal()"><i class="fas fa-plus"></i> Add Review</button>
+        <button type="button" class="btn btn-primary" onclick="showAddReviewModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Review</button>
         {% endif %}
     </div>
 </div>
 
-<div class="tabs">
-    <a href="{{ url_for('people.access_reviews', tab='reviews') }}" class="tab {% if tab == 'reviews' %}active{% endif %}">Reviews</a>
-    <a href="{{ url_for('people.access_reviews', tab='applications') }}" class="tab {% if tab == 'applications' %}active{% endif %}">Applications</a>
-    <a href="{{ url_for('people.access_reviews', tab='chart') }}" class="tab {% if tab == 'chart' %}active{% endif %}">Access Chart</a>
+<div class="tabs" role="navigation" aria-label="Access review views">
+    <a href="{{ url_for('people.access_reviews', tab='reviews') }}" class="tab {% if tab == 'reviews' %}active{% endif %}" {% if tab == 'reviews' %}aria-current="page"{% endif %}>Reviews</a>
+    <a href="{{ url_for('people.access_reviews', tab='applications') }}" class="tab {% if tab == 'applications' %}active{% endif %}" {% if tab == 'applications' %}aria-current="page"{% endif %}>Applications</a>
+    <a href="{{ url_for('people.access_reviews', tab='chart') }}" class="tab {% if tab == 'chart' %}active{% endif %}" {% if tab == 'chart' %}aria-current="page"{% endif %}>Access Chart</a>
 </div>
 
 {% if tab == 'reviews' %}
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-file-circle-plus"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Created</div>
-            <div class="stat-value">{{ created_count }}</div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-file-circle-plus" aria-hidden="true"></i> Created</div>
+        <div class="kpi-value">{{ created_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-spinner"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">In Progress</div>
-            <div class="stat-value">{{ in_progress_count }}</div>
-        </div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-spinner" aria-hidden="true"></i> In progress</div>
+        <div class="kpi-value">{{ in_progress_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-clock"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Overdue</div>
-            <div class="stat-value">{{ overdue_count }}</div>
-        </div>
+    <div class="kpi kpi-accent-danger">
+        <div class="kpi-label"><i class="fas fa-clock" aria-hidden="true"></i> Overdue</div>
+        <div class="kpi-value">{{ overdue_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon purple"><i class="fas fa-box-archive"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Archived</div>
-            <div class="stat-value">{{ archived_count }}</div>
-        </div>
+    <div class="kpi">
+        <div class="kpi-label"><i class="fas fa-box-archive" aria-hidden="true"></i> Archived</div>
+        <div class="kpi-value">{{ archived_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-circle-check"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Completed</div>
-            <div class="stat-value">{{ completed_count }}</div>
-        </div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-circle-check" aria-hidden="true"></i> Completed</div>
+        <div class="kpi-value">{{ completed_count }}</div>
     </div>
 </div>
 
@@ -64,60 +51,61 @@
     <div class="card-body no-padding">
         {% if reviews %}
         <div class="table-container">
-            <table>
+            <table class="table-sortable">
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Owner</th>
-                        <th>Status</th>
-                        <th>Review Period</th>
-                        <th>Apps in Review</th>
-                        <th>Recurrence</th>
-                        <th>Added On</th>
-                        <th>Actions</th>
+                        <th data-sort="text">Name</th>
+                        <th data-sort="text">Owner</th>
+                        <th data-sort="text">Status</th>
+                        <th>Review period</th>
+                        <th>Apps in review</th>
+                        <th data-sort="text">Recurrence</th>
+                        <th data-sort="text">Added</th>
+                        <th class="actions"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for r in reviews %}
                     <tr>
-                        <td class="font-semibold">{{ r.name }}</td>
+                        <td class="cell-title">{{ r.name }}</td>
                         <td class="text-muted">{{ r.owner or '-' }}</td>
                         <td>
-                            {% if r.status == 'Completed' %}<span class="badge badge-success">{{ r.status }}</span>
-                            {% elif r.status == 'In Progress' %}<span class="badge badge-primary">{{ r.status }}</span>
-                            {% elif r.status == 'Overdue' %}<span class="badge badge-danger">{{ r.status }}</span>
-                            {% elif r.status == 'Archived' %}<span class="badge badge-neutral">{{ r.status }}</span>
-                            {% else %}<span class="badge badge-info">{{ r.status }}</span>{% endif %}
+                            {% if r.status == 'Completed' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>{{ r.status }}</span>
+                            {% elif r.status == 'In Progress' %}<span class="pill pill-in-progress"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i>{{ r.status }}</span>
+                            {% elif r.status == 'Overdue' %}<span class="pill pill-overdue"><i class="fas fa-clock" aria-hidden="true"></i>{{ r.status }}</span>
+                            {% elif r.status == 'Archived' %}<span class="pill pill-archived"><i class="fas fa-box-archive" aria-hidden="true"></i>{{ r.status }}</span>
+                            {% else %}<span class="pill pill-info"><i class="fas fa-circle-info" aria-hidden="true"></i>{{ r.status }}</span>{% endif %}
                         </td>
-                        <td class="text-sm">{{ r.review_period_start }} &ndash; {{ r.review_period_end }}</td>
+                        <td class="text-sm pd-nowrap">{{ r.review_period_start }} &ndash; {{ r.review_period_end }}</td>
                         <td>
-                            <div class="flex gap-8">
+                            <div class="pd-actions">
                                 {% for app in r.applications %}
-                                <div class="stat-icon stat-icon-xs blue" title="{{ app.name }}"><i class="fab {{ app.name|vendor_icon }}" aria-hidden="true"></i></div>
+                                <span class="pd-app-icon" title="{{ app.name }}" role="img" aria-label="{{ app.name }}"><i class="fab {{ app.name|vendor_icon }}" aria-hidden="true"></i></span>
+                                {% else %}<span class="text-muted">&mdash;</span>
                                 {% endfor %}
                             </div>
                         </td>
                         <td class="text-muted">{{ r.recurrence }}</td>
-                        <td class="text-sm text-muted">{{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}</td>
-                        <td>
-                            <div class="flex gap-8">
+                        <td class="text-sm text-muted pd-nowrap">{{ r.created_at.strftime('%d %b %Y') if r.created_at else '-' }}</td>
+                        <td class="actions">
+                            <div class="pd-actions">
                                 {% if r.status != 'Completed' %}
-                                <form method="POST" action="{{ url_for('people.update_access_review_status', review_id=r.id) }}" style="display:inline;">
+                                <form method="POST" action="{{ url_for('people.update_access_review_status', review_id=r.id) }}" class="pd-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="status" value="Completed">
-                                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Mark Completed"><i class="fas fa-check"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Mark completed" aria-label="Mark {{ r.name }} completed"><i class="fas fa-check" aria-hidden="true"></i></button>
                                 </form>
                                 {% endif %}
                                 {% if r.status != 'Archived' %}
-                                <form method="POST" action="{{ url_for('people.update_access_review_status', review_id=r.id) }}" style="display:inline;">
+                                <form method="POST" action="{{ url_for('people.update_access_review_status', review_id=r.id) }}" class="pd-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="status" value="Archived">
-                                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Archive"><i class="fas fa-box-archive"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" title="Archive" aria-label="Archive {{ r.name }}"><i class="fas fa-box-archive" aria-hidden="true"></i></button>
                                 </form>
                                 {% endif %}
-                                <form method="POST" action="{{ url_for('people.delete_access_review', review_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Delete {{ r.name }}?');">
+                                <form method="POST" action="{{ url_for('people.delete_access_review', review_id=r.id) }}" class="pd-inline" data-confirm="Delete {{ r.name }}?" data-confirm-title="Delete access review" data-confirm-button="Delete">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete" aria-label="Delete {{ r.name }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
                                 </form>
                             </div>
                         </td>
@@ -131,7 +119,7 @@
             <div class="empty-state-icon"><i class="fas fa-user-lock" aria-hidden="true"></i></div>
             <h3>No access reviews yet</h3>
             <p>Create a recurring or one-time access review to validate who has access to your integrated applications.</p>
-            <button class="btn btn-primary btn-sm" onclick="showAddReviewModal()"><i class="fas fa-plus"></i> Add Review</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="showAddReviewModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Review</button>
         </div>
         {% endif %}
     </div>
@@ -140,38 +128,38 @@
 {% elif tab == 'applications' %}
 <div class="card">
     <div class="card-header">
-        <h3>Integrated Platforms</h3>
+        <div><h2 class="card-title">Integrated platforms</h2><div class="card-subtitle">Applications that can be included in a review</div></div>
         <a href="/vendors" class="btn btn-sm btn-secondary">Manage in Vendors</a>
     </div>
     <div class="card-body no-padding">
         {% if vendors %}
         <div class="table-container">
-            <table>
+            <table class="table-sortable">
                 <thead>
                     <tr>
-                        <th>Application</th>
-                        <th>Category</th>
-                        <th>Status</th>
-                        <th>Employees with Access</th>
-                        <th>Linked Reviews</th>
+                        <th data-sort="text">Application</th>
+                        <th data-sort="text">Category</th>
+                        <th data-sort="text">Status</th>
+                        <th data-sort="num" class="num">Employees with access</th>
+                        <th data-sort="num" class="num">Linked reviews</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for v in vendors %}
                     <tr>
                         <td>
-                            <div class="flex-center gap-8">
-                                <div class="stat-icon stat-icon-xs blue"><i class="fab {{ v.name|vendor_icon }}"></i></div>
-                                <span class="font-semibold">{{ v.name }}</span>
+                            <div class="pd-person">
+                                <span class="pd-app-icon" aria-hidden="true"><i class="fab {{ v.name|vendor_icon }}"></i></span>
+                                <span class="cell-title">{{ v.name }}</span>
                             </div>
                         </td>
                         <td class="text-muted">{{ v.category }}</td>
                         <td>
-                            {% if v.status == 'Approved' %}<span class="badge badge-success">{{ v.status }}</span>
-                            {% else %}<span class="badge badge-warning">{{ v.status }}</span>{% endif %}
+                            {% if v.status == 'Approved' %}<span class="pill pill-approved"><i class="fas fa-check" aria-hidden="true"></i>{{ v.status }}</span>
+                            {% else %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>{{ v.status }}</span>{% endif %}
                         </td>
-                        <td>{{ access_by_vendor.get(v.id, 0) }}</td>
-                        <td>{{ linked_reviews_by_vendor.get(v.id, 0) }}</td>
+                        <td class="num">{{ access_by_vendor.get(v.id, 0) }}</td>
+                        <td class="num">{{ linked_reviews_by_vendor.get(v.id, 0) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -190,11 +178,11 @@
 
 {% else %}
 <div class="card">
-    <div class="card-header"><h3>Employee Access per Application</h3></div>
+    <div class="card-header"><div><h2 class="card-title">Employee access per application</h2><div class="card-subtitle">Number of employees with access to each platform</div></div></div>
     <div class="card-body">
         {% if vendors %}
-        <div class="chart-container-wide" style="height:320px;">
-            <canvas id="accessChart"></canvas>
+        <div class="pd-chart-box">
+            <canvas id="accessChart" role="img" aria-label="Bar chart of employees with access per application"></canvas>
         </div>
         {% else %}
         <div class="empty-state">
@@ -210,29 +198,41 @@
 
 {% block scripts %}
 <script>
-{% if tab == 'chart' %}
-document.addEventListener('DOMContentLoaded', function() {
-    new Chart(document.getElementById('accessChart').getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: {{ chart_labels|tojson }},
-            datasets: [{
-                label: 'Employees with Access',
-                data: {{ chart_data|tojson }},
-                backgroundColor: '#2748c9',
-                borderRadius: 6,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+{% if tab == 'chart' and vendors %}
+(function() {
+    var chart = null;
+    function token(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+    function draw() {
+        var canvas = document.getElementById('accessChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+        if (chart) chart.destroy();
+        var text = token('--text-secondary'), grid = token('--border-light');
+        chart = new Chart(canvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: {{ chart_labels|tojson }},
+                datasets: [{
+                    label: 'Employees with Access',
+                    data: {{ chart_data|tojson }},
+                    backgroundColor: token('--accent-primary'),
+                    borderRadius: 6,
+                    maxBarThickness: 48
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: text }, grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1, color: text }, grid: { color: grid } }
+                }
             }
-        }
-    });
-});
+        });
+    }
+    document.addEventListener('DOMContentLoaded', draw);
+    document.addEventListener('themechange', draw);
+})();
 {% endif %}
 
 function showAddReviewModal() {
@@ -240,17 +240,17 @@ function showAddReviewModal() {
         <form id="addReviewForm" method="POST" action="{{ url_for('people.create_access_review') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Review Name</label>
-                <input type="text" name="name" class="form-control" placeholder="e.g., Q3 2026 Access Review" required>
+                <label for="arName">Review Name</label>
+                <input type="text" id="arName" name="name" class="form-control" placeholder="e.g., Q3 2026 Access Review" required>
             </div>
-            <div class="grid-2" style="margin-bottom:0;">
+            <div class="grid-2">
                 <div class="form-group">
-                    <label>Owner</label>
-                    <input type="text" name="owner" class="form-control" placeholder="e.g. Compliance Team">
+                    <label for="arOwner">Owner</label>
+                    <input type="text" id="arOwner" name="owner" class="form-control" placeholder="e.g. Compliance Team">
                 </div>
                 <div class="form-group">
-                    <label>Recurrence</label>
-                    <select name="recurrence" class="form-control">
+                    <label for="arRecurrence">Recurrence</label>
+                    <select id="arRecurrence" name="recurrence" class="form-control">
                         <option>Once</option>
                         <option>Monthly</option>
                         <option>Quarterly</option>
@@ -259,22 +259,22 @@ function showAddReviewModal() {
                     </select>
                 </div>
             </div>
-            <div class="grid-2" style="margin-bottom:0;">
+            <div class="grid-2">
                 <div class="form-group">
-                    <label>Review Period Start</label>
-                    <input type="date" name="review_period_start" class="form-control">
+                    <label for="arStart">Review Period Start</label>
+                    <input type="date" id="arStart" name="review_period_start" class="form-control">
                 </div>
                 <div class="form-group">
-                    <label>Review Period End</label>
-                    <input type="date" name="review_period_end" class="form-control">
+                    <label for="arEnd">Review Period End</label>
+                    <input type="date" id="arEnd" name="review_period_end" class="form-control">
                 </div>
             </div>
             <div class="form-group">
-                <label>Apps in Review</label>
+                <span class="form-label">Apps in Review</span>
                 {% if vendors %}
-                <div class="flex gap-12" style="flex-wrap:wrap;">
+                <div class="pd-check-list">
                     {% for v in vendors %}
-                    <label class="form-check" style="width:auto;">
+                    <label class="form-check">
                         <input type="checkbox" name="vendor_ids" value="{{ v.id }}"> {{ v.name }}
                     </label>
                     {% endfor %}

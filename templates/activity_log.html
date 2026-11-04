@@ -1,58 +1,63 @@
 {% extends "base.html" %}
 {% block title %}Audit Trail{% endblock %}
-{% block breadcrumb %}<span>Settings</span> / <span>Audit Trail</span>{% endblock %}
+{% block breadcrumb %}<a href="/settings">Settings</a><span>/</span><span>Audit Trail</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-d.css') }}">
+{% set has_filters = selected_entity_type or selected_action or selected_user_id %}
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Settings</div>
         <h1>Audit Trail</h1>
-        <p>Complete activity log across the platform for compliance and audit evidence</p>
+        <p>Complete activity log across the platform for compliance and audit evidence.</p>
     </div>
     <div class="page-actions">
-        <a href="/settings/activity-log/export" class="btn btn-secondary"><i class="fas fa-download"></i> Export CSV</a>
-        <a href="/settings" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Settings</a>
+        <a href="/settings" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Settings</a>
+        <a href="/settings/activity-log/export" class="btn btn-primary"><i class="fas fa-download" aria-hidden="true"></i> Export CSV</a>
     </div>
 </div>
 
-<div class="toolbar">
-    <form method="GET" action="/settings/activity-log" style="display:flex;gap:12px;flex-wrap:wrap;width:100%;">
-        <select class="filter-select" name="entity_type" onchange="this.form.submit()">
-            <option value="">All Entity Types</option>
-            {% for et in entity_types %}
-            <option value="{{ et }}" {% if et == selected_entity_type %}selected{% endif %}>{{ et }}</option>
-            {% endfor %}
-        </select>
-        <select class="filter-select" name="action" onchange="this.form.submit()">
-            <option value="">All Actions</option>
-            {% for a in actions %}
-            <option value="{{ a }}" {% if a == selected_action %}selected{% endif %}>{{ a }}</option>
-            {% endfor %}
-        </select>
-        <select class="filter-select" name="user_id" onchange="this.form.submit()">
-            <option value="">All Users</option>
-            {% for u in users %}
-            <option value="{{ u.id }}" {% if selected_user_id|string == u.id|string %}selected{% endif %}>{{ u.name }}</option>
-            {% endfor %}
-        </select>
-        {% if selected_entity_type or selected_action or selected_user_id %}
-        <a href="/settings/activity-log" class="btn btn-secondary">Clear Filters</a>
-        {% endif %}
-    </form>
-</div>
+<form method="GET" action="/settings/activity-log" class="filter-bar" role="search" aria-label="Filter audit trail">
+    <select class="filter-select" name="entity_type" aria-label="Entity type" onchange="this.form.submit()">
+        <option value="">All Entity Types</option>
+        {% for et in entity_types %}
+        <option value="{{ et }}" {% if et == selected_entity_type %}selected{% endif %}>{{ et }}</option>
+        {% endfor %}
+    </select>
+    <select class="filter-select" name="action" aria-label="Action" onchange="this.form.submit()">
+        <option value="">All Actions</option>
+        {% for a in actions %}
+        <option value="{{ a }}" {% if a == selected_action %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+    </select>
+    <select class="filter-select" name="user_id" aria-label="User" onchange="this.form.submit()">
+        <option value="">All Users</option>
+        {% for u in users %}
+        <option value="{{ u.id }}" {% if selected_user_id|string == u.id|string %}selected{% endif %}>{{ u.name }}</option>
+        {% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-secondary btn-sm">Apply</button></noscript>
+    <span class="spacer"></span>
+    <span class="pd-status-note" role="status">{{ total }} entr{{ 'y' if total == 1 else 'ies' }}</span>
+    {% if has_filters %}
+    <a href="/settings/activity-log" class="btn btn-ghost btn-sm"><i class="fas fa-xmark" aria-hidden="true"></i> Clear filters</a>
+    {% endif %}
+</form>
 
 <div class="card">
     <div class="card-body no-padding">
+        {% if entries %}
         <div class="table-container">
-            <table>
+            <table class="table-sortable">
                 <thead>
-                    <tr><th>When</th><th>User</th><th>Action</th><th>Entity Type</th><th>Entity Name</th><th>Description</th></tr>
+                    <tr><th data-sort="text">When</th><th data-sort="text">User</th><th data-sort="text">Action</th><th data-sort="text">Entity type</th><th data-sort="text">Entity name</th><th>Description</th></tr>
                 </thead>
                 <tbody>
                     {% for e in entries %}
                     <tr>
-                        <td class="text-sm text-muted" style="white-space:nowrap;">{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
+                        <td class="text-sm text-muted pd-nowrap">{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
                         <td>{{ e.user.name if e.user else '-' }}</td>
-                        <td><span class="badge badge-info">{{ e.action }}</span></td>
+                        <td><span class="pill pill-info">{{ e.action }}</span></td>
                         <td>{{ e.entity_type }}</td>
                         <td>{{ e.entity_name or '-' }}</td>
                         <td class="text-sm text-muted">{{ e.description or '-' }}</td>
@@ -60,36 +65,38 @@
                     {% endfor %}
                 </tbody>
             </table>
-            {% if not entries %}
-            <div class="empty-state">
-                <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
-                <h3>No activity recorded yet</h3>
-                <p>{% if selected_entity_type or selected_action or selected_user_id %}No entries match the current filters.{% else %}Actions taken across the platform will show up here for compliance and audit evidence.{% endif %}</p>
-                {% if selected_entity_type or selected_action or selected_user_id %}
-                <a href="/settings/activity-log" class="btn btn-sm btn-secondary">Clear Filters</a>
-                {% endif %}
-            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
+            <h3>No activity recorded yet</h3>
+            <p>{% if has_filters %}No entries match the current filters.{% else %}Actions taken across the platform will show up here for compliance and audit evidence.{% endif %}</p>
+            {% if has_filters %}
+            <a href="/settings/activity-log" class="btn btn-sm btn-secondary">Clear Filters</a>
             {% endif %}
         </div>
-    </div>
-</div>
+        {% endif %}
 
-{% set total_pages = ((total - 1) // per_page) + 1 if total > 0 else 1 %}
-{% if total_pages > 1 %}
-<div class="flex-between mt-16">
-    <span class="text-sm text-muted">Showing page {{ current_page }} of {{ total_pages }} ({{ total }} entries)</span>
-    {% set qs = '&entity_type=' + selected_entity_type + '&action=' + selected_action + '&user_id=' + (selected_user_id|string) %}
-    <div class="pagination">
-        <button type="button" class="pagination-btn" {% if current_page <= 1 %}disabled{% else %}onclick="window.location='?page={{ current_page - 1 }}{{ qs }}'"{% endif %} aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
-        {% for p in range(1, total_pages + 1) %}
-            {% if p == 1 or p == total_pages or (p >= current_page - 2 and p <= current_page + 2) %}
-        <button type="button" class="pagination-btn{{ ' active' if p == current_page else '' }}" onclick="window.location='?page={{ p }}{{ qs }}'">{{ p }}</button>
-            {% elif p == current_page - 3 or p == current_page + 3 %}
-        <span class="pagination-btn" style="border:none;background:none;cursor:default;">&hellip;</span>
-            {% endif %}
-        {% endfor %}
-        <button type="button" class="pagination-btn" {% if current_page >= total_pages %}disabled{% else %}onclick="window.location='?page={{ current_page + 1 }}{{ qs }}'"{% endif %} aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+        {% set total_pages = ((total - 1) // per_page) + 1 if total > 0 else 1 %}
+        {% if total_pages > 1 %}
+        {% set qs = '&entity_type=' + selected_entity_type + '&action=' + selected_action + '&user_id=' + (selected_user_id|string) %}
+        <nav class="pagination pd-pagination" aria-label="Pagination">
+            <span>Page {{ current_page }} of {{ total_pages }} ({{ total }} entries)</span>
+            <span class="cluster">
+                {% if current_page <= 1 %}<span class="pagination-btn" aria-disabled="true" aria-label="Previous page" disabled><i class="fas fa-chevron-left" aria-hidden="true"></i></span>
+                {% else %}<a class="pagination-btn" href="?page={{ current_page - 1 }}{{ qs }}" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></a>{% endif %}
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == 1 or p == total_pages or (p >= current_page - 2 and p <= current_page + 2) %}
+                <a class="pagination-btn{{ ' active' if p == current_page else '' }}" href="?page={{ p }}{{ qs }}" {% if p == current_page %}aria-current="page"{% endif %} aria-label="Page {{ p }}">{{ p }}</a>
+                    {% elif p == current_page - 3 or p == current_page + 3 %}
+                <span aria-hidden="true">&hellip;</span>
+                    {% endif %}
+                {% endfor %}
+                {% if current_page >= total_pages %}<span class="pagination-btn" aria-disabled="true" aria-label="Next page" disabled><i class="fas fa-chevron-right" aria-hidden="true"></i></span>
+                {% else %}<a class="pagination-btn" href="?page={{ current_page + 1 }}{{ qs }}" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+            </span>
+        </nav>
+        {% endif %}
     </div>
 </div>
-{% endif %}
 {% endblock %}

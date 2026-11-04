@@ -3,76 +3,86 @@
 {% block breadcrumb %}<span>Reports</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-d.css') }}">
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">External</div>
         <h1>Reports</h1>
-        <p>Download compliance, executive, and audit-readiness reports</p>
+        <p>Download compliance, executive, and audit-readiness reports as PDF.</p>
     </div>
 </div>
 
-<div class="card mb-16">
-    <div class="card-header"><h3>Executive Summary</h3></div>
-    <div class="card-body">
-        <div class="feature-row">
-            <div class="feature-row-body">
-                <div class="stat-icon stat-icon-md blue"><i class="fas fa-chart-pie" aria-hidden="true"></i></div>
-                <div>
-                    <div class="feature-row-title">Dashboard Snapshot</div>
-                    <div class="feature-row-desc">Current compliance score, risk posture, and KPIs in one PDF</div>
+<div class="stack">
+    <div class="card">
+        <div class="card-header"><div><h2 class="card-title">Executive summary</h2><div class="card-subtitle">For leadership and board updates</div></div></div>
+        <div class="card-body">
+            <div class="pd-report">
+                <div class="pd-report-main">
+                    <div class="pd-report-icon" aria-hidden="true"><i class="fas fa-chart-pie"></i></div>
+                    <div>
+                        <div class="pd-report-title">Dashboard snapshot</div>
+                        <div class="pd-report-desc">Current compliance score, risk posture, and KPIs in one PDF</div>
+                    </div>
                 </div>
+                <a href="/reports/dashboard.pdf" class="btn btn-primary"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</a>
             </div>
-            <a href="/reports/dashboard.pdf" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
         </div>
     </div>
-</div>
 
-<div class="card mb-16">
-    <div class="card-header"><h3>Framework Compliance Reports</h3></div>
-    <div class="card-body no-padding">
-        {% if frameworks %}
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr><th>Framework</th><th>Compliance Score</th><th>Controls</th><th></th></tr>
-                </thead>
-                <tbody>
-                    {% for fw in frameworks %}
-                    <tr>
-                        <td class="font-semibold">{{ fw.name }}</td>
-                        <td><span class="badge badge-info">{{ fw.compliance_score }}%</span></td>
-                        <td class="text-sm text-muted">{{ fw.total_controls }} controls</td>
-                        <td><a href="/compliance/{{ fw.id }}/report.pdf" class="btn btn-sm btn-secondary"><i class="fas fa-file-pdf"></i> Download</a></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-clipboard-check"></i>
-            <h3>No frameworks yet</h3>
-            <p>Add a compliance framework to generate reports.</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header"><h3>Audit Readiness</h3></div>
-    <div class="card-body">
-        <div class="feature-row">
-            <div class="feature-row-body">
-                <div class="stat-icon stat-icon-md purple"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
-                <div>
-                    <div class="feature-row-title">SOC 2 Readiness Report</div>
-                    <div class="feature-row-desc">Trust Service Criteria coverage summary for auditor handoff</div>
-                </div>
+    <div class="card">
+        <div class="card-header"><div><h2 class="card-title">Framework compliance reports</h2><div class="card-subtitle">One report per framework you have adopted</div></div></div>
+        <div class="card-body no-padding">
+            {% if frameworks %}
+            <div class="table-container">
+                <table class="table-sortable">
+                    <thead>
+                        <tr><th data-sort="text">Framework</th><th data-sort="num">Compliance score</th><th data-sort="num" class="num">Controls</th><th class="actions"><span class="sr-only">Download</span></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for fw in frameworks %}
+                        <tr>
+                            <td class="cell-title">{{ fw.name }}</td>
+                            <td data-value="{{ fw.compliance_score }}">
+                                <div class="pd-score">
+                                    <div class="progress {% if fw.compliance_score >= 80 %}is-success{% elif fw.compliance_score < 50 %}is-danger{% else %}is-warning{% endif %}" role="progressbar" aria-valuenow="{{ fw.compliance_score }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ fw.name }} compliance score"><span style="width:{{ fw.compliance_score }}%"></span></div>
+                                    <span>{{ fw.compliance_score }}%</span>
+                                </div>
+                            </td>
+                            <td class="num text-muted" data-value="{{ fw.total_controls }}">{{ fw.total_controls }}</td>
+                            <td class="actions"><a href="/compliance/{{ fw.id }}/report.pdf" class="btn btn-sm btn-secondary" aria-label="Download {{ fw.name }} report"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            {% if soc2 %}
-            <a href="/reports/soc2-readiness.pdf" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
             {% else %}
-            <span class="badge badge-neutral">SOC 2 not configured</span>
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></div>
+                <h3>No frameworks yet</h3>
+                <p>Add a compliance framework to generate reports.</p>
+                <a href="/compliance" class="btn btn-primary btn-sm">Go to Compliance</a>
+            </div>
             {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><div><h2 class="card-title">Audit readiness</h2><div class="card-subtitle">Hand-off material for auditors</div></div></div>
+        <div class="card-body">
+            <div class="pd-report">
+                <div class="pd-report-main">
+                    <div class="pd-report-icon violet" aria-hidden="true"><i class="fas fa-shield-halved"></i></div>
+                    <div>
+                        <div class="pd-report-title">SOC 2 readiness report</div>
+                        <div class="pd-report-desc">Trust Service Criteria coverage summary for auditor handoff</div>
+                    </div>
+                </div>
+                {% if soc2 %}
+                <a href="/reports/soc2-readiness.pdf" class="btn btn-primary"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</a>
+                {% else %}
+                <span class="pill pill-neutral"><i class="fas fa-ban" aria-hidden="true"></i>SOC 2 not configured</span>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>

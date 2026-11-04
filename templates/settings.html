@@ -3,250 +3,233 @@
 {% block breadcrumb %}<span>Settings</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-d.css') }}">
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">{{ current_org.name if current_org else 'Workspace' }}</div>
         <h1>Settings</h1>
-        <p>Configure your organization and platform preferences</p>
+        <p>Configure your organization and platform preferences.</p>
+    </div>
+    <div class="page-actions">
+        <a href="/settings/activity-log" class="btn btn-secondary"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Audit Trail</a>
     </div>
 </div>
 
-<div class="settings-grid">
-    <!-- Settings Nav -->
-    <div class="card" style="height:fit-content;">
-        <div class="card-body" style="padding:12px;">
-            <div class="settings-nav" role="tablist" aria-label="Settings sections" onkeydown="handleSettingsTabKeydown(event)">
-                <div class="settings-nav-item active" id="tab-general" role="tab" aria-selected="true" aria-controls="panel-general" tabindex="0" onclick="switchSettings(this, 'general')">
-                    <i class="fas fa-building" aria-hidden="true"></i> Organization
-                </div>
-                <div class="settings-nav-item" id="tab-notifications" role="tab" aria-selected="false" aria-controls="panel-notifications" tabindex="-1" onclick="switchSettings(this, 'notifications')">
-                    <i class="fas fa-bell" aria-hidden="true"></i> Notifications
-                </div>
-                <div class="settings-nav-item" id="tab-users" role="tab" aria-selected="false" aria-controls="panel-users" tabindex="-1" onclick="switchSettings(this, 'users')">
-                    <i class="fas fa-users" aria-hidden="true"></i> Users & Roles
-                </div>
-                <a href="/settings/activity-log" class="settings-nav-item" role="link">
-                    <i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Audit Trail
-                </a>
-            </div>
+<div class="pd-settings" data-tabs>
+    <div class="pd-settings-nav">
+        <div class="tabs" role="tablist" aria-label="Settings sections" aria-orientation="vertical" id="settingsTablist">
+            <button type="button" class="tab active" id="tab-general" role="tab" data-tab="general" aria-controls="panel-general"><i class="fas fa-building" aria-hidden="true"></i> Organization</button>
+            <button type="button" class="tab" id="tab-notifications" role="tab" data-tab="notifications" aria-controls="panel-notifications"><i class="fas fa-bell" aria-hidden="true"></i> Notifications</button>
+            <button type="button" class="tab" id="tab-users" role="tab" data-tab="users" aria-controls="panel-users"><i class="fas fa-users" aria-hidden="true"></i> Users &amp; Roles</button>
         </div>
     </div>
 
-    <!-- Settings Content -->
     <div>
         <!-- General Settings -->
-        <div class="settings-panel active" id="panel-general" role="tabpanel" aria-labelledby="tab-general" tabindex="0">
+        <div class="tab-panel" data-panel="general" id="panel-general" role="tabpanel" aria-labelledby="tab-general">
             <div class="card">
                 <div class="card-header">
-                    <h3>Organization Info</h3>
-                    <div class="flex gap-8">
-                        <a href="/settings/activity-log" class="btn btn-sm btn-secondary"><i class="fas fa-clock-rotate-left"></i> Audit Log</a>
-                        <button class="btn btn-sm btn-primary" onclick="showToast('Organization settings saved successfully','success')">Save Changes</button>
-                    </div>
+                    <div><h2 class="card-title">Organization</h2><div class="card-subtitle">How your company appears across MIGRC and in reports</div></div>
                 </div>
-                <div class="card-body">
 
-                    <div class="form-group">
-                        <label>Organization Logo <span class="required-star">*</span></label>
-                        <div class="flex-center gap-12">
-                            <div class="logo-upload-box">
-                                <img id="orgLogoPreview" style="display:none;" alt="Organization logo">
-                                <i class="fas fa-building" id="orgLogoFallback"></i>
-                            </div>
-                            <div>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('orgLogoInput').click()">Replace Logo</button>
-                                <div class="text-sm text-muted mt-4">Select a file (Max size 2MB)</div>
-                            </div>
-                            <input type="file" id="orgLogoInput" accept="image/*" style="display:none;" onchange="previewOrgLogo(this)">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Organization Name <span class="required-star">*</span></label>
-                        <input type="text" class="form-control" id="orgName" maxlength="100" value="Midevops_NFR-POC" oninput="updateFieldCounter('orgName','orgNameCount',100)">
-                        <div class="field-counter" id="orgNameCount">16/100</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Legal Name <span class="required-star">*</span></label>
-                        <input type="text" class="form-control" id="orgLegalName" maxlength="100" value="Midevops Services Pvt Ltd" oninput="updateFieldCounter('orgLegalName','orgLegalNameCount',100)">
-                        <div class="field-counter" id="orgLegalNameCount">26/100</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Company URL</label>
-                        <input type="text" class="form-control" id="orgUrl" maxlength="200" value="https://www.midevops.io" oninput="updateFieldCounter('orgUrl','orgUrlCount',200)">
-                        <div class="field-counter" id="orgUrlCount">23/200</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Work Arrangement <span class="required-star">*</span></label>
-                        <div class="radio-card-group">
-                            <label class="radio-card"><input type="radio" name="work_arrangement" value="Remote"> Remote</label>
-                            <label class="radio-card"><input type="radio" name="work_arrangement" value="Hybrid"> Hybrid</label>
-                            <label class="radio-card selected"><input type="radio" name="work_arrangement" value="Office" checked> Office</label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Business Address</label>
-                        <textarea class="form-control" id="orgAddress" maxlength="500" rows="3" placeholder="Enter your registered business address" oninput="updateFieldCounter('orgAddress','orgAddressCount',500)"></textarea>
-                        <div class="field-counter" id="orgAddressCount">0/500</div>
-                    </div>
-
-                    <div class="grid-2" style="margin-bottom:0;">
+                <section class="pd-section" aria-labelledby="sec-identity">
+                    <div><h3 id="sec-identity">Identity</h3><p class="hint">Logo and names shown on reports and the Trust Center.</p></div>
+                    <div>
                         <div class="form-group">
-                            <label>Industry</label>
-                            <select class="form-control">
-                                <option>Technology / SaaS</option>
-                                <option selected>Information Technology</option>
-                                <option>Healthcare</option>
-                                <option>Finance</option>
-                                <option>Retail</option>
-                                <option>Manufacturing</option>
-                            </select>
+                            <span class="form-label" id="logoLabel">Organization Logo <span class="required-star">*</span></span>
+                            <div class="pd-logo-row" role="group" aria-labelledby="logoLabel">
+                                <div class="logo-upload-box">
+                                    <img id="orgLogoPreview" hidden alt="Organization logo preview">
+                                    <i class="fas fa-building" id="orgLogoFallback" aria-hidden="true"></i>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('orgLogoInput').click()">Replace Logo</button>
+                                    <div class="form-help">Select an image (max size 2MB)</div>
+                                </div>
+                                <input type="file" id="orgLogoInput" accept="image/*" hidden aria-label="Organization logo file" onchange="previewOrgLogo(this)">
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label>Company Size</label>
-                            <select class="form-control">
-                                <option>1-50</option>
-                                <option selected>51-200</option>
-                                <option>201-500</option>
-                                <option>501-1000</option>
-                                <option>1000+</option>
+                            <label for="orgName">Organization Name <span class="required-star">*</span></label>
+                            <input type="text" class="form-control" id="orgName" maxlength="100" value="Midevops_NFR-POC" oninput="updateFieldCounter('orgName','orgNameCount',100)">
+                            <div class="field-counter" id="orgNameCount">16/100</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="orgLegalName">Legal Name <span class="required-star">*</span></label>
+                            <input type="text" class="form-control" id="orgLegalName" maxlength="100" value="Midevops Services Pvt Ltd" oninput="updateFieldCounter('orgLegalName','orgLegalNameCount',100)">
+                            <div class="field-counter" id="orgLegalNameCount">26/100</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="orgUrl">Company URL</label>
+                            <input type="text" class="form-control" id="orgUrl" maxlength="200" value="https://www.midevops.io" oninput="updateFieldCounter('orgUrl','orgUrlCount',200)">
+                            <div class="field-counter" id="orgUrlCount">23/200</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="pd-section" aria-labelledby="sec-profile">
+                    <div><h3 id="sec-profile">Business profile</h3><p class="hint">Used to tailor frameworks and recommendations.</p></div>
+                    <div>
+                        <fieldset class="form-group pd-fieldset">
+                            <legend>Work Arrangement <span class="required-star">*</span></legend>
+                            <div class="radio-card-group">
+                                <label class="radio-card"><input type="radio" name="work_arrangement" value="Remote"> Remote</label>
+                                <label class="radio-card"><input type="radio" name="work_arrangement" value="Hybrid"> Hybrid</label>
+                                <label class="radio-card selected"><input type="radio" name="work_arrangement" value="Office" checked> Office</label>
+                            </div>
+                        </fieldset>
+                        <div class="form-group">
+                            <label for="orgAddress">Business Address</label>
+                            <textarea class="form-control" id="orgAddress" maxlength="500" rows="3" placeholder="Enter your registered business address" oninput="updateFieldCounter('orgAddress','orgAddressCount',500)"></textarea>
+                            <div class="field-counter" id="orgAddressCount">0/500</div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label for="orgIndustry">Industry</label>
+                                <select class="form-control" id="orgIndustry">
+                                    <option>Technology / SaaS</option>
+                                    <option selected>Information Technology</option>
+                                    <option>Healthcare</option>
+                                    <option>Finance</option>
+                                    <option>Retail</option>
+                                    <option>Manufacturing</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="orgSize">Company Size</label>
+                                <select class="form-control" id="orgSize">
+                                    <option>1-50</option>
+                                    <option selected>51-200</option>
+                                    <option>201-500</option>
+                                    <option>501-1000</option>
+                                    <option>1000+</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="orgGeo">Geographic Scope</label>
+                            <select class="form-control" id="orgGeo" onchange="addGeoScopeTag(this)">
+                                <option value="">Add a region...</option>
+                                <option value="India">India</option>
+                                <option value="United States">United States</option>
+                                <option value="United Kingdom">United Kingdom</option>
+                                <option value="European Union">European Union</option>
+                                <option value="Global">Global</option>
                             </select>
+                            <div class="tag-list mt-8" id="geoScopeTags" aria-live="polite">
+                                <span class="chip" data-value="India">India <button type="button" aria-label="Remove India" onclick="this.parentElement.remove()"><i class="fas fa-times" aria-hidden="true"></i></button></span>
+                            </div>
                         </div>
                     </div>
+                </section>
 
-                    <div class="form-group">
-                        <label>Geographic Scope</label>
-                        <select class="form-control" onchange="addGeoScopeTag(this)">
-                            <option value="">Geographic Scope</option>
-                            <option value="India">India</option>
-                            <option value="United States">United States</option>
-                            <option value="United Kingdom">United Kingdom</option>
-                            <option value="European Union">European Union</option>
-                            <option value="Global">Global</option>
-                        </select>
-                        <div class="tag-list mt-8" id="geoScopeTags">
-                            <span class="chip" data-value="India">India <i class="fas fa-times" onclick="this.parentElement.remove()"></i></span>
+                <section class="pd-section" aria-labelledby="sec-locale">
+                    <div><h3 id="sec-locale">Locale &amp; contact</h3><p class="hint">Fiscal calendar, timezone and who we reach out to.</p></div>
+                    <div>
+                        <fieldset class="form-group pd-fieldset">
+                            <legend>Fiscal Year</legend>
+                            <div class="radio-card-group">
+                                <label class="radio-card selected"><input type="radio" name="fiscal_year" value="Jan-Dec" checked> January &ndash; December</label>
+                                <label class="radio-card"><input type="radio" name="fiscal_year" value="Apr-Mar"> April &ndash; March</label>
+                            </div>
+                        </fieldset>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label for="orgEmail">Primary Contact Email</label>
+                                <input type="email" class="form-control" id="orgEmail" value="admin@midevops.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="orgTz">Timezone</label>
+                                <select class="form-control" id="orgTz">
+                                    <option selected>Asia/Kolkata (IST, UTC+5:30)</option>
+                                    <option>US/Eastern (EST, UTC-5)</option>
+                                    <option>US/Pacific (PST, UTC-8)</option>
+                                    <option>Europe/London (GMT, UTC+0)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
+                </section>
 
-                    <div class="form-group">
-                        <label>Fiscal Year</label>
-                        <div class="radio-card-group">
-                            <label class="radio-card selected"><input type="radio" name="fiscal_year" value="Jan-Dec" checked> January &ndash; December</label>
-                            <label class="radio-card"><input type="radio" name="fiscal_year" value="Apr-Mar"> April &ndash; March</label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Primary Contact Email</label>
-                        <input type="email" class="form-control" value="admin@midevops.com">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Timezone</label>
-                        <select class="form-control">
-                            <option selected>Asia/Kolkata (IST, UTC+5:30)</option>
-                            <option>US/Eastern (EST, UTC-5)</option>
-                            <option>US/Pacific (PST, UTC-8)</option>
-                            <option>Europe/London (GMT, UTC+0)</option>
-                        </select>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="showToast('Organization settings saved successfully','success')">Save Changes</button>
+                <div class="pd-save-bar">
+                    <button type="button" class="btn btn-primary" onclick="showToast('Organization settings saved successfully','success')"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save Changes</button>
                 </div>
             </div>
         </div>
 
         <!-- Notifications -->
-        <div class="settings-panel" id="panel-notifications" role="tabpanel" aria-labelledby="tab-notifications" tabindex="0">
+        <div class="tab-panel" data-panel="notifications" id="panel-notifications" role="tabpanel" aria-labelledby="tab-notifications" hidden>
             <div class="card">
-                <div class="card-header"><h3>Notification Preferences</h3></div>
+                <div class="card-header"><div><h2 class="card-title">Notification preferences</h2><div class="card-subtitle">Choose which events alert you</div></div></div>
                 <div class="card-body">
-                    <div class="flex" style="flex-direction:column;gap:var(--space-2);">
-                        <div class="flex-between" style="padding:12px 0;border-bottom:1px solid var(--border-color);">
-                            <div>
-                                <div class="font-semibold text-sm">Compliance Alerts</div>
-                                <div class="text-sm text-muted">Notify when control status changes</div>
-                            </div>
-                            <label class="toggle" style="margin:0;" aria-label="Toggle compliance alerts">
-                                <input type="checkbox" checked>
-                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                            </label>
-                        </div>
-                        <div class="flex-between" style="padding:12px 0;border-bottom:1px solid var(--border-color);">
-                            <div>
-                                <div class="font-semibold text-sm">Risk Notifications</div>
-                                <div class="text-sm text-muted">Notify on new or escalated risks</div>
-                            </div>
-                            <label class="toggle" style="margin:0;" aria-label="Toggle risk notifications">
-                                <input type="checkbox" checked>
-                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                            </label>
-                        </div>
-                        <div class="flex-between" style="padding:12px 0;border-bottom:1px solid var(--border-color);">
-                            <div>
-                                <div class="font-semibold text-sm">Audit Reminders</div>
-                                <div class="text-sm text-muted">Remind about upcoming audit deadlines</div>
-                            </div>
-                            <label class="toggle" style="margin:0;" aria-label="Toggle audit reminders">
-                                <input type="checkbox" checked>
-                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                            </label>
-                        </div>
-                        <div class="flex-between" style="padding:12px 0;">
-                            <div>
-                                <div class="font-semibold text-sm">Policy Review Reminders</div>
-                                <div class="text-sm text-muted">Remind when policies are due for review</div>
-                            </div>
-                            <label class="toggle" style="margin:0;" aria-label="Toggle policy review reminders">
-                                <input type="checkbox">
-                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                            </label>
-                        </div>
+                    <div class="pd-pref">
+                        <div><div class="pd-pref-title" id="prefCompliance">Compliance alerts</div><div class="pd-pref-sub">Notify when control status changes</div></div>
+                        <label class="toggle"><input type="checkbox" checked aria-labelledby="prefCompliance"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
                     </div>
-                    <button class="btn btn-primary mt-16" onclick="showToast('Notification preferences saved','success')">Save Preferences</button>
+                    <div class="pd-pref">
+                        <div><div class="pd-pref-title" id="prefRisk">Risk notifications</div><div class="pd-pref-sub">Notify on new or escalated risks</div></div>
+                        <label class="toggle"><input type="checkbox" checked aria-labelledby="prefRisk"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+                    </div>
+                    <div class="pd-pref">
+                        <div><div class="pd-pref-title" id="prefAudit">Audit reminders</div><div class="pd-pref-sub">Remind about upcoming audit deadlines</div></div>
+                        <label class="toggle"><input type="checkbox" checked aria-labelledby="prefAudit"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+                    </div>
+                    <div class="pd-pref">
+                        <div><div class="pd-pref-title" id="prefPolicy">Policy review reminders</div><div class="pd-pref-sub">Remind when policies are due for review</div></div>
+                        <label class="toggle"><input type="checkbox" aria-labelledby="prefPolicy"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+                    </div>
+                </div>
+                <div class="pd-save-bar">
+                    <button type="button" class="btn btn-primary" onclick="showToast('Notification preferences saved','success')"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save Preferences</button>
                 </div>
             </div>
         </div>
 
         <!-- Users -->
-        <div class="settings-panel" id="panel-users" role="tabpanel" aria-labelledby="tab-users" tabindex="0">
+        <div class="tab-panel" data-panel="users" id="panel-users" role="tabpanel" aria-labelledby="tab-users" hidden>
             <div class="card">
                 <div class="card-header">
-                    <h3>Users & Roles</h3>
+                    <div><h2 class="card-title">Users &amp; roles</h2><div class="card-subtitle">{{ memberships|length if memberships else 0 }} member{{ '' if memberships and memberships|length == 1 else 's' }} in this organization</div></div>
                     {% if current_user.can_manage_users %}
-                    <button class="btn btn-sm btn-primary" onclick="openInviteUser()"><i class="fas fa-user-plus"></i> Invite User</button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="openInviteUser()"><i class="fas fa-user-plus" aria-hidden="true"></i> Invite User</button>
                     {% endif %}
                 </div>
                 <div class="card-body no-padding">
                     {% if memberships %}
-                    <table>
-                        <thead>
-                            <tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody>
-                            {% for m in memberships %}
-                            {% set u = m.user %}
-                            <tr>
-                                <td class="flex-center gap-8"><div class="avatar avatar-sm">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] if ' ' in u.name else '' }}</div> {{ u.name }}</td>
-                                <td>{{ u.email }}</td>
-                                <td><span class="badge {% if m.role == 'Admin' %}badge-primary{% elif m.role == 'Auditor' %}badge-neutral{% else %}badge-info{% endif %}">{{ m.role }}</span></td>
-                                <td><span class="badge {% if u.is_active_user %}badge-success{% else %}badge-neutral{% endif %}">{{ 'Active' if u.is_active_user else 'Inactive' }}</span></td>
-                                <td>{% if current_user.can_manage_users %}<button class="btn btn-sm btn-secondary btn-icon" title="Edit role" aria-label="Edit role for {{ u.name }}"><i class="fas fa-pen"></i></button>{% endif %}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-container">
+                        <table class="table-sortable">
+                            <thead>
+                                <tr><th data-sort="text">User</th><th data-sort="text">Email</th><th data-sort="text">Role</th><th data-sort="text">Status</th><th class="actions"><span class="sr-only">Actions</span></th></tr>
+                            </thead>
+                            <tbody>
+                                {% for m in memberships %}
+                                {% set u = m.user %}
+                                <tr>
+                                    <td>
+                                        <div class="pd-person">
+                                            <div class="avatar avatar-sm" aria-hidden="true">{{ u.name.split()[0][0] }}{{ u.name.split()[-1][0] if ' ' in u.name else '' }}</div>
+                                            <span class="cell-title">{{ u.name }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-muted">{{ u.email }}</td>
+                                    <td><span class="pill {% if m.role == 'Admin' %}pill-primary{% elif m.role == 'Auditor' %}pill-neutral{% else %}pill-info{% endif %}">{{ m.role }}</span></td>
+                                    <td>
+                                        {% if u.is_active_user %}<span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Active</span>
+                                        {% else %}<span class="pill pill-neutral"><i class="fas fa-ban" aria-hidden="true"></i>Inactive</span>{% endif %}
+                                    </td>
+                                    <td class="actions">{% if current_user.can_manage_users %}<button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit role" aria-label="Edit role for {{ u.name }}"><i class="fas fa-pen" aria-hidden="true"></i></button>{% endif %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
                     <div class="empty-state">
                         <div class="empty-state-icon"><i class="fas fa-users" aria-hidden="true"></i></div>
                         <h3>No users yet</h3>
                         <p>Invite your team to collaborate on your compliance program.</p>
                         {% if current_user.can_manage_users %}
-                        <button class="btn btn-primary btn-sm" onclick="openInviteUser()"><i class="fas fa-user-plus"></i> Invite User</button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="openInviteUser()"><i class="fas fa-user-plus" aria-hidden="true"></i> Invite User</button>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -268,11 +251,18 @@ function addGeoScopeTag(select) {
     const value = select.value;
     if (!value) return;
     const container = document.getElementById('geoScopeTags');
-    if (container.querySelector(`[data-value="${value}"]`)) { select.value = ''; return; }
+    const exists = Array.from(container.querySelectorAll('.chip')).some(c => c.dataset.value === value);
+    if (exists) { select.value = ''; return; }
     const chip = document.createElement('span');
     chip.className = 'chip';
     chip.dataset.value = value;
-    chip.innerHTML = `${value} <i class="fas fa-times" onclick="this.parentElement.remove()"></i>`;
+    chip.appendChild(document.createTextNode(value + ' '));
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Remove ' + value);
+    btn.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i>';
+    btn.addEventListener('click', () => chip.remove());
+    chip.appendChild(btn);
     container.appendChild(chip);
     select.value = '';
 }
@@ -288,8 +278,8 @@ function previewOrgLogo(input) {
     reader.onload = e => {
         const img = document.getElementById('orgLogoPreview');
         img.src = e.target.result;
-        img.style.display = '';
-        document.getElementById('orgLogoFallback').style.display = 'none';
+        img.hidden = false;
+        document.getElementById('orgLogoFallback').hidden = true;
     };
     reader.readAsDataURL(input.files[0]);
 }
@@ -303,52 +293,18 @@ document.querySelectorAll('.radio-card-group').forEach(group => {
     });
 });
 
-function switchSettings(el, panel) {
-    document.querySelectorAll('.settings-nav-item[role="tab"]').forEach(i => {
-        i.classList.remove('active');
-        i.setAttribute('aria-selected', 'false');
-        i.tabIndex = -1;
-    });
-    el.classList.add('active');
-    el.setAttribute('aria-selected', 'true');
-    el.tabIndex = 0;
-    document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('panel-' + panel).classList.add('active');
-}
-
-// Accessibility: the three settings sections are implemented as an ARIA
-// tabs widget (role="tablist"/"tab"/"tabpanel" above). Per the WAI-ARIA
-// Authoring Practices tabs pattern, arrow keys move between tabs (and
-// activate them), Home/End jump to the first/last tab, and Enter/Space
-// activates the focused tab - none of that came for free since these are
-// <div>s, not native <button>s.
-function handleSettingsTabKeydown(e) {
-    const tabs = Array.from(document.querySelectorAll('.settings-nav-item[role="tab"]'));
-    const current = document.activeElement;
-    const idx = tabs.indexOf(current);
-    if (idx === -1) return;
-
-    let next = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        next = tabs[(idx + 1) % tabs.length];
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        next = tabs[(idx - 1 + tabs.length) % tabs.length];
-    } else if (e.key === 'Home') {
-        next = tabs[0];
-    } else if (e.key === 'End') {
-        next = tabs[tabs.length - 1];
-    } else if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        current.click();
-        return;
-    } else {
-        return;
-    }
-    e.preventDefault();
-    const panel = next.getAttribute('aria-controls').replace('panel-', '');
-    switchSettings(next, panel);
-    next.focus();
-}
+// Vertical tablist: app.js wires Left/Right; add Up/Down, Home/End to match the ARIA tabs pattern.
+document.getElementById('settingsTablist').addEventListener('keydown', function(e) {
+    const tabs = Array.from(this.querySelectorAll('[role="tab"]'));
+    const i = tabs.indexOf(document.activeElement);
+    if (i === -1) return;
+    let n = null;
+    if (e.key === 'ArrowDown') n = tabs[(i + 1) % tabs.length];
+    else if (e.key === 'ArrowUp') n = tabs[(i - 1 + tabs.length) % tabs.length];
+    else if (e.key === 'Home') n = tabs[0];
+    else if (e.key === 'End') n = tabs[tabs.length - 1];
+    if (n) { e.preventDefault(); n.focus(); n.click(); }
+});
 
 function openInviteUser() {
     openModal('Invite User', `
@@ -364,7 +320,7 @@ function openInviteUser() {
             </div>
             <div class="form-group">
                 <label for="invitePassword">Password</label>
-                <input type="password" id="invitePassword" name="password" class="form-control" placeholder="Min 6 characters" required minlength="6">
+                <input type="password" id="invitePassword" name="password" class="form-control" placeholder="Min 6 characters" required minlength="6" autocomplete="new-password">
             </div>
             <div class="form-group">
                 <label for="inviteRole">Role</label>

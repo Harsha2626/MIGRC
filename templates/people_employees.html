@@ -1,196 +1,193 @@
 {% extends "base.html" %}
 {% block title %}Employees{% endblock %}
-{% block breadcrumb %}<span>Employees</span>{% endblock %}
+{% block breadcrumb %}<span>People</span><span>/</span><span>Employees</span>{% endblock %}
+
+{% macro donut(good, bad, center_label) -%}
+{% set total = good + bad %}
+{% set pct = ((good / total * 100)|round|int) if total else 0 %}
+<div class="pd-donut">
+    <svg viewBox="0 0 100 100" role="img" aria-label="{{ pct }}% {{ center_label }}">
+        <circle class="track" cx="50" cy="50" r="40" fill="none" stroke-width="12"></circle>
+        {% if total %}
+        <circle class="seg-bad" cx="50" cy="50" r="40" fill="none" stroke-width="12"></circle>
+        {% if good %}<circle class="seg-good" cx="50" cy="50" r="40" fill="none" stroke-width="12" pathLength="100" stroke-dasharray="{{ pct }} {{ 100 - pct }}"></circle>{% endif %}
+        {% endif %}
+    </svg>
+    <div class="pd-donut-center"><strong>{{ pct }}%</strong><span>{{ center_label }}</span></div>
+</div>
+{%- endmacro %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-d.css') }}">
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">People</div>
         <h1>Employees</h1>
-        <p>Track employee onboarding, device compliance, and policy acceptance</p>
+        <p>Track employee onboarding, device compliance, and policy acceptance.</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-primary" onclick="showAddEmployeeModal()"><i class="fas fa-plus"></i> Add Employee</button>
+        <button type="button" class="btn btn-primary" onclick="showAddEmployeeModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Employee</button>
     </div>
 </div>
 
-<div class="tabs">
-    <a href="{{ url_for('people.employees', tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}">Overview</a>
-    <a href="{{ url_for('people.employees', tab='all') }}" class="tab {% if tab == 'all' %}active{% endif %}">All Employees</a>
+<div class="tabs" role="navigation" aria-label="Employee views">
+    <a href="{{ url_for('people.employees', tab='overview') }}" class="tab {% if tab == 'overview' %}active{% endif %}" {% if tab == 'overview' %}aria-current="page"{% endif %}>Overview</a>
+    <a href="{{ url_for('people.employees', tab='all') }}" class="tab {% if tab == 'all' %}active{% endif %}" {% if tab == 'all' %}aria-current="page"{% endif %}>All Employees</a>
 </div>
 
 {% if tab == 'overview' %}
-<form method="get" style="margin-bottom:20px;">
+<form method="get" class="filter-bar">
     <input type="hidden" name="tab" value="overview">
-    <div class="flex-center gap-8">
-        <span class="text-sm font-semibold">Group:</span>
-        <select class="filter-select" name="group" onchange="this.form.submit()">
-            <option value="">All Employees</option>
-            {% for c in campaigns %}
-            <option value="{{ c.id }}" {% if selected_group == c.id|string %}selected{% endif %}>{{ c.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
+    <label for="overviewGroup" class="text-sm font-semibold">Group</label>
+    <select class="filter-select" id="overviewGroup" name="group" onchange="this.form.submit()">
+        <option value="">All Employees</option>
+        {% for c in campaigns %}
+        <option value="{{ c.id }}" {% if selected_group == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-secondary btn-sm">Apply</button></noscript>
 </form>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-list-check"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Employees with Pending Tasks</div>
-            <div class="stat-value">{{ pending_tasks_count }}<span class="stat-value-sub"> / {{ total_overview }}</span></div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-list-check" aria-hidden="true"></i> Employees with pending tasks</div>
+        <div class="kpi-value">{{ pending_tasks_count }}<small>/ {{ total_overview }}</small></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon blue"><i class="fas fa-desktop"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Monitoring Agent Installed</div>
-            <div class="stat-value">{{ monitoring_count }}<span class="stat-value-sub"> / {{ total_overview }}</span></div>
-        </div>
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-desktop" aria-hidden="true"></i> Monitoring agent installed</div>
+        <div class="kpi-value">{{ monitoring_count }}<small>/ {{ total_overview }}</small></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-shield-halved"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Device Security Compliant</div>
-            <div class="stat-value">{{ device_compliant_count }}<span class="stat-value-sub"> / {{ total_overview }}</span></div>
-        </div>
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-shield-halved" aria-hidden="true"></i> Device security compliant</div>
+        <div class="kpi-value">{{ device_compliant_count }}<small>/ {{ total_overview }}</small></div>
     </div>
 </div>
 
 <div class="grid-2">
     <div class="card">
-        <div class="card-header"><h3>Policy Acceptance Rate</h3></div>
-        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
-            <div class="chart-container" style="width:220px;height:220px;">
-                <canvas id="policyChart"></canvas>
-            </div>
-            <div class="legend" style="flex-direction:column;align-items:flex-start;">
-                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-success)"></div> Accepted ({{ policy_accepted_count }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-danger)"></div> Not Accepted ({{ policy_not_accepted_count }})</div>
+        <div class="card-header"><div><h2 class="card-title">Policy acceptance rate</h2><div class="card-subtitle">Employees who accepted published policies</div></div></div>
+        <div class="card-body">
+            <div class="pd-ring-wrap">
+                {{ donut(policy_accepted_count, policy_not_accepted_count, 'accepted') }}
+                <ul class="pd-legend">
+                    <li><span class="pd-dot good" aria-hidden="true"></span> Accepted <b>{{ policy_accepted_count }}</b></li>
+                    <li><span class="pd-dot bad" aria-hidden="true"></span> Not accepted <b>{{ policy_not_accepted_count }}</b></li>
+                </ul>
             </div>
         </div>
     </div>
     <div class="card">
-        <div class="card-header"><h3>Employee Campaign Completion Rate</h3></div>
-        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
-            <div class="chart-container" style="width:220px;height:220px;">
-                <canvas id="campaignChart"></canvas>
-            </div>
-            <div class="legend" style="flex-direction:column;align-items:flex-start;">
-                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-success)"></div> Completed ({{ completed_enrollments }})</div>
-                <div class="legend-item"><div class="legend-dot" style="background:var(--accent-danger)"></div> Not Completed ({{ incomplete_enrollments }})</div>
+        <div class="card-header"><div><h2 class="card-title">Campaign completion rate</h2><div class="card-subtitle">Training enrollments completed</div></div></div>
+        <div class="card-body">
+            <div class="pd-ring-wrap">
+                {{ donut(completed_enrollments, incomplete_enrollments, 'completed') }}
+                <ul class="pd-legend">
+                    <li><span class="pd-dot good" aria-hidden="true"></span> Completed <b>{{ completed_enrollments }}</b></li>
+                    <li><span class="pd-dot bad" aria-hidden="true"></span> Not completed <b>{{ incomplete_enrollments }}</b></li>
+                </ul>
             </div>
         </div>
     </div>
 </div>
 
 {% else %}
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Active</div>
-            <div class="stat-value">{{ active_count }}</div>
-        </div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-success">
+        <div class="kpi-label"><i class="fas fa-user-check" aria-hidden="true"></i> Active</div>
+        <div class="kpi-value">{{ active_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon orange"><i class="fas fa-user-clock"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Offboarding Needed</div>
-            <div class="stat-value">{{ offboarding_count }}</div>
-        </div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-user-clock" aria-hidden="true"></i> Offboarding needed</div>
+        <div class="kpi-value">{{ offboarding_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon red"><i class="fas fa-user-slash"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Offboarded</div>
-            <div class="stat-value">{{ offboarded_count }}</div>
-        </div>
+    <div class="kpi kpi-accent-danger">
+        <div class="kpi-label"><i class="fas fa-user-slash" aria-hidden="true"></i> Offboarded</div>
+        <div class="kpi-value">{{ offboarded_count }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon purple"><i class="fas fa-user-group"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">Non Personnel</div>
-            <div class="stat-value">{{ non_personnel_count }}</div>
-        </div>
+    <div class="kpi">
+        <div class="kpi-label"><i class="fas fa-user-group" aria-hidden="true"></i> Non personnel</div>
+        <div class="kpi-value">{{ non_personnel_count }}</div>
     </div>
 </div>
 
-<form method="get" class="toolbar">
+<form method="get" class="filter-bar" role="search">
     <input type="hidden" name="tab" value="all">
-    <div class="search-input-wrapper">
-        <i class="fas fa-search"></i>
-        <input type="text" class="filter-input" name="q" placeholder="Search Employee" value="{{ search }}">
+    <div class="filter-search input-icon">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input type="text" class="form-control" name="q" placeholder="Search employee" aria-label="Search employee" value="{{ search }}">
     </div>
-    <select class="filter-select" name="department" onchange="this.form.submit()">
+    <select class="filter-select" name="department" aria-label="Department" onchange="this.form.submit()">
         <option value="">Department</option>
         {% for d in departments %}
         <option value="{{ d }}" {% if selected_department == d %}selected{% endif %}>{{ d }}</option>
         {% endfor %}
     </select>
-    <select class="filter-select" name="task_status" onchange="this.form.submit()">
+    <select class="filter-select" name="task_status" aria-label="Task status" onchange="this.form.submit()">
         <option value="">Task Status</option>
         <option value="pending" {% if selected_task_status == 'pending' %}selected{% endif %}>Pending Tasks</option>
         <option value="clear" {% if selected_task_status == 'clear' %}selected{% endif %}>No Pending Tasks</option>
     </select>
-    <select class="filter-select" name="group" onchange="this.form.submit()">
+    <select class="filter-select" name="group" aria-label="Employee group" onchange="this.form.submit()">
         <option value="">Employee Groups</option>
         {% for c in campaigns %}
         <option value="{{ c.id }}" {% if selected_group == c.id|string %}selected{% endif %}>{{ c.name }}</option>
         {% endfor %}
     </select>
-    <button type="submit" class="btn btn-secondary btn-icon" title="Apply filters"><i class="fas fa-filter"></i></button>
-    <a href="{{ url_for('people.employees', tab='all') }}" class="btn btn-secondary btn-icon" title="Reset filters"><i class="fas fa-rotate-left"></i></a>
+    <span class="spacer"></span>
+    <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-filter" aria-hidden="true"></i> Apply</button>
+    <a href="{{ url_for('people.employees', tab='all') }}" class="btn btn-ghost btn-sm"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset</a>
 </form>
 
 <div class="card">
     <div class="card-body no-padding">
         {% if employees %}
         <div class="table-container">
-            <table>
+            <table class="table-sortable">
                 <thead>
                     <tr>
-                        <th>Employee Name</th>
-                        <th>Email</th>
-                        <th>Status</th>
+                        <th data-sort="text">Employee</th>
+                        <th data-sort="text">Email</th>
+                        <th data-sort="text">Status</th>
                         <th>Group</th>
-                        <th>Department</th>
-                        <th>Actions</th>
+                        <th data-sort="text">Department</th>
+                        <th class="actions"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for e in employees %}
                     <tr>
                         <td>
-                            <div class="flex-center gap-8">
-                                <div class="avatar avatar-sm">{{ e.name.split(' ')[0][0] }}{{ e.name.split(' ')[-1][0] if ' ' in e.name else '' }}</div>
-                                <span class="font-semibold">{{ e.name }}</span>
+                            <div class="pd-person">
+                                <div class="avatar avatar-sm" aria-hidden="true">{{ e.name.split(' ')[0][0] }}{{ e.name.split(' ')[-1][0] if ' ' in e.name else '' }}</div>
+                                <span class="cell-title">{{ e.name }}</span>
                             </div>
                         </td>
                         <td class="text-muted">{{ e.email }}</td>
                         <td>
-                            {% if e.status == 'Active' %}<span class="badge badge-success">{{ e.status }}</span>
-                            {% elif e.status == 'Offboarding Needed' %}<span class="badge badge-warning">{{ e.status }}</span>
-                            {% elif e.status == 'Offboarded' %}<span class="badge badge-danger">{{ e.status }}</span>
-                            {% else %}<span class="badge badge-info">{{ e.status }}</span>{% endif %}
+                            {% if e.status == 'Active' %}<span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>{{ e.status }}</span>
+                            {% elif e.status == 'Offboarding Needed' %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>{{ e.status }}</span>
+                            {% elif e.status == 'Offboarded' %}<span class="pill pill-rejected"><i class="fas fa-xmark" aria-hidden="true"></i>{{ e.status }}</span>
+                            {% else %}<span class="pill pill-info"><i class="fas fa-circle-info" aria-hidden="true"></i>{{ e.status }}</span>{% endif %}
                         </td>
                         <td>
                             <div class="tag-list">
                                 {% for name in e.campaign_names[:2] %}
                                 <span class="tag">{{ name }}</span>
+                                {% else %}<span class="text-muted">&mdash;</span>
                                 {% endfor %}
                                 {% if e.campaign_names|length > 2 %}
                                 <span class="tag">+{{ e.campaign_names|length - 2 }}</span>
                                 {% endif %}
                             </div>
                         </td>
-                        <td class="text-muted">{{ e.department }}</td>
-                        <td>
-                            <div class="flex gap-8">
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Send Reminder" onclick="showToast('Reminder sent to {{ e.name }}','info')"><i class="fas fa-paper-plane"></i></button>
-                                <button class="btn btn-sm btn-secondary btn-icon" title="Edit" onclick="showEditEmployeeModal({{ e.id }}, '{{ e.name }}', '{{ e.status }}', '{{ e.department or '' }}', {{ e.campaign_ids|tojson }})"><i class="fas fa-pen"></i></button>
-                                <form method="POST" action="{{ url_for('people.delete_employee', employee_id=e.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ e.name }}?');">
+                        <td class="text-muted">{{ e.department or '-' }}</td>
+                        <td class="actions">
+                            <div class="pd-actions">
+                                <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Send reminder" aria-label="Send reminder to {{ e.name }}" onclick='showToast({{ ("Reminder sent to " ~ e.name)|tojson }}, "info")'><i class="fas fa-paper-plane" aria-hidden="true"></i></button>
+                                <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Edit" aria-label="Edit {{ e.name }}" onclick='showEditEmployeeModal({{ e.id }}, {{ e.name|tojson }}, {{ e.status|tojson }}, {{ (e.department or "")|tojson }}, {{ e.campaign_ids|tojson }})'><i class="fas fa-pen" aria-hidden="true"></i></button>
+                                <form method="POST" action="{{ url_for('people.delete_employee', employee_id=e.id) }}" class="pd-inline" data-confirm="Remove {{ e.name }}?" data-confirm-title="Remove employee" data-confirm-button="Remove">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Remove"><i class="fas fa-trash"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Remove" aria-label="Remove {{ e.name }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
                                 </form>
                             </div>
                         </td>
@@ -207,7 +204,7 @@
             {% if search or selected_department or selected_task_status or selected_group %}
             <a href="{{ url_for('people.employees', tab='all') }}" class="btn btn-sm btn-secondary">Reset Filters</a>
             {% else %}
-            <button class="btn btn-sm btn-primary" onclick="showAddEmployeeModal()"><i class="fas fa-plus"></i> Add Employee</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="showAddEmployeeModal()"><i class="fas fa-plus" aria-hidden="true"></i> Add Employee</button>
             {% endif %}
         </div>
         {% endif %}
@@ -218,36 +215,6 @@
 
 {% block scripts %}
 <script>
-{% if tab == 'overview' %}
-document.addEventListener('DOMContentLoaded', function() {
-    new Chart(document.getElementById('policyChart').getContext('2d'), {
-        type: 'pie',
-        data: {
-            labels: ['Accepted', 'Not Accepted'],
-            datasets: [{
-                data: [{{ policy_accepted_count }}, {{ policy_not_accepted_count }}],
-                backgroundColor: ['#228148', '#b82a2e'],
-                borderWidth: 0
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
-    });
-
-    new Chart(document.getElementById('campaignChart').getContext('2d'), {
-        type: 'pie',
-        data: {
-            labels: ['Completed', 'Not Completed'],
-            datasets: [{
-                data: [{{ completed_enrollments }}, {{ incomplete_enrollments }}],
-                backgroundColor: ['#228148', '#b82a2e'],
-                borderWidth: 0
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
-    });
-});
-{% endif %}
-
 const CAMPAIGNS = {{ campaigns_json|tojson }};
 
 function groupCheckboxes(selectedIds) {
@@ -255,9 +222,9 @@ function groupCheckboxes(selectedIds) {
     if (!CAMPAIGNS.length) {
         return '<p class="text-sm text-muted">No groups yet. Create one under People &rarr; Training Campaigns first.</p>';
     }
-    return `<div style="max-height:160px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-md);padding:8px 12px;">` +
+    return `<div class="pd-box">` +
         CAMPAIGNS.map(c => `
-            <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;">
+            <label>
                 <input type="checkbox" name="campaign_ids" value="${c.id}" ${selectedIds.includes(c.id) ? 'checked' : ''}>
                 ${c.name}
             </label>
@@ -272,9 +239,9 @@ function toggleEmployeeSourceUI(source) {
     const workspaceNotice = document.getElementById('workspaceSyncNotice');
     const submitBtn = document.getElementById('addEmployeeSubmitBtn');
     if (source === 'Google Workspace') {
-        manualFields.style.display = 'none';
+        manualFields.hidden = true;
         manualFields.querySelectorAll('[required]').forEach(el => el.removeAttribute('required'));
-        workspaceNotice.style.display = '';
+        workspaceNotice.hidden = false;
         workspaceNotice.innerHTML = GOOGLE_CONNECTED
             ? `<p class="text-sm text-muted">Google Workspace is connected as <strong>${GOOGLE_EMAIL}</strong>. Employees are pulled in automatically from your directory — click below to sync now instead of adding them one by one.</p>`
             : `<p class="text-sm text-muted">Google Workspace isn't connected yet. Connect it from the Setup Wizard to pull all your employees in automatically instead of adding them one by one.</p>`;
@@ -283,10 +250,10 @@ function toggleEmployeeSourceUI(source) {
             ? function() { document.getElementById('workspaceSyncForm').submit(); }
             : function() { window.location.href = "{{ url_for('setup.setup_wizard') }}"; };
     } else {
-        manualFields.style.display = '';
+        manualFields.hidden = false;
         manualFields.querySelector('input[name="name"]').setAttribute('required', 'required');
         manualFields.querySelector('input[name="email"]').setAttribute('required', 'required');
-        workspaceNotice.style.display = 'none';
+        workspaceNotice.hidden = true;
         submitBtn.textContent = 'Add Employee';
         submitBtn.onclick = function() { document.getElementById('addEmployeeForm').submit(); };
     }
@@ -294,14 +261,14 @@ function toggleEmployeeSourceUI(source) {
 
 function showAddEmployeeModal() {
     openModal('Add Employee', `
-        <form id="workspaceSyncForm" method="POST" action="{{ url_for('google_oauth.sync_employees') }}" style="display:none;">
+        <form id="workspaceSyncForm" method="POST" action="{{ url_for('google_oauth.sync_employees') }}" hidden>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         </form>
         <form id="addEmployeeForm" method="POST" action="{{ url_for('people.create_employee') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Source</label>
-                <select name="source" class="form-control" onchange="toggleEmployeeSourceUI(this.value)">
+                <label for="empSource">Source</label>
+                <select id="empSource" name="source" class="form-control" onchange="toggleEmployeeSourceUI(this.value)">
                     <option>Manual</option>
                     <option>Google Workspace</option>
                     <option>HRIS</option>
@@ -309,23 +276,23 @@ function showAddEmployeeModal() {
             </div>
             <div id="manualEmployeeFields">
                 <div class="form-group">
-                    <label>Full Name</label>
-                    <input type="text" name="name" class="form-control" placeholder="e.g. Priya Sharma" required>
+                    <label for="empName">Full Name</label>
+                    <input type="text" id="empName" name="name" class="form-control" placeholder="e.g. Priya Sharma" required>
                 </div>
                 <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" name="email" class="form-control" placeholder="e.g. priya@midevops.io" required>
+                    <label for="empEmail">Email</label>
+                    <input type="email" id="empEmail" name="email" class="form-control" placeholder="e.g. priya@midevops.io" required>
                 </div>
                 <div class="form-group">
-                    <label>Department</label>
-                    <input type="text" name="department" class="form-control" placeholder="e.g. Engineering">
+                    <label for="empDept">Department</label>
+                    <input type="text" id="empDept" name="department" class="form-control" placeholder="e.g. Engineering">
                 </div>
                 <div class="form-group">
-                    <label>Groups</label>
+                    <span class="form-label">Groups</span>
                     ${groupCheckboxes()}
                 </div>
             </div>
-            <div id="workspaceSyncNotice" style="display:none;"></div>
+            <div id="workspaceSyncNotice" hidden></div>
         </form>
     `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" id="addEmployeeSubmitBtn" class="btn btn-primary" onclick="document.getElementById(\'addEmployeeForm\').submit()">Add Employee</button>');
 }
@@ -335,8 +302,8 @@ function showEditEmployeeModal(id, name, status, department, campaignIds) {
         <form id="editEmployeeForm" method="POST" action="/people/employees/${id}/edit">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Status</label>
-                <select name="status" class="form-control">
+                <label for="editStatus">Status</label>
+                <select id="editStatus" name="status" class="form-control">
                     <option ${status === 'Active' ? 'selected' : ''}>Active</option>
                     <option ${status === 'Offboarding Needed' ? 'selected' : ''}>Offboarding Needed</option>
                     <option ${status === 'Offboarded' ? 'selected' : ''}>Offboarded</option>
@@ -344,11 +311,11 @@ function showEditEmployeeModal(id, name, status, department, campaignIds) {
                 </select>
             </div>
             <div class="form-group">
-                <label>Department</label>
-                <input type="text" name="department" class="form-control" value="${department}">
+                <label for="editDept">Department</label>
+                <input type="text" id="editDept" name="department" class="form-control" value="${department}">
             </div>
             <div class="form-group">
-                <label>Groups</label>
+                <span class="form-label">Groups</span>
                 ${groupCheckboxes(campaignIds)}
             </div>
         </form>
