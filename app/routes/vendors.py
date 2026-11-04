@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, g, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app.models import (
@@ -232,6 +232,37 @@ def assessment_detail(vendor_id, assessment_id):
     existing = {r.question_id: r.answer_text for r in assessment.responses}
     return render_template('vendor_assessment.html', page='vendors',
         assessment=assessment, existing=existing)
+
+
+@vendors_bp.route('/vendors/<int:vendor_id>/assessments/<int:assessment_id>/ai-suggest', methods=['POST'])
+@login_required
+@require_permission('write')
+def ai_suggest_assessment(vendor_id, assessment_id):
+    """AI-drafted answers from this org's own published policies / approved evidence. Nothing
+    is persisted: suggestions are rendered in-page as drafts (no schema change needed) and a
+    human must click "accept" per question - which only fills the textarea - then save."""
+    from app.services.ai_questionnaire import suggest_answers
+    vendor = Vendor.query.filter_by(id=vendor_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+    assessment = vendor.assessments.filter_by(id=assessment_id).first_or_404()
+    if assessment.status == 'Completed':
+        flash('This assessment is already completed.', 'error')
+        return redirect(url_for('vendors.assessment_detail', vendor_id=vendor_id, assessment_id=assessment_id))
+    suggestions = suggest_answers(assessment, g.current_org.id)
+    if suggestions:
+        flash(f'AI drafted {len(suggestions)} suggestion(s). Review each one - nothing is saved until you accept and save.', 'info')
+    else:
+        flash('AI suggestions are unavailable right now (or nothing could be drafted). You can still answer manually.', 'warning')
+    existing = {r.question_id: r.answer_text for r in assessment.responses}
+    return render_template('vendor_assessment.html', page='vendors',
+        assessment=assessment, existing=existing, suggestions=suggestions or {})
+
+
+@vendors_bp.route('/ai/status')
+@login_required
+def ai_status():
+    """Secret-free JSON: which AI model path is active (opencode-server vs cline-direct)."""
+    from app.services.ai_dispatch import get_ai_status
+    return jsonify(get_ai_status())
 
 
 @vendors_bp.route('/vendors/<int:vendor_id>/assessments/<int:assessment_id>/respond', methods=['POST'])

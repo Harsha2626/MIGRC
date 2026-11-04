@@ -50,22 +50,38 @@ LOCK_STALE_SECONDS = REQUEST_TIMEOUT + 60  # reclaim a lock left by a crashed/ki
 
 REPLY_POLL_SECONDS = 2       # how often to check whether the agent has finished replying
 
-# Model fallback: evaluation runs against OpenCode's free `opencode` (Zen) provider models,
-# which can intermittently return "Model is unavailable" under load or during provider-side
-# incidents, or even an account-wide block (see https://github.com/anomalyco/opencode/issues/39827).
-# Ordered by context window (the one capability OpenCode's model metadata reliably reports) so
-# the highest-capacity free models are tried first. Set OPENCODE_MODEL="providerID/modelID" (and
-# optionally OPENCODE_MODEL_VARIANT) to pin a single model instead of falling back across this
-# list - e.g. "clinedirect/minimax/minimax-m2.5", the model actually in use as of 2026-10-30.
+# Model fallback: the PRIMARY path is the local OpenCode server's free `opencode` (Zen) provider
+# models, which can intermittently return "Model is unavailable" under load or during
+# provider-side incidents, or even an account-wide block (see
+# https://github.com/anomalyco/opencode/issues/39827). Refreshed 2026-11-04 against the live
+# server (`opencode models opencode --verbose` / GET /api/model). Ordered by context window with
+# the stable models ahead of the "-alpha" previews. At call time the list is further reconciled
+# with what the server reports (see _discover_free_models): deprecated/removed entries are
+# dropped and newly-added active free models are appended, so this static list is only the
+# fallback for when discovery fails. Set OPENCODE_MODEL="providerID/modelID" (and optionally
+# OPENCODE_MODEL_VARIANT) to pin a single model instead. The Cline-direct bypass
+# ("clinedirect/<model>") is OPT-IN ONLY via that same variable; it is never in the default list.
 DEFAULT_FREE_MODELS = [
-    ('opencode', 'nemotron-3.5-super-vl-free'),  # 1,048,576 ctx / 131,072 out
-    ('opencode', 'beam-free'),                   # 1,048,576 ctx / 131,072 out
+    ('opencode', 'nemotron-3.5-super-vl-free'),   # 1,048,576 ctx / 131,072 out
+    ('opencode', 'beam-free'),                    # 1,048,576 ctx / 131,072 out
+    ('opencode', 'crouton-alpha-free'),           # 1,048,576 ctx / 270,000 out (alpha)
+    ('opencode', 'pulse-alpha-free'),             # 1,048,576 ctx / 131,072 out (alpha)
     ('opencode', 'flint-40b-free'),               # 262,144 ctx / 65,536 out
     ('opencode', 'nemotron-3.5-lightning-free'),  # 262,144 ctx / 262,144 out
     ('opencode', 'glm-5.3-flash-free'),           # 200,000 ctx / 32,000 out
     ('opencode', 'deepseek-v4.1-flash-free'),     # 200,000 ctx / 32,000 out
     ('opencode', 'mimo-v2.6-flash-free'),         # 200,000 ctx / 32,000 out
+    ('opencode', 'big-pickle'),                   # 200,000 ctx / 32,000 out (free)
 ]
+
+# Provider errors that mean "this account is gated", not "this model is down" (observed live
+# 2026-11-04: HTTP 401 PAID_MODEL_AUTH_REQUIRED / HTTP 403 ENTITLEMENT_ERROR on every model).
+AUTH_BLOCK_SIGNATURES = ('PAID_MODEL_AUTH_REQUIRED', 'ENTITLEMENT_ERROR')
+AUTH_BLOCK_LIMIT = 3
+
+DISCOVERY_TTL_SECONDS = 300
+DISCOVERY_TIMEOUT = 3
+_discovery_cache = {'at': 0.0, 'key': None, 'models': None}
 
 CLINE_API_URL = 'https://api.cline.bot/api/v1/chat/completions'
 CLINE_SYSTEM_PROMPT = (
@@ -117,19 +133,70 @@ def _cline_complete(prompt_text, model_id, timeout):
     return choice.get('message', {}).get('content', '')
 
 
-def _candidate_models():
+def _discover_free_models(base_url, password):
+    """Asks the live server which `opencode`-provider models are currently active and free
+    (GET /api/model) and returns [(provider, model)] ordered by context window, or None if the
+    server can't be asked. Cached for DISCOVERY_TTL_SECONDS. Never raises."""
+    key = base_url
+    now = time.monotonic()
+    if _discovery_cache['key'] == key and now - _discovery_cache['at'] < DISCOVERY_TTL_SECONDS:
+        return _discovery_cache['models']
+    models = None
+    try:
+        payload = _request(base_url, password, 'GET', '/api/model', timeout=DISCOVERY_TIMEOUT)
+        found = []
+        for m in (payload or {}).get('data', []):
+            if m.get('providerID') != 'opencode' or m.get('status') != 'active' or m.get('enabled') is False:
+                continue
+            costs = m.get('cost') or []
+            if isinstance(costs, dict):
+                costs = [costs]
+            if not costs or any((c.get('input') or 0) or (c.get('output') or 0) for c in costs):
+                continue  # not free
+            found.append((m['id'], (m.get('limit') or {}).get('context') or 0))
+        if found:
+            found.sort(key=lambda x: -x[1])
+            models = [('opencode', mid) for mid, _ in found]
+    except Exception:
+        models = None
+    _discovery_cache.update(at=now, key=key, models=models)
+    return models
+
+
+def _default_models(base_url=None, password=None):
+    """DEFAULT_FREE_MODELS reconciled with the live server: static order is preserved for
+    entries the server still reports active, then any newly-added active free models are
+    appended. Falls back to the static list verbatim if discovery is unavailable."""
+    live = _discover_free_models(base_url, password) if base_url and password else None
+    if not live:
+        return list(DEFAULT_FREE_MODELS)
+    live_set = set(live)
+    ordered = [m for m in DEFAULT_FREE_MODELS if m in live_set]
+    seen = set(ordered)
+    ordered += [m for m in live if m not in seen]
+    return ordered
+
+
+def _candidate_models(base_url=None, password=None):
     """Returns a list of (provider_id, model_id, variant) tuples to try in order. `variant`
     is None unless OPENCODE_MODEL_VARIANT is set alongside a pinned OPENCODE_MODEL - e.g.
     "low" / "high" / "max" to select a reasoning-effort variant on models that expose one
     (confirmed via `opencode models <provider> --verbose`, which lists each model's
     `variants` map). DEFAULT_FREE_MODELS entries don't carry a variant since none of those
-    free models advertise tunable reasoning-effort variants."""
+    free models advertise tunable reasoning-effort variants.
+
+    A pinned OPENCODE_MODEL is used alone, unless OPENCODE_MODEL_FALLBACK=1, in which case the
+    free OpenCode-server models follow it as fallbacks."""
     pinned = os.environ.get('OPENCODE_MODEL')
     if pinned and '/' in pinned:
         provider_id, model_id = pinned.split('/', 1)
         variant = os.environ.get('OPENCODE_MODEL_VARIANT') or None
-        return [(provider_id, model_id, variant)]
-    return [(provider_id, model_id, None) for provider_id, model_id in DEFAULT_FREE_MODELS]
+        pinned_list = [(provider_id, model_id, variant)]
+        if os.environ.get('OPENCODE_MODEL_FALLBACK') == '1':
+            defaults = [(p, m, None) for p, m in _default_models(base_url, password)]
+            return pinned_list + [d for d in defaults if d[:2] != (provider_id, model_id)]
+        return pinned_list
+    return [(p, m, None) for p, m in _default_models(base_url, password)]
 
 
 def _config():
@@ -161,6 +228,36 @@ def check_server_status():
         return 'connected'
     except Exception:
         return 'unreachable'
+
+
+def get_ai_status():
+    """
+    Secret-free description of which model path is active, for the Setup Wizard / a status
+    endpoint. Never includes the password, API keys, or credentials.
+
+    {'server': check_server_status() value ('cline-direct' reports whether CLINE_API_KEY exists),
+     'path': 'opencode-server' | 'cline-direct',
+     'primary_model': 'provider/model' or None,
+     'fallback_count': int,
+     'pinned': bool}
+    """
+    pinned = os.environ.get('OPENCODE_MODEL')
+    pinned = pinned if pinned and '/' in pinned else None
+    cline = bool(pinned) and pinned.split('/', 1)[0] == 'clinedirect'
+    if cline:
+        server = 'connected' if os.environ.get('CLINE_API_KEY') else 'not_configured'
+    else:
+        server = check_server_status()
+    cfg = _config()
+    candidates = _candidate_models(*cfg) if (cfg and server == 'connected') else _candidate_models()
+    first = candidates[0] if candidates else None
+    return {
+        'server': server,
+        'path': 'cline-direct' if cline else 'opencode-server',
+        'primary_model': f'{first[0]}/{first[1]}' if first else None,
+        'fallback_count': max(len(candidates) - 1, 0),
+        'pinned': bool(pinned),
+    }
 
 
 def _request(base_url, password, method, path, body=None, timeout=REQUEST_TIMEOUT):
@@ -249,13 +346,13 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
     cross-machine lock busy, every model errored/timed out/returned unparseable output).
     `log_tag` is just a short label for this call's log lines (e.g. a policy or control id).
     """
-    candidates = _candidate_models()
+    cfg = _config()
+    candidates = _candidate_models(*cfg) if cfg else _candidate_models()
     needs_opencode_server = any(provider_id != 'clinedirect' for provider_id, _, _ in candidates)
 
     base_url = password = None
     owner = None
     if needs_opencode_server:
-        cfg = _config()
         if cfg is None:
             return None
         base_url, password = cfg
@@ -272,6 +369,7 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
 
     try:
         last_failure = None
+        auth_blocks = 0
         for attempt, (provider_id, model_id, variant) in enumerate(candidates):
             attempt_timeout = REQUEST_TIMEOUT if attempt == 0 else FALLBACK_REQUEST_TIMEOUT
             tag = f'{provider_id}/{model_id}' + (f' ({variant})' if variant else '')
@@ -303,6 +401,17 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
                     if last.get('error'):
                         last_failure = f'{tag}: {last["error"]}'
                         logger.warning('AI dispatch (%s) agent errored using model %s: %s', log_tag, tag, last['error'])
+                        if any(sig in str(last['error']) for sig in AUTH_BLOCK_SIGNATURES):
+                            auth_blocks += 1
+                            if auth_blocks >= AUTH_BLOCK_LIMIT:
+                                # Account-wide gate (not a per-model outage): the remaining models
+                                # will fail identically, so fail fast instead of burning minutes.
+                                logger.warning('AI dispatch (%s): %d consecutive entitlement/sign-in '
+                                               'errors - server is gating models account-wide, giving up',
+                                               log_tag, auth_blocks)
+                                break
+                        else:
+                            auth_blocks = 0
                         continue
                     full_text = '\n'.join(p['text'] for p in last.get('content', []) if p.get('type') == 'text')
 
@@ -313,13 +422,16 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
                     continue
                 return parsed
 
-            except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError) as e:
+            except Exception as e:  # fail open: an HTTP/shape/parse_fn bug must never become a 500
                 last_failure = f'{tag}: {e}'
                 logger.exception('AI dispatch (%s) failed using model %s: %s', log_tag, tag, e)
                 continue
             finally:
                 if session_id:
                     try:
+                        # NB: creation uses /api/session but the live server (verified 2026-11-04)
+                        # only deletes via the legacy /session/{id}; DELETE /api/session/{id}
+                        # returns the web UI's HTML shell and leaves the session behind.
                         _request(base_url, password, 'DELETE', f'/session/{session_id}', timeout=15)
                     except Exception:
                         pass
