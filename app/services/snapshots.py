@@ -6,12 +6,15 @@ from app.models import db, Framework, Risk, Policy, Evidence, ComplianceSnapshot
 
 def ensure_snapshots_for_today():
     """Idempotently record today's compliance/dashboard snapshot rows for the current
-    organization, once per day."""
+    organization (g.current_org), once per day. Used by both the dashboard (on demand) and
+    `flask run-daily-jobs`. Race-safe: the unique constraints on the snapshot tables make a
+    concurrent insert fail with IntegrityError, which is swallowed. Returns rows created."""
     org = getattr(g, 'current_org', None)
     if not org:
-        return
+        return 0
     org_id = org.id
     today = date.today()
+    created = 0
 
     # Use no_autoflush so that pending inserts inside the loop don't trigger an
     # autoflush (and a UniqueViolation) when the next SELECT is executed.
@@ -25,6 +28,7 @@ def ensure_snapshots_for_today():
                 snapshot_date=today,
             ).first()
             if not exists:
+                created += 1
                 db.session.add(ComplianceSnapshot(
                     organization_id=org_id,
                     framework_id=framework.id,
@@ -38,6 +42,7 @@ def ensure_snapshots_for_today():
                 ))
 
         if not DashboardSnapshot.query.filter_by(organization_id=org_id, snapshot_date=today).first():
+            created += 1
             db.session.add(DashboardSnapshot(
                 organization_id=org_id,
                 snapshot_date=today,
@@ -49,6 +54,7 @@ def ensure_snapshots_for_today():
     try:
         db.session.commit()
     except IntegrityError:
-        # Another concurrent request already inserted the snapshot — safe to ignore.
+        # Another concurrent request or the CLI daily job already inserted the snapshot.
         db.session.rollback()
-
+        return 0
+    return created

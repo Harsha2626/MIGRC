@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from flask import current_app, g
 from app.models import db, User, Notification, Policy, Vendor, Audit, OrganizationMembership
 
@@ -92,43 +92,122 @@ def notify_finding_assigned(finding):
 
 
 def ensure_notifications_for_today():
-    """Lazy daily check for deadlines approaching within 7 days — policy reviews, vendor
-    reassessments, audits wrapping up. Safe to call on every dashboard load (dedupe_key guards it)."""
+    """Daily check for due/overdue items: policy reviews, vendor reassessments, audits wrapping
+    up, training campaign SLAs, and stale/expiring evidence. Safe to call repeatedly (on every
+    dashboard load and from `flask run-daily-jobs`): dedupe_key guards against duplicates.
+    Returns the number of notifications created."""
     org = getattr(g, 'current_org', None)
     if not org:
-        return
+        return 0
     org_id = org.id
     today = date.today()
     horizon = today + timedelta(days=7)
+    count = 0
 
     from app.utils import parse_date_safe
+    from app.models import Evidence, TrainingCampaign
+
+    def notify(*args, **kwargs):
+        nonlocal count
+        count += len(notify_all_users(*args, **kwargs))
 
     for policy in Policy.query.filter_by(organization_id=org_id).filter(Policy.status == 'Published').all():
         d = parse_date_safe(policy.next_review)
-        if d and today <= d <= horizon:
-            notify_all_users(
+        if not d:
+            continue
+        if today <= d <= horizon:
+            notify(
                 'policy_review_due', f'Policy review due: {policy.name}',
                 f'"{policy.name}" is due for review on {d.strftime("%d %b %Y")}.',
                 link=f'/policies/{policy.id}',
                 dedupe_key=f'policy_review_due:{policy.id}:{d}',
             )
+        elif d < today:
+            notify(
+                'policy_review_due', f'Policy review overdue: {policy.name}',
+                f'"{policy.name}" was due for review on {d.strftime("%d %b %Y")}.',
+                link=f'/policies/{policy.id}',
+                dedupe_key=f'policy_review_overdue:{policy.id}:{d}',
+            )
 
     for vendor in Vendor.query.filter_by(organization_id=org_id).all():
         d = parse_date_safe(vendor.next_assessment)
-        if d and today <= d <= horizon:
-            notify_all_users(
+        if not d:
+            continue
+        if today <= d <= horizon:
+            notify(
                 'deadline_approaching', f'Vendor assessment due: {vendor.name}',
                 f'{vendor.name} is due for reassessment on {d.strftime("%d %b %Y")}.',
                 link=f'/vendors/{vendor.id}',
                 dedupe_key=f'vendor_assessment_due:{vendor.id}:{d}',
             )
+        elif d < today:
+            notify(
+                'deadline_approaching', f'Vendor assessment overdue: {vendor.name}',
+                f'{vendor.name} was due for reassessment on {d.strftime("%d %b %Y")}.',
+                link=f'/vendors/{vendor.id}',
+                dedupe_key=f'vendor_assessment_overdue:{vendor.id}:{d}',
+            )
 
     for audit in Audit.query.filter_by(organization_id=org_id).filter(Audit.status != 'Completed').all():
         d = parse_date_safe(audit.end_date)
-        if d and today <= d <= horizon:
-            notify_all_users(
+        if not d:
+            continue
+        if today <= d <= horizon:
+            notify(
                 'deadline_approaching', f'Audit wrapping up soon: {audit.name}',
                 f'{audit.name} is scheduled to end on {d.strftime("%d %b %Y")}.',
                 link=f'/audits/{audit.id}',
                 dedupe_key=f'audit_end_due:{audit.id}:{d}',
             )
+        elif d < today:
+            notify(
+                'deadline_approaching', f'Audit past its end date: {audit.name}',
+                f'{audit.name} was scheduled to end on {d.strftime("%d %b %Y")} and is not completed.',
+                link=f'/audits/{audit.id}',
+                dedupe_key=f'audit_end_overdue:{audit.id}:{d}',
+            )
+
+    # Training campaigns: deadline = launch_date + sla_days, only while someone hasn't completed.
+    for campaign in TrainingCampaign.query.filter_by(organization_id=org_id).filter(
+            TrainingCampaign.status.in_(['Upcoming', 'In Progress'])).all():
+        launch = parse_date_safe(campaign.launch_date)
+        if not launch or not campaign.sla_days:
+            continue
+        deadline = launch + timedelta(days=campaign.sla_days)
+        if deadline > horizon:
+            continue
+        pending = campaign.enrollments.filter_by(completed=False).count()
+        if not pending:
+            continue
+        overdue = deadline < today
+        notify(
+            'deadline_approaching',
+            f'Training {"overdue" if overdue else "SLA due"}: {campaign.name}',
+            f'{pending} employee(s) have not completed "{campaign.name}" '
+            f'(SLA {"passed" if overdue else "ends"} {deadline.strftime("%d %b %Y")}).',
+            link='/people',
+            dedupe_key=f'training_sla_{"overdue" if overdue else "due"}:{campaign.id}:{deadline}',
+        )
+
+    # Evidence: sitting in review too long, or its audit period ending soon.
+    stale_cutoff = datetime.utcnow() - timedelta(days=14)
+    for ev in Evidence.query.filter_by(organization_id=org_id, status='Pending Review').filter(
+            Evidence.created_at < stale_cutoff).all():
+        notify(
+            'deadline_approaching', f'Evidence awaiting review: {ev.title}',
+            f'"{ev.title}" has been pending review for over 14 days.',
+            link='/compliance',
+            dedupe_key=f'evidence_stale:{ev.id}',
+        )
+    expiry_horizon = today + timedelta(days=14)
+    for ev in Evidence.query.filter_by(organization_id=org_id).filter(
+            Evidence.audit_period_end.isnot(None),
+            Evidence.audit_period_end >= today, Evidence.audit_period_end <= expiry_horizon).all():
+        notify(
+            'deadline_approaching', f'Evidence expiring: {ev.title}',
+            f'"{ev.title}" covers an audit period ending {ev.audit_period_end.strftime("%d %b %Y")}; refresh it.',
+            link='/compliance',
+            dedupe_key=f'evidence_expiring:{ev.id}:{ev.audit_period_end}',
+        )
+    return count
