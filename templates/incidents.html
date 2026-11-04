@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% from "_incident_macros.html" import sev_pill, status_pill %}
+{% block title %}Incidents{% endblock %}
+{% block breadcrumb %}<span>Incidents</span>{% endblock %}
+
+{% block content %}
+{% set has_filters = filters.q or filters.severity or filters.status or filters.category or filters.owner %}
+<div class="page-header">
+    <div>
+        <div class="page-eyebrow">Risk</div>
+        <h1>Incident Management</h1>
+        <p>Track security incidents from detection to post-incident review.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('incidents.export_csv', **export_args) }}"><i class="fas fa-download" aria-hidden="true"></i> Export CSV</a>
+        {% if current_user.can_write %}
+        <a class="btn btn-primary" href="{{ url_for('incidents.new_incident') }}"><i class="fas fa-plus" aria-hidden="true"></i> Report incident</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="kpi-grid" role="list">
+    <div class="kpi kpi-accent-warning" role="listitem">
+        <div class="kpi-label"><i class="fas fa-folder-open" aria-hidden="true"></i> Open incidents</div>
+        <div class="kpi-value">{{ kpis.open }}</div>
+        <div class="kpi-foot"><span>{{ kpis.total }} total reported</span></div>
+    </div>
+    <div class="kpi kpi-accent-danger" role="listitem">
+        <div class="kpi-label"><i class="fas fa-circle-exclamation" aria-hidden="true"></i> Critical open</div>
+        <div class="kpi-value">{{ kpis.critical }}</div>
+        <div class="kpi-foot"><span>{{ 'Needs immediate attention' if kpis.critical else 'None outstanding' }}</span></div>
+    </div>
+    <div class="kpi kpi-accent-primary" role="listitem">
+        <div class="kpi-label"><i class="fas fa-stopwatch" aria-hidden="true"></i> Mean time to resolve</div>
+        <div class="kpi-value">{% if kpis.mttr_hours is none %}&ndash;{% elif kpis.mttr_hours >= 48 %}{{ (kpis.mttr_hours / 24)|round(1) }}<small>d</small>{% else %}{{ kpis.mttr_hours }}<small>h</small>{% endif %}</div>
+        <div class="kpi-foot"><span>{% if kpis.closed %}Across {{ kpis.closed }} closed{% else %}No closed incidents yet{% endif %}</span></div>
+    </div>
+    <div class="kpi kpi-accent-success" role="listitem">
+        <div class="kpi-label"><i class="fas fa-check" aria-hidden="true"></i> Closed</div>
+        <div class="kpi-value">{{ kpis.closed }}</div>
+        <div class="kpi-foot"><span>Resolved incidents</span></div>
+    </div>
+</div>
+
+<form class="filter-bar" method="get" action="{{ url_for('incidents.incidents') }}" role="search">
+    <div class="filter-search input-icon">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input class="form-control" type="search" name="q" value="{{ filters.q }}" placeholder="Search incidents" aria-label="Search incidents">
+    </div>
+    <select class="filter-select" name="severity" aria-label="Severity" onchange="this.form.submit()">
+        <option value="">All severities</option>
+        {% for s in severities %}<option value="{{ s }}" {{ 'selected' if filters.severity == s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select class="filter-select" name="status" aria-label="Status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        <option value="open" {{ 'selected' if filters.status == 'open' }}>Open (not closed)</option>
+        {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select class="filter-select" name="category" aria-label="Category" onchange="this.form.submit()">
+        <option value="">All categories</option>
+        {% for c in categories %}<option value="{{ c }}" {{ 'selected' if filters.category == c }}>{{ c }}</option>{% endfor %}
+    </select>
+    <select class="filter-select" name="owner" aria-label="Owner" onchange="this.form.submit()">
+        <option value="">Any owner</option>
+        {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if filters.owner == u.id|string }}>{{ u.name }}</option>{% endfor %}
+    </select>
+    <span class="spacer"></span>
+    <button class="btn btn-secondary btn-sm" type="submit">Apply</button>
+    {% if has_filters %}<a class="btn btn-ghost btn-sm" href="{{ url_for('incidents.incidents') }}">Clear</a>{% endif %}
+</form>
+
+{% if incidents %}
+<div class="card">
+    <div class="card-body no-padding">
+        <div class="table-container">
+            <table class="table-sortable">
+                <thead>
+                    <tr>
+                        <th data-sort="text">Incident</th>
+                        <th data-sort="num">Severity</th>
+                        <th data-sort="text">Status</th>
+                        <th data-sort="text">Owner</th>
+                        <th data-sort="text">Detected</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for i in incidents %}
+                    <tr class="is-link" onclick="location='{{ url_for('incidents.incident_detail', incident_id=i.id) }}'">
+                        <td>
+                            <div class="cell-title"><a href="{{ url_for('incidents.incident_detail', incident_id=i.id) }}">{{ i.title }}</a></div>
+                            <div class="cell-sub">#{{ i.id }}{% if i.category %} &middot; {{ i.category }}{% endif %}</div>
+                        </td>
+                        <td data-value="{{ severities.index(i.severity) if i.severity in severities else 0 }}">{{ sev_pill(i.severity) }}</td>
+                        <td>{{ status_pill(i.status) }}</td>
+                        <td>{{ i.owner.name if i.owner else 'Unassigned' }}</td>
+                        <td data-value="{{ i.detected_at.strftime('%Y%m%d%H%M') if i.detected_at else '' }}">{{ i.detected_at.strftime('%d %b %Y %H:%M') if i.detected_at else '' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body">
+    <div class="empty-state">
+        <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
+        {% if has_filters %}
+        <h3>No incidents match these filters</h3>
+        <p>Try broadening your search or clearing the filters.</p>
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('incidents.incidents') }}">Clear filters</a>
+        {% else %}
+        <h3>No incidents recorded</h3>
+        <p>Report security incidents here to track response, link affected controls and risks, and capture lessons learned.</p>
+        {% if current_user.can_write %}<a class="btn btn-primary btn-sm" href="{{ url_for('incidents.new_incident') }}">Report first incident</a>{% endif %}
+        {% endif %}
+    </div>
+</div></div>
+{% endif %}
+{% endblock %}

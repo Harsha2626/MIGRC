@@ -1,0 +1,12 @@
+{# Shared incident UI helpers: severity/status pills. #}
+{% macro sev_pill(sev) -%}
+{%- set cls = {'Critical': 'pill-critical', 'High': 'pill-at-risk', 'Medium': 'pill-info', 'Low': 'pill-neutral'} -%}
+{%- set ico = {'Critical': 'fa-circle-exclamation', 'High': 'fa-triangle-exclamation', 'Medium': 'fa-circle-half-stroke', 'Low': 'fa-arrow-down'} -%}
+<span class="pill {{ cls.get(sev, 'pill-neutral') }}"><i class="fas {{ ico.get(sev, 'fa-circle') }}" aria-hidden="true"></i>{{ sev }}</span>
+{%- endmacro %}
+
+{% macro status_pill(st) -%}
+{%- set cls = {'Detected': 'pill-failing', 'Triaged': 'pill-pending', 'Contained': 'pill-in-progress', 'Eradicated': 'pill-in-progress', 'Recovered': 'pill-info', 'Closed': 'pill-completed'} -%}
+{%- set ico = {'Detected': 'fa-bell', 'Triaged': 'fa-clipboard-check', 'Contained': 'fa-shield-halved', 'Eradicated': 'fa-broom', 'Recovered': 'fa-rotate-left', 'Closed': 'fa-check'} -%}
+<span class="pill {{ cls.get(st, 'pill-neutral') }}"><i class="fas {{ ico.get(st, 'fa-circle') }}" aria-hidden="true"></i>{{ st }}</span>
+{%- endmacro %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit incident' if incident else 'Report incident' }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('incidents.incidents') }}">Incidents</a><span>/</span><span>{{ 'Edit' if incident else 'New' }}</span>{% endblock %}
+
+{% block content %}
+{% set f = request.form if request.method == 'POST' else {} %}
+<div class="page-header">
+    <div>
+        <div class="page-eyebrow">Incidents</div>
+        <h1>{{ 'Edit incident' if incident else 'Report incident' }}</h1>
+        <p>{{ 'Update the details of this incident.' if incident else 'Capture what you know now. You can add timeline notes and details as the response unfolds.' }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('incidents.edit_incident', incident_id=incident.id) if incident else url_for('incidents.new_incident') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="title">Title <span class="required-star">*</span></label>
+                <input id="title" name="title" class="form-control" maxlength="200" required value="{{ f.get('title', incident.title if incident else '') }}" placeholder="e.g. Suspicious login from unknown location">
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="severity">Severity <span class="required-star">*</span></label>
+                    {% set cur_sev = f.get('severity', incident.severity if incident else 'Medium') %}
+                    <select id="severity" name="severity" class="form-control">
+                        {% for s in severities %}<option value="{{ s }}" {{ 'selected' if cur_sev == s }}>{{ s }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="category">Category</label>
+                    {% set cur_cat = f.get('category', incident.category if incident else '') %}
+                    <select id="category" name="category" class="form-control">
+                        <option value="">Select category</option>
+                        {% for c in categories %}<option value="{{ c }}" {{ 'selected' if cur_cat == c }}>{{ c }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="owner_id">Owner</label>
+                    {% set cur_owner = f.get('owner_id') or (incident.owner_id|string if incident and incident.owner_id else '') %}
+                    <select id="owner_id" name="owner_id" class="form-control">
+                        <option value="">Unassigned</option>
+                        {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if cur_owner == u.id|string }}>{{ u.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="detected_at">Detected at</label>
+                    {% set cur_dt = f.get('detected_at') or (incident.detected_at.strftime('%Y-%m-%dT%H:%M') if incident and incident.detected_at else '') %}
+                    <input id="detected_at" name="detected_at" type="datetime-local" class="form-control" value="{{ cur_dt }}">
+                    <div class="form-help">Leave blank to use the current time.</div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" class="form-control" rows="4" placeholder="What happened, how it was detected, current impact">{{ f.get('description', incident.description if incident and incident.description else '') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label for="affected_assets">Affected assets</label>
+                <textarea id="affected_assets" name="affected_assets" class="form-control" rows="2" placeholder="Systems, accounts, data sets or people affected">{{ f.get('affected_assets', incident.affected_assets if incident and incident.affected_assets else '') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label for="root_cause">Root cause</label>
+                <textarea id="root_cause" name="root_cause" class="form-control" rows="2" placeholder="Known or suspected cause (can be filled in later)">{{ f.get('root_cause', incident.root_cause if incident and incident.root_cause else '') }}</textarea>
+            </div>
+            <div class="form-actions">
+                <a class="btn btn-secondary" href="{{ url_for('incidents.incident_detail', incident_id=incident.id) if incident else url_for('incidents.incidents') }}">Cancel</a>
+                <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk" aria-hidden="true"></i> {{ 'Save changes' if incident else 'Report incident' }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
