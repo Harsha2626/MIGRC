@@ -1,52 +1,55 @@
 {% extends "base.html" %}
 {% block title %}{{ risk.title }}{% endblock %}
-{% block breadcrumb %}
-<a href="/risks" style="color:var(--text-secondary);text-decoration:none;">Risk Management</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<span>{{ risk.title }}</span>
-{% endblock %}
+{% block breadcrumb %}<a href="/risks">Risk Management</a><span>/</span><span>{{ risk.title }}</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-c.css') }}">
+{% macro score_pill(score) -%}
+    {% if score >= 20 %}<span class="pill pill-critical"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>Critical</span>
+    {% elif score >= 12 %}<span class="pill pill-warning"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>High</span>
+    {% elif score >= 6 %}<span class="pill pill-info"><i class="fas fa-circle-info" aria-hidden="true"></i>Medium</span>
+    {% else %}<span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>Low</span>{% endif %}
+{%- endmacro %}
+
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+    <ol><li><a href="/risks">Risk Management</a></li><li aria-current="page">{{ risk.title }}</li></ol>
+</nav>
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">{{ risk.category }}</div>
         <h1>{{ risk.title }}</h1>
-        <p>{{ risk.category }} &middot; Owner: {{ risk.owner }} &middot; <a href="/risks">Edit core fields on Risk Register</a></p>
+        <p>Owner: {{ risk.owner or '—' }} &middot; <a href="/risks">Edit core fields on Risk Register</a></p>
     </div>
     <div class="page-actions">
-        {% if risk.status == 'Open' %}<span class="badge badge-danger badge-lg">{{ risk.status }}</span>
-        {% elif risk.status == 'In Treatment' %}<span class="badge badge-warning badge-lg">{{ risk.status }}</span>
-        {% else %}<span class="badge badge-success badge-lg">{{ risk.status }}</span>{% endif %}
-        <a href="/risks" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        {% if risk.status == 'Open' %}<span class="pill pill-danger"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>{{ risk.status }}</span>
+        {% elif risk.status == 'In Treatment' %}<span class="pill pill-warning"><i class="fas fa-wrench" aria-hidden="true"></i>{{ risk.status }}</span>
+        {% else %}<span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>{{ risk.status }}</span>{% endif %}
+        <a href="/risks" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     </div>
 </div>
 
 <!-- Inherent vs Residual -->
-<div class="grid-2" style="margin-bottom:20px;">
+<div class="grid-2 section-gap">
     <div class="card">
-        <div class="card-header"><h3>Inherent Risk</h3></div>
-        <div class="card-body" style="display:flex;gap:24px;align-items:center;">
-            <div style="text-align:center;">
-                <div style="font-size:36px;font-weight:700;{% if risk.score >= 20 %}color:var(--accent-danger){% elif risk.score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ risk.score }}</div>
-                <div class="text-sm text-muted">Score</div>
-            </div>
-            <div>
-                <div class="text-sm"><strong>Likelihood:</strong> {{ risk.likelihood }}</div>
-                <div class="text-sm"><strong>Impact:</strong> {{ risk.impact }}</div>
-            </div>
+        <div class="card-header"><h2 class="card-title">Inherent risk</h2>{{ score_pill(risk.score) }}</div>
+        <div class="card-body score-block">
+            <div class="num-lg">{{ risk.score }}<span class="sr-only"> out of 25</span></div>
+            <dl>
+                <dt>Likelihood</dt><dd>{{ risk.likelihood }}</dd>
+                <dt>Impact</dt><dd>{{ risk.impact }}</dd>
+            </dl>
         </div>
     </div>
     <div class="card">
-        <div class="card-header"><h3>Residual Risk</h3></div>
-        <div class="card-body" style="display:flex;gap:24px;align-items:center;">
+        <div class="card-header"><h2 class="card-title">Residual risk</h2>{% if risk.residual_score is not none %}{{ score_pill(risk.residual_score) }}{% else %}<span class="pill pill-not-assessed"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i>Not assessed</span>{% endif %}</div>
+        <div class="card-body score-block">
             {% if risk.residual_score is not none %}
-            <div style="text-align:center;">
-                <div style="font-size:36px;font-weight:700;{% if risk.residual_score >= 20 %}color:var(--accent-danger){% elif risk.residual_score >= 12 %}color:var(--accent-warning){% else %}color:var(--accent-success){% endif %}">{{ risk.residual_score }}</div>
-                <div class="text-sm text-muted">Score</div>
-            </div>
-            <div>
-                <div class="text-sm"><strong>Likelihood:</strong> {{ risk.residual_likelihood }}</div>
-                <div class="text-sm"><strong>Impact:</strong> {{ risk.residual_impact }}</div>
-            </div>
+            <div class="num-lg">{{ risk.residual_score }}<span class="sr-only"> out of 25</span></div>
+            <dl>
+                <dt>Likelihood</dt><dd>{{ risk.residual_likelihood }}</dd>
+                <dt>Impact</dt><dd>{{ risk.residual_impact }}</dd>
+            </dl>
             {% else %}
             <p class="text-sm text-muted">Not yet assessed &mdash; complete a treatment plan below to record residual risk.</p>
             {% endif %}
@@ -55,23 +58,26 @@
 </div>
 
 <!-- Mitigating Controls -->
-<div class="card" style="margin-bottom:20px;">
+<div class="card section-gap">
     <div class="card-header">
-        <h3>Mitigating Controls</h3>
+        <div>
+            <h2 class="card-title">Mitigating controls</h2>
+            <div class="card-subtitle">{{ risk.mitigating_controls|length }} linked</div>
+        </div>
         {% if current_user.can_write %}
-        <button type="button" class="btn btn-sm btn-primary" onclick="openLinkControlsModal()"><i class="fas fa-link"></i> Link / Unlink Controls</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="openLinkControlsModal()"><i class="fas fa-link" aria-hidden="true"></i> Link / Unlink Controls</button>
         {% endif %}
     </div>
     <div class="card-body">
         {% if risk.mitigating_controls %}
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <div class="cluster">
             {% for c in risk.mitigating_controls %}
-            <a href="{{ url_for('compliance.control_detail', framework_id=c.framework_id, control_id=c.id) }}" class="badge badge-neutral" style="text-decoration:none;" title="{{ c.title }}">{{ c.code }}</a>
+            <a href="{{ url_for('compliance.control_detail', framework_id=c.framework_id, control_id=c.id) }}" class="chip-link" title="{{ c.title }}">{{ c.code }}</a>
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state" style="padding:var(--space-6) var(--space-5);">
-            <i class="fas fa-link-slash" aria-hidden="true"></i>
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-link-slash" aria-hidden="true"></i></div>
             <h3>No controls linked yet</h3>
             <p>Link one or more framework controls that mitigate this risk.</p>
         </div>
@@ -99,9 +105,9 @@
                     <div class="picker-hint-box-header">
                         <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
                         <span>AI Suggestions</span>
-                        <span class="badge badge-neutral" style="margin-left:auto;">Coming soon</span>
+                        <span class="pill pill-neutral push-right">Coming soon</span>
                     </div>
-                    <p class="text-sm text-muted" style="margin:6px 0 0;">
+                    <p class="text-sm text-muted">
                         AI integration is pending. Once enabled, MIGRC will analyze this risk and suggest the most relevant controls from your connected frameworks here &mdash; as suggestions only, for you to review and select below.
                     </p>
                 </div>
@@ -137,61 +143,70 @@
 <!-- Treatment Plans -->
 <div class="card">
     <div class="card-header">
-        <h3>Treatment Plans</h3>
-        <button class="btn btn-sm btn-primary" onclick="toggleEl('addTreatment')"><i class="fas fa-plus"></i> Add Treatment</button>
+        <div>
+            <h2 class="card-title">Treatment plans</h2>
+            <div class="card-subtitle">{{ treatments|length }} plan{{ '' if treatments|length == 1 else 's' }}</div>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" id="addTreatmentBtn" aria-expanded="false" aria-controls="addTreatment" onclick="toggleEl('addTreatment', this)"><i class="fas fa-plus" aria-hidden="true"></i> Add Treatment</button>
     </div>
     <div class="card-body">
-        <div id="addTreatment" style="display:none;margin-bottom:20px;padding:16px;background:var(--bg-tertiary);border-radius:8px;">
+        <div id="addTreatment" class="inset-panel" hidden>
             <form method="POST" action="{{ url_for('risks.add_treatment', risk_id=risk.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
-                    <label>Action</label>
-                    <textarea name="action" class="form-control" placeholder="Describe the treatment action..." required></textarea>
+                    <label for="tr-action">Action <span class="required-star">*</span></label>
+                    <textarea id="tr-action" name="action" class="form-control" placeholder="Describe the treatment action..." required></textarea>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-grid-2">
                     <div class="form-group">
-                        <label>Owner</label>
-                        <input type="text" name="owner" class="form-control">
+                        <label for="tr-owner">Owner</label>
+                        <input type="text" id="tr-owner" name="owner" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label>Deadline</label>
-                        <input type="date" name="deadline" class="form-control">
+                        <label for="tr-deadline">Deadline</label>
+                        <input type="date" id="tr-deadline" name="deadline" class="form-control">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Add Treatment</button>
+                <div class="form-actions"><button type="submit" class="btn btn-primary">Add Treatment</button></div>
             </form>
         </div>
 
         {% if treatments %}
         {% for t in treatments %}
-        <div style="border:1px solid var(--border-color);border-radius:8px;padding:16px;margin-bottom:14px;">
-            <div class="flex-between mb-8">
-                <p style="font-size:13px;margin:0;">{{ t.action }}</p>
-                <span class="badge {% if t.status == 'Completed' %}badge-success{% elif t.status == 'In Progress' %}badge-warning{% else %}badge-neutral{% endif %}">{{ t.status }}</span>
+        <div class="treatment-item">
+            <div class="cluster between">
+                <p class="cell-title">{{ t.action }}</p>
+                {% if t.status == 'Completed' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>{{ t.status }}</span>
+                {% elif t.status == 'In Progress' %}<span class="pill pill-in-progress"><i class="fas fa-spinner" aria-hidden="true"></i>{{ t.status }}</span>
+                {% else %}<span class="pill pill-neutral">{{ t.status }}</span>{% endif %}
             </div>
-            <div class="text-sm text-muted mb-16">Owner: {{ t.owner or '-' }} &middot; Deadline: {{ t.deadline or '-' }}</div>
+            <div class="cell-sub block-gap">Owner: {{ t.owner or '-' }} &middot; Deadline: {{ t.deadline or '-' }}</div>
 
             <!-- Milestones -->
-            <div style="margin-bottom:14px;">
-                <div class="flex-between mb-8">
-                    <span class="text-sm font-semibold">Milestones</span>
-                    <span class="text-sm text-muted">{{ t.milestone_progress }}% complete</span>
+            <div class="block-gap">
+                <div class="progress-label spread">
+                    <strong>Milestones</strong>
+                    <span>{{ t.milestone_progress }}% complete</span>
                 </div>
-                <div class="progress-bar mb-8"><div class="progress-fill blue" style="width:{{ t.milestone_progress }}%"></div></div>
+                <div class="progress" role="progressbar" aria-label="Milestone progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ t.milestone_progress }}"><span style="width:{{ t.milestone_progress }}%"></span></div>
+                <div class="block-gap">
                 {% for m in t.milestones %}
-                <form method="POST" action="{{ url_for('risks.toggle_milestone', risk_id=risk.id, milestone_id=m.id) }}" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <form method="POST" action="{{ url_for('risks.toggle_milestone', risk_id=risk.id, milestone_id=m.id) }}" class="milestone-row">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-secondary btn-icon" style="width:24px;height:24px;padding:0;">
-                        <i class="fas {{ 'fa-check-square' if m.completed else 'fa-square' }}"></i>
+                    <button type="submit" class="btn btn-sm btn-ghost btn-icon" aria-label="{{ 'Mark incomplete: ' if m.completed else 'Mark complete: ' }}{{ m.title }}" aria-pressed="{{ 'true' if m.completed else 'false' }}">
+                        <i class="fas {{ 'fa-square-check' if m.completed else 'fa-square' }}" aria-hidden="true"></i>
                     </button>
-                    <span class="text-sm" style="{% if m.completed %}text-decoration:line-through;color:var(--text-muted);{% endif %}">{{ m.title }}</span>
-                    {% if m.due_date %}<span class="text-sm text-muted">({{ m.due_date }})</span>{% endif %}
+                    <span class="text-sm{% if m.completed %} done-text{% endif %}">{{ m.title }}</span>
+                    {% if m.due_date %}<span class="cell-sub">({{ m.due_date }})</span>{% endif %}
                 </form>
                 {% endfor %}
-                <form method="POST" action="{{ url_for('risks.add_milestone', risk_id=risk.id, treatment_id=t.id) }}" style="display:flex;gap:8px;margin-top:8px;">
+                </div>
+                <form method="POST" action="{{ url_for('risks.add_milestone', risk_id=risk.id, treatment_id=t.id) }}" class="milestone-add">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="text" name="title" class="form-control" placeholder="New milestone..." style="font-size:12px;">
-                    <input type="date" name="due_date" class="form-control" style="font-size:12px;width:150px;">
+                    <label class="sr-only" for="ms-title-{{ t.id }}">New milestone</label>
+                    <input type="text" id="ms-title-{{ t.id }}" name="title" class="form-control" placeholder="New milestone...">
+                    <label class="sr-only" for="ms-due-{{ t.id }}">Milestone due date</label>
+                    <input type="date" id="ms-due-{{ t.id }}" name="due_date" class="form-control">
                     <button type="submit" class="btn btn-sm btn-secondary">Add</button>
                 </form>
             </div>
@@ -199,28 +214,28 @@
             {% if t.status != 'Completed' %}
             <form method="POST" action="{{ url_for('risks.update_treatment_status', risk_id=risk.id, treatment_id=t.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;background:var(--bg-tertiary);padding:12px;border-radius:8px;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="text-sm">Status</label>
-                        <select name="status" class="form-control" style="font-size:12px;">
+                <div class="treatment-update">
+                    <div class="form-group">
+                        <label for="ts-status-{{ t.id }}">Status</label>
+                        <select id="ts-status-{{ t.id }}" name="status" class="form-control">
                             <option {% if t.status == 'Planned' %}selected{% endif %}>Planned</option>
                             <option {% if t.status == 'In Progress' %}selected{% endif %}>In Progress</option>
                             <option>Completed</option>
                         </select>
                     </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="text-sm">Residual Likelihood (if Completed)</label>
-                        <select name="residual_likelihood" class="form-control" style="font-size:12px;">
+                    <div class="form-group">
+                        <label for="ts-rl-{{ t.id }}">Residual likelihood (if completed)</label>
+                        <select id="ts-rl-{{ t.id }}" name="residual_likelihood" class="form-control">
                             {% for l in risk_levels %}<option {% if l == risk.likelihood %}selected{% endif %}>{{ l }}</option>{% endfor %}
                         </select>
                     </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="text-sm">Residual Impact (if Completed)</label>
-                        <select name="residual_impact" class="form-control" style="font-size:12px;">
+                    <div class="form-group">
+                        <label for="ts-ri-{{ t.id }}">Residual impact (if completed)</label>
+                        <select id="ts-ri-{{ t.id }}" name="residual_impact" class="form-control">
                             {% for l in risk_levels %}<option {% if l == risk.impact %}selected{% endif %}>{{ l }}</option>{% endfor %}
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                    <div class="form-group"><button type="submit" class="btn btn-primary">Update</button></div>
                 </div>
             </form>
             {% endif %}
@@ -228,7 +243,7 @@
         {% endfor %}
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-list-check"></i>
+            <div class="empty-state-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
             <h3>No treatment plans yet</h3>
             <p>Add an action to mitigate, transfer, or accept this risk.</p>
         </div>
@@ -239,9 +254,11 @@
 
 {% block scripts %}
 <script>
-function toggleEl(id) {
+function toggleEl(id, btn) {
     const el = document.getElementById(id);
-    el.style.display = el.style.display === 'none' ? '' : 'none';
+    el.hidden = !el.hidden;
+    if (btn) btn.setAttribute('aria-expanded', el.hidden ? 'false' : 'true');
+    if (!el.hidden) { const f = el.querySelector('textarea, input'); if (f) f.focus(); }
 }
 
 // ============================================================

@@ -1,72 +1,224 @@
 {% extends "base.html" %}
 {% block title %}Questionnaire Templates{% endblock %}
-{% block breadcrumb %}
-<a href="/vendors" style="color:var(--text-secondary);text-decoration:none;">Vendor Management</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<span>Questionnaire Templates</span>
-{% endblock %}
+{% block breadcrumb %}<a href="/vendors">Vendor Management</a><span>/</span><span>Questionnaire Templates</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-c.css') }}">
+{% set total_q = namespace(n=0) %}
+{% for t in templates %}{% set total_q.n = total_q.n + (t.questions|list|length) %}{% endfor %}
+
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+    <ol><li><a href="/vendors">Vendor Management</a></li><li aria-current="page">Questionnaire Templates</li></ol>
+</nav>
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">Third-party risk</div>
         <h1>Questionnaire Templates</h1>
         <p>Reusable question sets for vendor assessments</p>
     </div>
     <div class="page-actions">
-        <a href="/vendors" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Vendors</a>
-        <button class="btn btn-primary" onclick="showAddModal()"><i class="fas fa-plus"></i> New Template</button>
+        <a href="/vendors" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Vendors</a>
+        <button type="button" class="btn btn-primary" onclick="showAddModal()"><i class="fas fa-plus" aria-hidden="true"></i> New Template</button>
     </div>
 </div>
 
-<div class="grid-2">
+{% if templates %}
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-clipboard-list" aria-hidden="true"></i> Templates</div>
+        <div class="kpi-value">{{ templates|length }}</div>
+    </div>
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-circle-question" aria-hidden="true"></i> Total questions</div>
+        <div class="kpi-value">{{ total_q.n }}</div>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div class="filter-search input-icon">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input type="search" class="form-control" placeholder="Search templates or questions" aria-label="Search templates or questions" id="tplSearch" oninput="filterTemplates()">
+    </div>
+    <span class="spacer"></span>
+    <span class="result-count" id="tplCount" role="status" aria-live="polite"></span>
+</div>
+
+<div class="tpl-grid" id="tplGrid">
     {% for t in templates %}
-    <div class="card">
+    {% set qs = t.questions|list %}
+    <article class="card tpl-card">
         <div class="card-header">
-            <h3>{{ t.name }}</h3>
-            <form method="POST" action="{{ url_for('vendors.delete_questionnaire', template_id=t.id) }}" onsubmit="return confirm('Delete {{ t.name }}?');">
+            <div>
+                <h2 class="card-title">{{ t.name }}</h2>
+                <div class="card-subtitle">{{ qs|length }} question{{ '' if qs|length == 1 else 's' }}</div>
+            </div>
+            <form method="POST" action="{{ url_for('vendors.delete_questionnaire', template_id=t.id) }}" data-confirm="Delete template &quot;{{ t.name }}&quot;? Assessments already sent keep their answers." data-confirm-title="Delete template" data-confirm-button="Delete">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-danger btn-icon" aria-label="Delete {{ t.name }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete template" aria-label="Delete {{ t.name }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
             </form>
         </div>
         <div class="card-body">
-            {% if t.description %}<p class="text-sm text-muted mb-16">{{ t.description }}</p>{% endif %}
-            <ol style="padding-left:18px;font-size:13px;">
-                {% for q in t.questions %}
-                <li style="margin-bottom:6px;">{{ q.question_text }}</li>
+            {% if t.description %}<p class="text-sm text-muted block-gap">{{ t.description }}</p>{% endif %}
+            {% if qs %}
+            <ol>
+                {% for q in qs %}
+                <li {% if loop.index > 5 %}class="tpl-extra" hidden{% endif %}>{{ q.question_text }}</li>
                 {% endfor %}
             </ol>
+            {% if qs|length > 5 %}
+            <button type="button" class="btn btn-ghost btn-sm tpl-toggle" aria-expanded="false">Show all {{ qs|length }} questions</button>
+            {% endif %}
+            {% else %}
+            <p class="cell-sub">No questions in this template.</p>
+            {% endif %}
         </div>
-    </div>
-    {% else %}
-    <div class="empty-state" style="grid-column:1/-1;">
-        <i class="fas fa-list-check"></i>
-        <h3>No templates yet</h3>
-        <p>Create a reusable questionnaire to start sending vendor assessments.</p>
-    </div>
+    </article>
     {% endfor %}
 </div>
+<div class="card is-hidden-row" id="tplNoMatch">
+    <div class="empty-state">
+        <div class="empty-state-icon"><i class="fas fa-filter" aria-hidden="true"></i></div>
+        <h3>No templates match</h3>
+        <p>Try a different search term.</p>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
+        <h3>No templates yet</h3>
+        <p>Create a reusable questionnaire to start sending vendor assessments.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="showAddModal()"><i class="fas fa-plus" aria-hidden="true"></i> New Template</button>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+function filterTemplates() {
+    const q = document.getElementById('tplSearch').value.toLowerCase();
+    const cards = document.querySelectorAll('#tplGrid .tpl-card');
+    let shown = 0;
+    cards.forEach(c => {
+        const ok = !q || c.textContent.toLowerCase().includes(q);
+        c.classList.toggle('is-hidden-row', !ok);
+        if (ok) shown++;
+    });
+    document.getElementById('tplNoMatch').classList.toggle('is-hidden-row', shown > 0);
+    document.getElementById('tplCount').textContent = `Showing ${shown} of ${cards.length}`;
+}
+if (document.getElementById('tplGrid')) filterTemplates();
+
+document.querySelectorAll('.tpl-toggle').forEach(btn => btn.addEventListener('click', () => {
+    const card = btn.closest('.tpl-card');
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    card.querySelectorAll('.tpl-extra').forEach(li => li.hidden = !open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.textContent = open ? 'Show fewer' : `Show all ${card.querySelectorAll('li').length} questions`;
+}));
+
+// ---- Template builder (modal) ----
+// Each question is its own input; on submit they are joined, one per line,
+// into the single "questions" field the server expects.
+function qbRow(value) {
+    const row = document.createElement('div');
+    row.className = 'qb-row';
+    row.innerHTML = `
+        <span class="qb-num" aria-hidden="true"></span>
+        <input type="text" class="form-control qb-input" aria-label="Question" placeholder="e.g. Do you encrypt data at rest?">
+        <button type="button" class="btn btn-ghost btn-icon btn-sm qb-up" aria-label="Move question up"><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm qb-down" aria-label="Move question down"><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm qb-del" aria-label="Remove question"><i class="fas fa-xmark" aria-hidden="true"></i></button>`;
+    row.querySelector('.qb-input').value = value || '';
+    return row;
+}
+function qbRefresh() {
+    const list = document.getElementById('qbList');
+    const rows = Array.from(list.children);
+    rows.forEach((r, i) => {
+        r.querySelector('.qb-num').textContent = (i + 1) + '.';
+        r.querySelector('.qb-input').setAttribute('aria-label', 'Question ' + (i + 1));
+        r.querySelector('.qb-up').disabled = i === 0;
+        r.querySelector('.qb-down').disabled = i === rows.length - 1;
+    });
+    const n = rows.filter(r => r.querySelector('.qb-input').value.trim()).length;
+    document.getElementById('qbCount').textContent = n + (n === 1 ? ' question' : ' questions');
+}
+function qbAdd(value, focus) {
+    const row = qbRow(value);
+    document.getElementById('qbList').appendChild(row);
+    qbRefresh();
+    if (focus) row.querySelector('input').focus();
+}
+function qbBind() {
+    const list = document.getElementById('qbList');
+    list.addEventListener('click', e => {
+        const row = e.target.closest('.qb-row');
+        if (!row) return;
+        if (e.target.closest('.qb-del')) {
+            if (list.children.length > 1) row.remove(); else row.querySelector('input').value = '';
+        } else if (e.target.closest('.qb-up') && row.previousElementSibling) {
+            list.insertBefore(row, row.previousElementSibling);
+        } else if (e.target.closest('.qb-down') && row.nextElementSibling) {
+            list.insertBefore(row.nextElementSibling, row);
+        }
+        qbRefresh();
+    });
+    list.addEventListener('input', qbRefresh);
+    list.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target.classList.contains('qb-input')) { e.preventDefault(); qbAdd('', true); }
+    });
+    // Pasting several lines splits them into separate questions.
+    list.addEventListener('paste', e => {
+        const text = (e.clipboardData || window.clipboardData).getData('text');
+        if (!/\n/.test(text.trim())) return;
+        e.preventDefault();
+        const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        const row = e.target.closest('.qb-row');
+        row.querySelector('input').value = lines[0];
+        let after = row;
+        lines.slice(1).forEach(l => { const r = qbRow(l); after.after(r); after = r; });
+        qbRefresh();
+    });
+    document.getElementById('qbAddBtn').addEventListener('click', () => qbAdd('', true));
+    document.getElementById('templateForm').addEventListener('submit', () => {
+        document.getElementById('qbQuestions').value =
+            Array.from(document.querySelectorAll('#qbList .qb-input')).map(i => i.value.trim()).filter(Boolean).join('\n');
+    });
+    qbAdd('', false); qbAdd('', false); qbAdd('', false);
+}
+
 function showAddModal() {
     openModal('New Questionnaire Template', `
         <form id="templateForm" method="POST" action="{{ url_for('vendors.add_questionnaire') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Template Name</label>
-                <input type="text" name="name" class="form-control" placeholder="e.g. Annual Security Questionnaire" required>
+                <label for="tpl-name">Template name <span class="required-star">*</span></label>
+                <input type="text" id="tpl-name" name="name" class="form-control" placeholder="e.g. Annual Security Questionnaire" required>
             </div>
             <div class="form-group">
-                <label>Description</label>
-                <input type="text" name="description" class="form-control" placeholder="Optional description">
+                <label for="tpl-desc">Description</label>
+                <input type="text" id="tpl-desc" name="description" class="form-control" placeholder="Optional description">
             </div>
             <div class="form-group">
-                <label>Questions (one per line)</label>
-                <textarea name="questions" class="form-control" rows="8" placeholder="Do you encrypt data at rest?&#10;Do you have a documented incident response plan?&#10;..."></textarea>
+                <div class="qb-head"><span class="form-label" id="qbLabel">Questions</span><span class="qb-count" id="qbCount" role="status" aria-live="polite"></span></div>
+                <div id="qbList" class="qb-list" role="group" aria-labelledby="qbLabel"></div>
+                <div class="form-help">Press Enter to add another question, or paste several lines to split them automatically.</div>
+                <button type="button" class="btn btn-secondary btn-sm" id="qbAddBtn"><i class="fas fa-plus" aria-hidden="true"></i> Add question</button>
+                <input type="hidden" name="questions" id="qbQuestions" value="">
             </div>
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'templateForm\').submit()">Create Template</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="submitTemplateForm()">Create Template</button>');
+    qbBind();
+    const n = document.getElementById('tpl-name'); if (n) n.focus();
+}
+function submitTemplateForm() {
+    const f = document.getElementById('templateForm');
+    if (!f.reportValidity()) return;
+    f.dispatchEvent(new Event('submit'));
+    f.submit();
 }
 </script>
 {% endblock %}

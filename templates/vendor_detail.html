@@ -1,164 +1,220 @@
 {% extends "base.html" %}
 {% block title %}{{ vendor.name }}{% endblock %}
-{% block breadcrumb %}
-<a href="/vendors" style="color:var(--text-secondary);text-decoration:none;">Vendor Management</a>
-<i class="fas fa-chevron-right" style="font-size:10px;margin:0 8px;color:var(--text-muted);"></i>
-<span>{{ vendor.name }}</span>
-{% endblock %}
+{% block breadcrumb %}<a href="/vendors">Vendor Management</a><span>/</span><span>{{ vendor.name }}</span>{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page-c.css') }}">
+{% set latest = assessments[0] if assessments else none %}
+{% set done_n = assessments|selectattr('status', 'equalto', 'Completed')|list|length %}
+
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+    <ol><li><a href="/vendors">Vendor Management</a></li><li aria-current="page">{{ vendor.name }}</li></ol>
+</nav>
+
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">{{ vendor.category or 'Vendor' }}</div>
         <h1>{{ vendor.name }}</h1>
-        <p>{{ vendor.category }} &middot; Next assessment due {{ vendor.next_assessment }} &middot; <a href="/vendors">Edit core fields on Vendor list</a></p>
+        <p>Next assessment due {{ vendor.next_assessment or '—' }} &middot; <a href="/vendors">Edit core fields on Vendor list</a></p>
     </div>
     <div class="page-actions">
-        <a href="/vendors" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        {% if vendor.status == 'Approved' %}<span class="pill pill-approved"><i class="fas fa-check" aria-hidden="true"></i>{{ vendor.status }}</span>
+        {% elif vendor.status == 'In Progress' %}<span class="pill pill-in-progress"><i class="fas fa-spinner" aria-hidden="true"></i>{{ vendor.status }}</span>
+        {% else %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>{{ vendor.status }}</span>{% endif %}
+        <a href="/vendors" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     </div>
 </div>
 
-<!-- Vendor Details -->
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-header"><h3>Vendor Details</h3></div>
-    <div class="card-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-            <div>
-                <div class="text-sm text-muted">Category</div>
-                <div class="font-semibold">{{ vendor.category or '—' }}</div>
+<div class="kpi-grid">
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-clipboard-question" aria-hidden="true"></i> Assessments</div>
+        <div class="kpi-value">{{ assessments|length }}</div>
+        <div class="kpi-foot"><span>{{ done_n }} completed</span></div>
+    </div>
+    <div class="kpi {% if latest and latest.verdict == 'Pass' %}kpi-accent-success{% elif latest and latest.verdict == 'Fail' %}kpi-accent-danger{% else %}kpi-accent-warning{% endif %}">
+        <div class="kpi-label"><i class="fas fa-gavel" aria-hidden="true"></i> Latest verdict</div>
+        <div class="kpi-value kpi-text">{{ (latest.verdict if latest and latest.verdict else 'None yet') }}</div>
+        <div class="kpi-foot"><span>{{ latest.template.name if latest else 'No assessment sent' }}</span></div>
+    </div>
+    <div class="kpi kpi-accent-primary">
+        <div class="kpi-label"><i class="fas fa-file-shield" aria-hidden="true"></i> Documents</div>
+        <div class="kpi-value">{{ documents|length }}</div>
+    </div>
+    <div class="kpi kpi-accent-warning">
+        <div class="kpi-label"><i class="fas fa-calendar-check" aria-hidden="true"></i> Next assessment</div>
+        <div class="kpi-value kpi-text">{{ vendor.next_assessment or '—' }}</div>
+        <div class="kpi-foot"><span>Last: {{ vendor.last_assessment or '—' }}</span></div>
+    </div>
+</div>
+
+<div data-tabs id="vendorTabs">
+    <div class="tabs" role="tablist" aria-label="Vendor sections">
+        <button type="button" class="tab active" role="tab" data-tab="overview" id="vtab-overview" aria-controls="vpanel-overview">Overview</button>
+        <button type="button" class="tab" role="tab" data-tab="assessments" id="vtab-assessments" aria-controls="vpanel-assessments">Assessments <span class="count">{{ assessments|length }}</span></button>
+        <button type="button" class="tab" role="tab" data-tab="documents" id="vtab-documents" aria-controls="vpanel-documents">Documents <span class="count">{{ documents|length }}</span></button>
+        <button type="button" class="tab" role="tab" data-tab="risk" id="vtab-risk" aria-controls="vpanel-risk">Risk</button>
+    </div>
+
+    <!-- Overview -->
+    <div class="tab-panel" data-panel="overview" id="vpanel-overview" role="tabpanel" aria-labelledby="vtab-overview">
+        <div class="card">
+            <div class="card-header"><h2 class="card-title">Vendor details</h2></div>
+            <div class="card-body">
+                <dl class="meta-grid">
+                    <div><dt>Category</dt><dd>{{ vendor.category or '—' }}</dd></div>
+                    <div><dt>Vendor URL</dt><dd>{% if vendor.website %}<a href="{{ vendor.website }}" target="_blank" rel="noopener noreferrer">{{ vendor.website }}</a>{% else %}—{% endif %}</dd></div>
+                    <div><dt>POC name</dt><dd>{{ vendor.contact_name or '—' }}</dd></div>
+                    <div><dt>POC email</dt><dd>{% if vendor.contact_email %}<a href="mailto:{{ vendor.contact_email }}">{{ vendor.contact_email }}</a>{% else %}—{% endif %}</dd></div>
+                    <div><dt>Compliance certifications</dt><dd>
+                        <div class="cert-list">{% for c in vendor.compliance or [] %}<span class="tag">{{ c }}</span>{% else %}<span class="cell-sub">None recorded</span>{% endfor %}</div>
+                    </dd></div>
+                </dl>
             </div>
-            <div>
-                <div class="text-sm text-muted">Vendor URL</div>
-                <div class="font-semibold">
-                    {% if vendor.website %}<a href="{{ vendor.website }}" target="_blank" rel="noopener noreferrer">{{ vendor.website }}</a>
-                    {% else %}—{% endif %}
+        </div>
+    </div>
+
+    <!-- Assessments -->
+    <div class="tab-panel" data-panel="assessments" id="vpanel-assessments" role="tabpanel" aria-labelledby="vtab-assessments" hidden>
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Assessments</h2>
+                    <div class="card-subtitle">Questionnaires sent to this vendor</div>
+                </div>
+                {% if current_user.can_write %}
+                <button type="button" class="btn btn-sm btn-primary" onclick="showSendAssessmentModal()" {% if not templates %}disabled title="Create a questionnaire template first"{% endif %}><i class="fas fa-paper-plane" aria-hidden="true"></i> Send Assessment</button>
+                {% endif %}
+            </div>
+            <div class="card-body no-padding">
+                {% if assessments %}
+                <div class="table-container">
+                    <table class="table-sortable">
+                        <thead><tr>
+                            <th data-sort="text">Questionnaire</th><th data-sort="text">Status</th><th data-sort="text">Verdict</th>
+                            <th data-sort="text">Sent</th><th data-sort="text">Completed</th><th class="actions"><span class="sr-only">Actions</span></th>
+                        </tr></thead>
+                        <tbody>
+                            {% for a in assessments %}
+                            <tr>
+                                <td class="cell-title">{{ a.template.name }}</td>
+                                <td>
+                                    {% if a.status == 'Completed' %}<span class="pill pill-completed"><i class="fas fa-check" aria-hidden="true"></i>{{ a.status }}</span>
+                                    {% elif a.status == 'In Progress' %}<span class="pill pill-in-progress"><i class="fas fa-spinner" aria-hidden="true"></i>{{ a.status }}</span>
+                                    {% else %}<span class="pill pill-neutral"><i class="fas fa-paper-plane" aria-hidden="true"></i>{{ a.status }}</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if a.verdict == 'Pass' %}<span class="pill pill-passing"><i class="fas fa-check" aria-hidden="true"></i>{{ a.verdict }}</span>
+                                    {% elif a.verdict == 'Fail' %}<span class="pill pill-failing"><i class="fas fa-xmark" aria-hidden="true"></i>{{ a.verdict }}</span>
+                                    {% elif a.verdict == 'Needs Follow-up' %}<span class="pill pill-warning"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i>{{ a.verdict }}</span>
+                                    {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                                </td>
+                                <td>{{ a.sent_date or '—' }}</td>
+                                <td>{{ a.completed_date or '—' }}</td>
+                                <td class="actions">
+                                    <div class="row-actions">
+                                        <a href="{{ url_for('vendors.assessment_detail', vendor_id=vendor.id, assessment_id=a.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Open assessment" aria-label="Open assessment {{ a.template.name }}"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-clipboard-question" aria-hidden="true"></i></div>
+                    <h3>No assessments yet</h3>
+                    <p>Send a questionnaire to collect this vendor's security posture and get a Pass / Fail / Needs Follow-up verdict.</p>
+                    {% if current_user.can_write and templates %}
+                    <button type="button" class="btn btn-primary btn-sm" onclick="showSendAssessmentModal()"><i class="fas fa-paper-plane" aria-hidden="true"></i> Send Assessment</button>
+                    {% elif current_user.can_write %}
+                    <a href="{{ url_for('vendors.questionnaires') }}" class="btn btn-secondary btn-sm">Create a questionnaire template</a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="tab-panel" data-panel="documents" id="vpanel-documents" role="tabpanel" aria-labelledby="vtab-documents" hidden>
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Compliance documents</h2>
+                    <div class="card-subtitle">SOC 2 reports, questionnaires and other evidence</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" aria-expanded="false" aria-controls="uploadDoc" onclick="toggleEl('uploadDoc', this)"><i class="fas fa-upload" aria-hidden="true"></i> Upload Document</button>
+            </div>
+            <div class="card-body">
+                <div id="uploadDoc" class="inset-panel" hidden>
+                    <form method="POST" action="{{ url_for('vendors.upload_vendor_document', vendor_id=vendor.id) }}" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label for="doc-title">Title</label>
+                                <input type="text" id="doc-title" name="title" class="form-control" placeholder="e.g. SOC 2 Type II Report">
+                            </div>
+                            <div class="form-group">
+                                <label for="doc-file">File <span class="required-star">*</span></label>
+                                <input type="file" id="doc-file" name="file" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="form-actions"><button type="submit" class="btn btn-primary">Upload</button></div>
+                    </form>
+                </div>
+                {% if documents %}
+                <div class="table-container">
+                    <table class="table-sortable">
+                        <thead><tr><th data-sort="text">Document</th><th data-sort="text">Uploaded</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            {% for d in documents %}
+                            <tr>
+                                <td><div class="cell-title">{{ d.title }}</div><div class="cell-sub mono">{{ d.file_name }}</div></td>
+                                <td data-value="{{ d.created_at.strftime('%Y-%m-%d') if d.created_at else '' }}">{{ d.created_at.strftime('%d %b %Y') if d.created_at else '-' }}</td>
+                                <td class="actions">
+                                    <div class="row-actions">
+                                        <form method="POST" action="{{ url_for('vendors.delete_vendor_document', vendor_id=vendor.id, evidence_id=d.id) }}" data-confirm="Delete document &quot;{{ d.title }}&quot;?" data-confirm-title="Delete document" data-confirm-button="Delete">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete document" aria-label="Delete document {{ d.title }}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-file-shield" aria-hidden="true"></i></div>
+                    <h3>No documents uploaded yet</h3>
+                    <p>Upload SOC 2 reports, security questionnaires, or other compliance evidence for this vendor.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk -->
+    <div class="tab-panel" data-panel="risk" id="vpanel-risk" role="tabpanel" aria-labelledby="vtab-risk" hidden>
+        <div class="card">
+            <div class="card-header">
+                <div class="vendor-risk-hint">
+                    <i class="fas fa-wand-magic-sparkles icon-accent" aria-hidden="true"></i>
+                    <div>
+                        <h2 class="card-title">Risk</h2>
+                        <div class="card-subtitle">AI analyzes this vendor's uploaded documents to surface potential risks. Review and add them to your <a href="/risks">risk register</a> once reviewed.</div>
+                    </div>
                 </div>
             </div>
-            <div>
-                <div class="text-sm text-muted">POC Name</div>
-                <div class="font-semibold">{{ vendor.contact_name or '—' }}</div>
-            </div>
-            <div>
-                <div class="text-sm text-muted">POC Email</div>
-                <div class="font-semibold">
-                    {% if vendor.contact_email %}<a href="mailto:{{ vendor.contact_email }}">{{ vendor.contact_email }}</a>
-                    {% else %}—{% endif %}
+            <div class="card-body" id="vendorRiskPanel">
+                <div class="locked-card">
+                    <div class="locked-icon"><i class="fas fa-lock" aria-hidden="true"></i></div>
+                    <h4>AI is Not Enabled</h4>
+                    <p>You currently don't have access to AI risk suggestions because AI is disabled.<br>Kindly enable it from <a href="/settings">Settings &gt; AI</a>.</p>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Documents -->
-<div class="card">
-    <div class="card-header">
-        <h3>Compliance Documents</h3>
-        <button class="btn btn-sm btn-primary" onclick="toggleEl('uploadDoc')"><i class="fas fa-upload"></i> Upload Document</button>
-    </div>
-    <div class="card-body">
-        <div id="uploadDoc" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg-tertiary);border-radius:8px;">
-            <form method="POST" action="{{ url_for('vendors.upload_vendor_document', vendor_id=vendor.id) }}" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="flex gap-8">
-                    <input type="text" name="title" class="form-control" placeholder="e.g. SOC 2 Type II Report">
-                    <input type="file" name="file" class="form-control" required>
-                    <button type="submit" class="btn btn-primary">Upload</button>
-                </div>
-            </form>
-        </div>
-        {% if documents %}
-        <table>
-            <thead><tr><th>Document</th><th>Uploaded</th><th></th></tr></thead>
-            <tbody>
-                {% for d in documents %}
-                <tr>
-                    <td>{{ d.title }} <span class="text-sm text-muted">({{ d.file_name }})</span></td>
-                    <td class="text-sm">{{ d.created_at.strftime('%d %b %Y') if d.created_at else '-' }}</td>
-                    <td>
-                        <form method="POST" action="{{ url_for('vendors.delete_vendor_document', vendor_id=vendor.id, evidence_id=d.id) }}" onsubmit="return confirm('Delete this document?');">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-danger-outline btn-icon" title="Delete document"><i class="fas fa-trash"></i></button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state">
-            <div class="empty-state-icon"><i class="fas fa-file-shield" aria-hidden="true"></i></div>
-            <h3>No documents uploaded yet</h3>
-            <p>Upload SOC 2 reports, security questionnaires, or other compliance evidence for this vendor.</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Assessments -->
-<div class="card" style="margin-top:20px;">
-    <div class="card-header">
-        <h3>Assessments</h3>
-        {% if current_user.can_write %}
-        <button class="btn btn-sm btn-primary" onclick="showSendAssessmentModal()" {% if not templates %}disabled title="Create a questionnaire template first"{% endif %}><i class="fas fa-paper-plane"></i> Send Assessment</button>
-        {% endif %}
-    </div>
-    <div class="card-body no-padding">
-        {% if assessments %}
-        <table>
-            <thead><tr><th>Questionnaire</th><th>Status</th><th>Verdict</th><th>Sent</th><th>Completed</th><th></th></tr></thead>
-            <tbody>
-                {% for a in assessments %}
-                <tr>
-                    <td class="font-semibold">{{ a.template.name }}</td>
-                    <td>
-                        {% if a.status == 'Completed' %}<span class="badge badge-success">{{ a.status }}</span>
-                        {% elif a.status == 'In Progress' %}<span class="badge badge-warning">{{ a.status }}</span>
-                        {% else %}<span class="badge badge-neutral">{{ a.status }}</span>{% endif %}
-                    </td>
-                    <td>
-                        {% if a.verdict == 'Pass' %}<span class="badge badge-success">{{ a.verdict }}</span>
-                        {% elif a.verdict == 'Fail' %}<span class="badge badge-danger">{{ a.verdict }}</span>
-                        {% elif a.verdict == 'Needs Follow-up' %}<span class="badge badge-warning">{{ a.verdict }}</span>
-                        {% else %}<span class="text-muted">&mdash;</span>{% endif %}
-                    </td>
-                    <td class="text-sm">{{ a.sent_date or '—' }}</td>
-                    <td class="text-sm">{{ a.completed_date or '—' }}</td>
-                    <td>
-                        <a href="{{ url_for('vendors.assessment_detail', vendor_id=vendor.id, assessment_id=a.id) }}" class="btn btn-sm btn-secondary btn-icon" title="Open assessment"><i class="fas fa-arrow-up-right-from-square"></i></a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state">
-            <div class="empty-state-icon"><i class="fas fa-clipboard-question" aria-hidden="true"></i></div>
-            <h3>No assessments yet</h3>
-            <p>Send a questionnaire to collect this vendor's security posture and get a Pass / Fail / Needs Follow-up verdict.</p>
-            {% if current_user.can_write and templates %}
-            <button class="btn btn-primary btn-sm" onclick="showSendAssessmentModal()"><i class="fas fa-paper-plane" aria-hidden="true"></i> Send Assessment</button>
-            {% endif %}
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Risk -->
-<div class="card" style="margin-top:20px;">
-    <div class="card-header" style="cursor:pointer;" role="button" tabindex="0" aria-expanded="true" aria-controls="vendorRiskPanel" onclick="toggleEl('vendorRiskPanel', this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleEl('vendorRiskPanel', this); }">
-        <div style="display:flex;gap:12px;align-items:flex-start;">
-            <i class="fas fa-wand-magic-sparkles" aria-hidden="true" style="color:var(--accent-primary);font-size:15px;margin-top:2px;"></i>
-            <div>
-                <h3 style="margin-bottom:2px;">Risk</h3>
-                <p class="text-sm text-muted" style="margin-bottom:0;">AI analyzes this vendor's uploaded documents to surface potential risks. Review and add them to your <a href="/risks" onclick="event.stopPropagation()">risk register</a> once reviewed.</p>
-            </div>
-        </div>
-        <i class="fas fa-chevron-up" aria-hidden="true" style="color:var(--text-muted);font-size:12px;"></i>
-    </div>
-    <div class="card-body" id="vendorRiskPanel">
-        <div class="locked-card">
-            <div class="locked-icon"><i class="fas fa-lock"></i></div>
-            <h4>AI is Not Enabled</h4>
-            <p>You currently don't have access to AI risk suggestions because AI is disabled.<br>Kindly enable it from <a href="/settings">Settings &gt; AI</a>.</p>
         </div>
     </div>
 </div>
@@ -166,11 +222,14 @@
 
 {% block scripts %}
 <script>
-function toggleEl(id, header) {
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toggleEl(id, btn) {
     const el = document.getElementById(id);
-    const collapsed = el.style.display === 'none';
-    el.style.display = collapsed ? '' : 'none';
-    if (header) header.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+    el.hidden = !el.hidden;
+    if (btn) btn.setAttribute('aria-expanded', el.hidden ? 'false' : 'true');
+    if (!el.hidden) { const f = el.querySelector('input'); if (f) f.focus(); }
 }
 
 {% if current_user.can_write %}
@@ -179,17 +238,17 @@ const QUESTIONNAIRE_TEMPLATES = [
     {% endfor %}
 ];
 function showSendAssessmentModal() {
-    const templateOptions = QUESTIONNAIRE_TEMPLATES.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    const templateOptions = QUESTIONNAIRE_TEMPLATES.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
     openModal('Send Assessment', `
         <form id="sendAssessmentForm" method="POST" action="{{ url_for('vendors.send_assessment', vendor_id=vendor.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Questionnaire Template</label>
-                <select name="template_id" class="form-control" required>${templateOptions}</select>
-                <span class="form-help">{{ vendor.name }} will be tracked against this questionnaire. Manage templates from <a href="{{ url_for('vendors.questionnaires') }}">Questionnaire Templates</a>.</span>
+                <label for="sa-template">Questionnaire template <span class="required-star">*</span></label>
+                <select id="sa-template" name="template_id" class="form-control" required>${templateOptions}</select>
+                <div class="form-help">${esc({{ vendor.name|tojson }})} will be tracked against this questionnaire. Manage templates from <a href="{{ url_for('vendors.questionnaires') }}">Questionnaire Templates</a>.</div>
             </div>
         </form>
-    `, '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="document.getElementById(\'sendAssessmentForm\').submit()">Send</button>');
+    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="document.getElementById(\'sendAssessmentForm\').submit()">Send</button>');
 }
 {% endif %}
 </script>
