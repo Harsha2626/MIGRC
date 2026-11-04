@@ -1112,6 +1112,80 @@ class DashboardSnapshot(db.Model):
     __table_args__ = (db.UniqueConstraint('organization_id', 'snapshot_date', name='uq_org_dashboard_snapshot_date'),)
 
 
+incident_controls = db.Table(
+    'incident_controls',
+    db.Column('incident_id', db.Integer, db.ForeignKey('incidents.id'), primary_key=True),
+    db.Column('control_id', db.Integer, db.ForeignKey('controls.id'), primary_key=True),
+)
+
+incident_risks = db.Table(
+    'incident_risks',
+    db.Column('incident_id', db.Integer, db.ForeignKey('incidents.id'), primary_key=True),
+    db.Column('risk_id', db.Integer, db.ForeignKey('risks.id'), primary_key=True),
+)
+
+
+class Incident(db.Model):
+    """Security incident, tracked Detected -> Triaged -> Contained -> Eradicated -> Recovered -> Closed.
+    Post-incident review fields live on the incident itself. Always query with organization_id."""
+    __tablename__ = 'incidents'
+    SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
+    STATUSES = ['Detected', 'Triaged', 'Contained', 'Eradicated', 'Recovered', 'Closed']
+    CATEGORIES = ['Malware', 'Phishing', 'Data Breach', 'Unauthorized Access', 'Denial of Service',
+                  'Insider Threat', 'Lost/Stolen Device', 'Vendor/Third Party', 'Misconfiguration', 'Other']
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    severity = db.Column(db.String(20), nullable=False, default='Medium')
+    status = db.Column(db.String(20), nullable=False, default='Detected')
+    category = db.Column(db.String(50))
+    detected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reported_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    affected_assets = db.Column(db.Text)
+    root_cause = db.Column(db.Text)
+    resolution_summary = db.Column(db.Text)
+    closed_at = db.Column(db.DateTime)
+    # Post-incident review
+    lessons_learned = db.Column(db.Text)
+    follow_up_actions = db.Column(db.Text)
+    review_completed_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    reported_by = db.relationship('User', foreign_keys=[reported_by_id])
+    owner = db.relationship('User', foreign_keys=[owner_id])
+    controls = db.relationship('Control', secondary=incident_controls, backref='incidents')
+    risks = db.relationship('Risk', secondary=incident_risks, backref='incidents')
+    timeline = db.relationship('IncidentTimelineEntry', backref='incident', cascade='all, delete-orphan',
+                               order_by='IncidentTimelineEntry.created_at.desc(), IncidentTimelineEntry.id.desc()')
+
+    @property
+    def is_open(self):
+        return self.status != 'Closed'
+
+    @property
+    def resolution_hours(self):
+        if self.closed_at and self.detected_at:
+            return (self.closed_at - self.detected_at).total_seconds() / 3600.0
+        return None
+
+
+class IncidentTimelineEntry(db.Model):
+    __tablename__ = 'incident_timeline_entries'
+    ENTRY_TYPES = ['note', 'status_change', 'action']
+    id = db.Column(db.Integer, primary_key=True)
+    incident_id = db.Column(db.Integer, db.ForeignKey('incidents.id'), nullable=False, index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    entry_type = db.Column(db.String(20), nullable=False, default='note')
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    author = db.relationship('User')
+
+
 class ActivityLog(db.Model):
     __tablename__ = 'activity_log'
     id = db.Column(db.Integer, primary_key=True)
