@@ -6,30 +6,38 @@
 {% set entity_icons = {'Risk': 'fa-triangle-exclamation', 'Policy': 'fa-file-shield', 'Vendor': 'fa-building',
     'Asset': 'fa-server', 'Audit': 'fa-magnifying-glass-chart', 'Evidence': 'fa-file-lines',
     'Employee': 'fa-user', 'TrainingCampaign': 'fa-graduation-cap', 'AccessReview': 'fa-user-lock'} %}
+{% set not_assessed_total = total_controls - passing_controls - failing_controls - na_controls %}
+{% set kpi_accent = {'blue': 'primary', 'red': 'danger', 'purple': 'primary', 'orange': 'warning'} %}
 
 <div class="page-header">
     <div>
+        <div class="page-eyebrow">{{ current_org.name if current_org else 'MIGRC' }}</div>
         <h1>Compliance Dashboard</h1>
-        <p>Real-time overview of your compliance and security posture</p>
+        <p>Your live security and compliance posture across frameworks, risks and audits.</p>
+    </div>
+    <div class="page-actions">
+        <a href="/tests" class="btn btn-secondary"><i class="fas fa-vial" aria-hidden="true"></i> Review tests</a>
+        <a href="/reports" class="btn btn-primary"><i class="fas fa-file-export" aria-hidden="true"></i> Export report</a>
     </div>
 </div>
 
-<!-- Row: KPI summary -->
+<!-- KPI row -->
 {% if kpis %}
-<div class="stats-grid">
+<div class="kpi-grid" role="list">
     {% for kpi in kpis %}
-    <div class="stat-card">
-        <div class="stat-icon {{ kpi.color }}"><i class="fas {{ kpi.icon }}"></i></div>
-        <div class="stat-info">
-            <div class="stat-label">{{ kpi.label }}</div>
-            <div class="stat-value">{{ kpi.value }}</div>
+    <div class="kpi kpi-accent-{{ kpi_accent.get(kpi.color, 'primary') }}" role="listitem">
+        <div class="kpi-label"><i class="fas {{ kpi.icon }}" aria-hidden="true"></i> {{ kpi.label }}</div>
+        <div class="kpi-value">{{ kpi.value }}</div>
+        <div class="kpi-foot">
             {% if kpi.direction %}
-            <div class="stat-change {{ 'up' if kpi.is_good else 'down' }}">
-                <i class="fas {{ 'fa-arrow-up' if kpi.direction == 'up' else ('fa-arrow-down' if kpi.direction == 'down' else 'fa-minus') }}"></i>
-                <span>{{ kpi.delta|abs }} vs last week</span>
-            </div>
+            <span class="delta {{ 'flat' if kpi.direction == 'flat' else ('good' if kpi.is_good else 'bad') }}">
+                <i class="fas {{ 'fa-arrow-up' if kpi.direction == 'up' else ('fa-arrow-down' if kpi.direction == 'down' else 'fa-minus') }}" aria-hidden="true"></i>
+                {{ kpi.delta|abs }}
+                <span class="sr-only">{{ 'change, ' ~ ('improving' if kpi.is_good else 'worsening') if kpi.direction != 'flat' else 'no change' }}</span>
+            </span>
+            <span>vs last week</span>
             {% else %}
-            <div class="stat-change"><span>No prior data yet</span></div>
+            <span>No prior data yet</span>
             {% endif %}
         </div>
     </div>
@@ -37,232 +45,261 @@
 </div>
 {% endif %}
 
-<!-- Row: Compliance Donut + Framework Progress -->
-<div class="grid-2">
-    <!-- Compliance Overview Donut -->
+<!-- Row 1: posture ring + trend -->
+<div class="dash-grid even">
     <div class="card">
         <div class="card-header">
-            <h3>Control Status Overview</h3>
-            <select class="filter-select" id="controlsDonutFilter" style="font-size:12px;padding:4px 10px;" onchange="updateControlsDonut(this.value)">
-                <option value="all">All Frameworks</option>
-                {% for fw in frameworks %}
-                <option value="{{ fw.id }}">{{ fw.name }}</option>
-                {% endfor %}
+            <div>
+                <h2 class="card-title">Control status</h2>
+                <div class="card-subtitle">{{ total_controls }} controls in scope</div>
+            </div>
+            <label class="sr-only" for="controlsDonutFilter">Framework</label>
+            <select class="filter-select" id="controlsDonutFilter" onchange="updateControlsDonut(this.value)">
+                <option value="all">All frameworks</option>
+                {% for fw in frameworks %}<option value="{{ fw.id }}">{{ fw.name }}</option>{% endfor %}
             </select>
         </div>
-        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:40px;flex-wrap:wrap;">
-            <div class="chart-container" style="width:220px;height:220px;">
-                <canvas id="controlsDonut"></canvas>
-                <div class="chart-center-label">
-                    <div class="value" id="donutScoreValue">{{ compliance_score }}%</div>
-                    <div class="label">Score</div>
+        <div class="card-body" style="display:flex;align-items:center;justify-content:center;gap:36px;flex-wrap:wrap;">
+            <div class="ring" role="img" aria-label="Compliance score {{ compliance_score }} percent">
+                <svg viewBox="0 0 168 168" aria-hidden="true" id="scoreRing">
+                    <circle class="ring-track" cx="84" cy="84" r="70" fill="none" stroke-width="14"></circle>
+                </svg>
+                <div class="ring-center">
+                    <div class="ring-value" id="donutScoreValue">{{ compliance_score }}%</div>
+                    <div class="ring-label">Compliant</div>
                 </div>
             </div>
+            <ul class="legend-list">
+                <li><span class="swatch" style="background:var(--accent-success)"></span> Passing <span class="count" id="donutPassingCount">{{ passing_controls }}</span></li>
+                <li><span class="swatch" style="background:var(--accent-danger)"></span> Failing <span class="count" id="donutFailingCount">{{ failing_controls }}</span></li>
+                <li><span class="swatch" style="background:var(--accent-warning)"></span> Not assessed <span class="count" id="donutNotAssessedCount">{{ not_assessed_total }}</span></li>
+                <li><span class="swatch" style="background:var(--border-strong)"></span> Not applicable <span class="count" id="donutNaCount">{{ na_controls }}</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
             <div>
-                <div class="legend">
-                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-success)"></div> Passing (<span id="donutPassingCount">{{ passing_controls }}</span>)</div>
-                </div>
-                <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-danger)"></div> Failing (<span id="donutFailingCount">{{ failing_controls }}</span>)</div>
-                </div>
-                <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-warning)"></div> Not Assessed (<span id="donutNotAssessedCount">{{ total_controls - passing_controls - failing_controls - na_controls }}</span>)</div>
-                </div>
-                <div class="legend" style="margin-top:8px;">
-                    <div class="legend-item"><div class="legend-dot" style="background:var(--text-muted)"></div> N/A (<span id="donutNaCount">{{ na_controls }}</span>)</div>
-                </div>
+                <h2 class="card-title">Compliance trend</h2>
+                <div class="card-subtitle">Percent of applicable controls passing, last 30 days</div>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if trend_labels and trend_labels|length > 1 %}
+            {# Inline SVG line chart: viewBox 640x220, plot area x 40..628, y 14..190 #}
+            {% set n = trend_labels|length %}
+            {% set lo = [ (trend_data|min) - 5, 0 ]|max %}
+            {% set hi = [ (trend_data|max) + 5, 100 ]|min %}
+            {% if hi - lo < 10 %}{% set lo = [hi - 10, 0]|max %}{% endif %}
+            {% set ns = namespace(pts=[], path='', first_x=0, last_x=0) %}
+            {% for i in range(n) %}
+                {% set x = 40 + (588 * i / (n - 1)) %}
+                {% set y = 190 - (176 * ((trend_data[i] - lo) / (hi - lo))) %}
+                {% set ns.pts = ns.pts + [ {'x': x|round(1), 'y': y|round(1), 'label': trend_labels[i], 'value': trend_data[i]} ] %}
+                {% set ns.path = ns.path ~ ('M' if i == 0 else 'L') ~ (x|round(1)) ~ ',' ~ (y|round(1)) ~ ' ' %}
+            {% endfor %}
+            <div class="chart-figure" style="position:relative;">
+                <svg class="trend-chart" viewBox="0 0 640 220" role="img" aria-label="Compliance trend from {{ trend_data[0] }} percent on {{ trend_labels[0] }} to {{ trend_data[-1] }} percent on {{ trend_labels[-1] }}" data-points='{{ ns.pts|tojson|forceescape }}'>
+                    <g class="grid">
+                        {% for k in range(4) %}
+                        {% set gy = 14 + (176 * k / 3) %}
+                        <line x1="40" x2="628" y1="{{ gy|round(1) }}" y2="{{ gy|round(1) }}"></line>
+                        <text x="32" y="{{ (gy + 4)|round(1) }}" text-anchor="end">{{ (hi - ((hi - lo) * k / 3))|round|int }}%</text>
+                        {% endfor %}
+                    </g>
+                    <path class="area" d="{{ ns.path }}L628,190 L40,190 Z"></path>
+                    <path class="line" d="{{ ns.path }}"></path>
+                    <text x="40" y="212">{{ trend_labels[0] }}</text>
+                    <text x="628" y="212" text-anchor="end">{{ trend_labels[-1] }}</text>
+                    <line class="cross" x1="0" x2="0" y1="14" y2="190"></line>
+                    <circle class="dot" cx="0" cy="0" r="5"></circle>
+                </svg>
+            </div>
+            <table class="sr-only"><caption>Compliance trend data</caption><thead><tr><th>Date</th><th>Compliant %</th></tr></thead><tbody>{% for i in range(n) %}<tr><td>{{ trend_labels[i] }}</td><td>{{ trend_data[i] }}</td></tr>{% endfor %}</tbody></table>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
+                <h3>Not enough history yet</h3>
+                <p>Trend data builds up as daily compliance snapshots accumulate. Check back after a few days of activity.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: risk heatmap + deadlines -->
+<div class="dash-grid even">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Risk heatmap</h2>
+                <div class="card-subtitle">Open register by likelihood and impact</div>
+            </div>
+            <a href="/risks" class="btn btn-sm btn-secondary">Risk register</a>
+        </div>
+        <div class="card-body">
+            {% set order = risk_levels|reverse|list %}
+            <div class="heatmap" role="group" aria-label="Risk heatmap: count of risks by likelihood and impact">
+                <div class="hm-head" aria-hidden="true"></div>
+                {% for imp in risk_levels %}<div class="hm-head">{{ imp }}</div>{% endfor %}
+                {% for lk in order %}
+                <div class="hm-head hm-row">{{ lk }}</div>
+                {% for imp in risk_levels %}
+                    {% set cnt = risk_matrix[lk][imp] %}
+                    {% set sc = risk_level_scores[lk] * risk_level_scores[imp] %}
+                    {% set lvl = 0 if sc <= 3 else (1 if sc <= 6 else (2 if sc <= 10 else (3 if sc <= 15 else 4))) %}
+                    {% set lvl_name = ['Low', 'Moderate', 'Elevated', 'High', 'Severe'][lvl] %}
+                    <div class="hm-cell l{{ lvl }}{{ ' zero' if cnt == 0 }}" role="img" tabindex="0" data-tooltip="{{ cnt }} risk{{ '' if cnt == 1 else 's' }} &middot; {{ lvl_name }}" data-tooltip-pos="bottom" aria-label="Likelihood {{ lk }}, impact {{ imp }}: {{ cnt }} risk{{ '' if cnt == 1 else 's' }}, {{ lvl_name }} exposure">{{ cnt if cnt else '&middot;'|safe }}</div>
+                {% endfor %}
+                {% endfor %}
+            </div>
+            <div class="hm-axis">Impact &rarr; &nbsp;&middot;&nbsp; Likelihood &uarr;</div>
+            <div class="hm-legend" aria-hidden="true">
+                Exposure:
+                <i style="background:var(--heat-0)"></i>Low
+                <i style="background:var(--heat-1)"></i>Moderate
+                <i style="background:var(--heat-2)"></i>Elevated
+                <i style="background:var(--heat-3)"></i>High
+                <i style="background:var(--heat-4)"></i>Severe
             </div>
         </div>
     </div>
 
-    <!-- Framework Compliance -->
     <div class="card">
         <div class="card-header">
-            <h3>Framework Compliance</h3>
-            <a href="/compliance" class="btn btn-sm btn-secondary">View All</a>
+            <div>
+                <h2 class="card-title">Upcoming deadlines</h2>
+                <div class="card-subtitle">Next 30 days</div>
+            </div>
         </div>
-        <div class="card-body">
-            {% for fw in frameworks %}
-            <div style="margin-bottom:18px;">
-                <div class="flex-between mb-8">
-                    <span class="font-semibold" style="font-size:13px;">{{ fw.name }}</span>
-                    <span class="text-sm text-muted">{{ fw.compliance_score }}%</span>
-                </div>
-                {% set applicable = fw.total_controls - fw.not_applicable %}
-                <div class="progress-stacked">
-                    {% if applicable > 0 %}
-                    <div class="segment" style="width:{{ (fw.passing / applicable * 100)|round }}%;background:var(--accent-success);"></div>
-                    <div class="segment" style="width:{{ (fw.failing / applicable * 100)|round }}%;background:var(--accent-danger);"></div>
-                    {% set not_assessed = applicable - fw.passing - fw.failing %}
-                    <div class="segment" style="width:{{ (not_assessed / applicable * 100)|round }}%;background:var(--accent-warning);"></div>
-                    {% endif %}
-                </div>
-                <div class="progress-label">
-                    <span>{{ fw.passing }} passing</span>
-                    <span>{{ fw.failing }} failing</span>
-                    {% if fw.not_applicable > 0 %}<span>{{ fw.not_applicable }} N/A</span>{% endif %}
+        <div class="card-body no-padding">
+            {% if deadlines %}
+            {% for d in deadlines[:7] %}
+            <div class="deadline">
+                <div class="deadline-date" aria-hidden="true"><b>{{ d.date.strftime('%d') }}</b><span>{{ d.date.strftime('%b') }}</span></div>
+                <div class="list-row-main">
+                    <div class="list-row-title truncate">{{ d.name }}</div>
+                    <div class="list-row-sub"><i class="fas {{ d.icon }}" aria-hidden="true"></i> {{ d.type }} &middot; {{ d.date.strftime('%a, %d %b %Y') }}</div>
                 </div>
             </div>
             {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></div>
+                <h3>Nothing due soon</h3>
+                <p>Policy reviews, vendor assessments and audit milestones due in the next 30 days will show up here.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
-<!-- 30-Day Compliance Trend -->
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-header">
-        <h3>Compliance Trend</h3>
-        <span class="text-sm text-muted">Last 30 days</span>
-    </div>
-    <div class="card-body">
-        {% if trend_labels and trend_labels|length > 1 %}
-        <div class="chart-container" style="height:220px;">
-            <canvas id="complianceTrendChart"></canvas>
-        </div>
-        {% else %}
-        <div class="empty-state" style="padding:32px 20px;">
-            <div class="empty-state-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
-            <h3>Not enough history yet</h3>
-            <p>Trend data builds up as daily compliance snapshots accumulate. Check back after a few days of activity.</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Top Risks -->
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-header">
-        <h3>Top Risks</h3>
-        <a href="/risks" class="btn btn-sm btn-secondary">View All Risks</a>
-    </div>
-    <div class="card-body no-padding">
-        {% if risks %}
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Risk</th>
-                        <th>Impact</th>
-                        <th>Score</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in risks %}
-                    <tr onclick="window.location='/risks/{{ r.id }}'" style="cursor:pointer;">
-                        <td class="font-semibold"><a href="/risks/{{ r.id }}" style="color:inherit;text-decoration:none;">{{ r.title }}</a></td>
-                        <td>
-                            {% if r.impact == 'Critical' %}<span class="badge badge-danger">{{ r.impact }}</span>
-                            {% elif r.impact == 'High' %}<span class="badge badge-warning">{{ r.impact }}</span>
-                            {% else %}<span class="badge badge-info">{{ r.impact }}</span>{% endif %}
-                        </td>
-                        <td><strong>{{ r.score }}</strong></td>
-                        <td>
-                            {% if r.status == 'Open' %}<span class="badge badge-danger">{{ r.status }}</span>
-                            {% elif r.status == 'In Treatment' %}<span class="badge badge-warning">{{ r.status }}</span>
-                            {% else %}<span class="badge badge-success">{{ r.status }}</span>{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
-            <h3>No risks logged yet</h3>
-            <p>Once risks are added to the register, the highest-scoring ones will show up here first.</p>
-            <a href="/risks" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Go to Risk Register</a>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Active Audits -->
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-header">
-        <h3>Active Audits</h3>
-        <a href="/audits" class="btn btn-sm btn-secondary">View All</a>
-    </div>
-    <div class="card-body no-padding">
-        {% if audits %}
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Audit</th>
-                        <th>Status</th>
-                        <th>Evidence</th>
-                        <th>Progress</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for a in audits %}
-                    <tr>
-                        <td>
-                            <div class="font-semibold">{{ a.name }}</div>
-                            <div class="text-sm text-muted">{{ a.auditor }}</div>
-                        </td>
-                        <td>
-                            {% if a.status == 'Completed' %}
-                            <span class="badge badge-success">{{ a.status }}</span>
-                            {% elif a.status == 'In Progress' %}
-                            <span class="badge badge-primary">{{ a.status }}</span>
-                            {% else %}
-                            <span class="badge badge-neutral">{{ a.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ a.evidence_collected }}/{{ a.evidence_total }}</td>
-                        <td style="width:120px;">
-                            <div class="progress-bar">
-                                <div class="progress-fill blue" style="width:{{ (a.evidence_collected / a.evidence_total * 100)|round if a.evidence_total else 0 }}%"></div>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <div class="empty-state-icon"><i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i></div>
-            <h3>No active audits</h3>
-            <p>Scheduled and in-progress audits will appear here with their evidence collection progress.</p>
-            <a href="/audits" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Go to Audit Center</a>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Row: Recent Activity + Upcoming Deadlines -->
-<div class="grid-2" style="margin-bottom:0;">
+<!-- Row 3: frameworks + top risks -->
+<div class="dash-grid">
     <div class="card">
         <div class="card-header">
-            <h3>Recent Activity</h3>
-            <a href="/settings/activity-log" class="btn btn-sm btn-secondary">View All</a>
+            <div>
+                <h2 class="card-title">Framework progress</h2>
+                <div class="card-subtitle">Passing, failing and not-yet-assessed controls</div>
+            </div>
+            <a href="/compliance" class="btn btn-sm btn-secondary">All frameworks</a>
         </div>
-        <div class="card-body{{ ' no-padding' if recent_activity else '' }}">
-            {% if recent_activity %}
-            <div class="activity-list">
-                {% for act in recent_activity[:8] %}
-                <div class="activity-row">
-                    <div class="activity-row-icon"><i class="fas {{ entity_icons.get(act.entity_type, 'fa-circle-info') }}" aria-hidden="true"></i></div>
-                    <div class="activity-row-body">
-                        <div class="activity-row-text">
-                            <span class="font-semibold">{{ act.user.name if act.user else 'System' }}</span>
-                            {{ act.description or (act.action ~ ' ' ~ act.entity_type) }}
-                            {% if act.entity_name %}<span class="font-semibold">{{ act.entity_name }}</span>{% endif %}
-                        </div>
-                        <div class="text-sm text-muted">{{ act.created_at|timesince }}</div>
-                    </div>
+        <div class="card-body">
+            {% for fw in frameworks %}
+            {% set applicable = fw.total_controls - fw.not_applicable %}
+            {% set na_fw = applicable - fw.passing - fw.failing %}
+            <div class="fw-row">
+                <div class="flex-between mb-8">
+                    <span class="font-semibold">{{ fw.name }}</span>
+                    <span class="font-semibold tabular">{{ fw.compliance_score }}%</span>
                 </div>
-                {% endfor %}
+                <div class="progress-stacked" role="img" aria-label="{{ fw.name }}: {{ fw.passing }} passing, {{ fw.failing }} failing, {{ na_fw }} not assessed">
+                    {% if applicable > 0 %}
+                    <div class="segment" style="width:{{ fw.passing / applicable * 100 }}%;background:var(--accent-success);"></div>
+                    <div class="segment" style="width:{{ fw.failing / applicable * 100 }}%;background:var(--accent-danger);"></div>
+                    <div class="segment empty" style="width:{{ na_fw / applicable * 100 }}%;"></div>
+                    {% else %}<div class="segment empty" style="width:100%;"></div>{% endif %}
+                </div>
+                <div class="progress-label"><span>{{ fw.passing }} passing</span><span>{{ fw.failing }} failing</span><span>{{ na_fw }} not assessed</span>{% if fw.not_applicable > 0 %}<span>{{ fw.not_applicable }} N/A</span>{% endif %}</div>
             </div>
             {% else %}
-            <div class="empty-state" style="padding:36px 16px;">
-                <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
-                <h3>No activity yet</h3>
-                <p>Actions taken across the platform will show up here as an audit trail.</p>
+            <div class="empty-state"><div class="empty-state-icon"><i class="fas fa-clipboard-check" aria-hidden="true"></i></div><h3>No frameworks yet</h3><p>Enable a framework to start tracking control coverage.</p><a href="/compliance" class="btn btn-primary btn-sm">Go to Compliance</a></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div><h2 class="card-title">Top risks</h2><div class="card-subtitle">Highest scoring first</div></div>
+            <a href="/risks" class="btn btn-sm btn-secondary">View all</a>
+        </div>
+        <div class="card-body no-padding">
+            {% if risks %}
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Risk</th><th>Impact</th><th class="num">Score</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for r in risks %}
+                        <tr class="is-link" onclick="window.location='/risks/{{ r.id }}'">
+                            <td class="cell-title"><a href="/risks/{{ r.id }}" style="color:inherit;">{{ r.title }}</a></td>
+                            <td>{% if r.impact == 'Critical' %}<span class="pill pill-danger"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>{{ r.impact }}</span>
+                                {% elif r.impact == 'High' %}<span class="pill pill-warning"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>{{ r.impact }}</span>
+                                {% else %}<span class="pill pill-neutral">{{ r.impact }}</span>{% endif %}</td>
+                            <td class="num font-semibold">{{ r.score }}</td>
+                            <td>{% if r.status == 'Open' %}<span class="pill pill-danger pill-dot">{{ r.status }}</span>
+                                {% elif r.status == 'In Treatment' %}<span class="pill pill-warning pill-dot">{{ r.status }}</span>
+                                {% else %}<span class="pill pill-success pill-dot">{{ r.status }}</span>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></div>
+                <h3>No risks logged yet</h3>
+                <p>Once risks are added to the register, the highest-scoring ones will show up here first.</p>
+                <a href="/risks" class="btn btn-primary btn-sm"><i class="fas fa-plus" aria-hidden="true"></i> Go to Risk Register</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Row 4: audits + activity -->
+<div class="dash-grid even">
+    <div class="card">
+        <div class="card-header">
+            <div><h2 class="card-title">Active audits</h2><div class="card-subtitle">Evidence collection progress</div></div>
+            <a href="/audits" class="btn btn-sm btn-secondary">View all</a>
+        </div>
+        <div class="card-body no-padding">
+            {% if audits %}
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Audit</th><th>Status</th><th class="num">Evidence</th><th style="width:130px;">Progress</th></tr></thead>
+                    <tbody>
+                        {% for a in audits %}
+                        {% set pct = ((a.evidence_collected / a.evidence_total * 100)|round|int) if a.evidence_total else 0 %}
+                        <tr>
+                            <td><div class="cell-title">{{ a.name }}</div><div class="cell-sub">{{ a.auditor }}</div></td>
+                            <td>{% if a.status == 'Completed' %}<span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>{{ a.status }}</span>
+                                {% elif a.status == 'In Progress' %}<span class="pill pill-primary">{{ a.status }}</span>
+                                {% else %}<span class="pill pill-neutral">{{ a.status }}</span>{% endif %}</td>
+                            <td class="num">{{ a.evidence_collected }}/{{ a.evidence_total }}</td>
+                            <td><div class="progress" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ a.name }} evidence collected"><span style="width:{{ pct }}%"></span></div></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i></div>
+                <h3>No active audits</h3>
+                <p>Scheduled and in-progress audits will appear here with their evidence collection progress.</p>
+                <a href="/audits" class="btn btn-primary btn-sm"><i class="fas fa-plus" aria-hidden="true"></i> Go to Audit Center</a>
             </div>
             {% endif %}
         </div>
@@ -270,29 +307,25 @@
 
     <div class="card">
         <div class="card-header">
-            <h3>Upcoming Deadlines</h3>
-            <span class="text-sm text-muted">Next 30 days</span>
+            <div><h2 class="card-title">Recent activity</h2><div class="card-subtitle">Audit trail across the platform</div></div>
+            <a href="/settings/activity-log" class="btn btn-sm btn-secondary">View all</a>
         </div>
-        <div class="card-body{{ ' no-padding' if deadlines else '' }}">
-            {% if deadlines %}
-            <div class="activity-list">
-                {% for d in deadlines[:8] %}
-                <div class="activity-row">
-                    <div class="activity-row-icon"><i class="fas {{ d.icon }}" aria-hidden="true"></i></div>
-                    <div class="activity-row-body">
-                        <div class="activity-row-text">
-                            <span class="font-semibold">{{ d.name }}</span> &middot; {{ d.type }}
-                        </div>
-                        <div class="text-sm text-muted">{{ d.date.strftime('%d %b %Y') }}</div>
-                    </div>
+        <div class="card-body no-padding">
+            {% if recent_activity %}
+            {% for act in recent_activity[:7] %}
+            <div class="activity-row">
+                <div class="activity-row-icon"><i class="fas {{ entity_icons.get(act.entity_type, 'fa-circle-info') }}" aria-hidden="true"></i></div>
+                <div class="activity-row-body">
+                    <div class="activity-row-text"><span class="font-semibold">{{ act.user.name if act.user else 'System' }}</span> {{ act.description or (act.action ~ ' ' ~ act.entity_type) }}{% if act.entity_name %} <span class="font-semibold">{{ act.entity_name }}</span>{% endif %}</div>
+                    <div class="text-xs text-muted">{{ act.created_at|timesince }}</div>
                 </div>
-                {% endfor %}
             </div>
+            {% endfor %}
             {% else %}
-            <div class="empty-state" style="padding:36px 16px;">
-                <div class="empty-state-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></div>
-                <h3>Nothing due soon</h3>
-                <p>Policy reviews, vendor assessments, and audit milestones due in the next 30 days will show up here.</p>
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i></div>
+                <h3>No activity yet</h3>
+                <p>Actions taken across the platform will show up here as an audit trail.</p>
             </div>
             {% endif %}
         </div>
@@ -302,88 +335,51 @@
 
 {% block scripts %}
 <script>
-const FRAMEWORK_DONUT_DATA = {{ frameworks|tojson }};
-const ALL_FRAMEWORKS_DONUT_DATA = {
-    id: 'all', passing: {{ passing_controls }}, failing: {{ failing_controls }},
-    not_assessed: {{ total_controls - passing_controls - failing_controls - na_controls }},
-    not_applicable: {{ na_controls }}, compliance_score: {{ compliance_score }}
-};
+(function () {
+    var FRAMEWORKS = {{ frameworks|tojson }};
+    var ALL = {
+        id: 'all', passing: {{ passing_controls }}, failing: {{ failing_controls }},
+        not_assessed: {{ not_assessed_total }}, not_applicable: {{ na_controls }},
+        compliance_score: {{ compliance_score }}
+    };
+    var COLORS = ['var(--accent-success)', 'var(--accent-danger)', 'var(--accent-warning)', 'var(--border-strong)'];
+    var R = 70, C = 2 * Math.PI * R, GAP = 3;
+    var svg = document.getElementById('scoreRing');
 
-let controlsDonutChart;
-
-document.addEventListener('DOMContentLoaded', function() {
-    const trendCanvas = document.getElementById('complianceTrendChart');
-    if (trendCanvas) {
-        new Chart(trendCanvas.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: {{ trend_labels|tojson }},
-                datasets: [{
-                    data: {{ trend_data|tojson }},
-                    borderColor: '#2748c9',
-                    backgroundColor: 'rgba(39,72,201,0.08)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.35,
-                    pointRadius: 0,
-                    pointHoverRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (ctx) => ctx.parsed.y + '% compliant' } }
-                },
-                scales: {
-                    y: { beginAtZero: false, ticks: { callback: (v) => v + '%' }, grid: { color: 'rgba(148,163,184,0.15)' } },
-                    x: { grid: { display: false } }
-                }
-            }
+    function drawRing(d) {
+        if (!svg) return;
+        svg.querySelectorAll('.ring-seg').forEach(function (n) { n.remove(); });
+        var vals = [d.passing, d.failing, d.not_assessed, d.not_applicable];
+        var total = vals.reduce(function (a, b) { return a + b; }, 0);
+        if (!total) return;
+        var cum = 0;
+        vals.forEach(function (v, i) {
+            if (!v) return;
+            var len = C * v / total;
+            var dash = Math.max(len - (vals.filter(Boolean).length > 1 ? GAP : 0), 0.5);
+            var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            c.setAttribute('class', 'ring-seg');
+            c.setAttribute('cx', 84); c.setAttribute('cy', 84); c.setAttribute('r', R);
+            c.setAttribute('fill', 'none'); c.setAttribute('stroke-width', 14);
+            c.style.stroke = COLORS[i];
+            c.setAttribute('stroke-dasharray', dash + ' ' + (C - dash));
+            c.setAttribute('stroke-dashoffset', -cum);
+            svg.appendChild(c);
+            cum += len;
         });
     }
 
-    // Read the actual token values (not hardcoded hex) so the donut tracks
-    // the current theme's institutional palette in both light and dark mode.
-    const rootStyles = getComputedStyle(document.documentElement);
-    const tokenColor = (name) => rootStyles.getPropertyValue(name).trim();
-    const donutCtx = document.getElementById('controlsDonut').getContext('2d');
-    controlsDonutChart = new Chart(donutCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Passing', 'Failing', 'Not Assessed', 'N/A'],
-            datasets: [{
-                data: [ALL_FRAMEWORKS_DONUT_DATA.passing, ALL_FRAMEWORKS_DONUT_DATA.failing,
-                    ALL_FRAMEWORKS_DONUT_DATA.not_assessed, ALL_FRAMEWORKS_DONUT_DATA.not_applicable],
-                backgroundColor: [tokenColor('--accent-success'), tokenColor('--accent-danger'),
-                    tokenColor('--accent-warning'), tokenColor('--text-muted')],
-                borderWidth: 0,
-                cutout: '75%'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: { legend: { display: false } }
-        }
-    });
-});
-
-function updateControlsDonut(selectedId) {
-    const data = selectedId === 'all'
-        ? ALL_FRAMEWORKS_DONUT_DATA
-        : FRAMEWORK_DONUT_DATA.find(fw => String(fw.id) === String(selectedId));
-    if (!data) return;
-
-    controlsDonutChart.data.datasets[0].data = [data.passing, data.failing, data.not_assessed, data.not_applicable];
-    controlsDonutChart.update();
-
-    document.getElementById('donutScoreValue').textContent = data.compliance_score + '%';
-    document.getElementById('donutPassingCount').textContent = data.passing;
-    document.getElementById('donutFailingCount').textContent = data.failing;
-    document.getElementById('donutNotAssessedCount').textContent = data.not_assessed;
-    document.getElementById('donutNaCount').textContent = data.not_applicable;
-}
+    window.updateControlsDonut = function (id) {
+        var d = id === 'all' ? ALL : FRAMEWORKS.find(function (fw) { return String(fw.id) === String(id); });
+        if (!d) return;
+        drawRing(d);
+        document.getElementById('donutScoreValue').textContent = d.compliance_score + '%';
+        document.getElementById('donutPassingCount').textContent = d.passing;
+        document.getElementById('donutFailingCount').textContent = d.failing;
+        document.getElementById('donutNotAssessedCount').textContent = d.not_assessed;
+        document.getElementById('donutNaCount').textContent = d.not_applicable;
+    };
+    drawRing(ALL);
+})();
 </script>
 {% endblock %}

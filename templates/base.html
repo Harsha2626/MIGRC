@@ -1,14 +1,22 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIGRC - {% block title %}Dashboard{% endblock %}</title>
+    <title>{% block title %}Dashboard{% endblock %} - MIGRC</title>
+    <meta name="color-scheme" content="light dark">
+    <script>
+    /* Apply the saved theme before first paint (no flash). No saved choice => CSS follows prefers-color-scheme. */
+    (function(){try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+    <a href="#mainContent" class="skip-link">Skip to content</a>
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -170,11 +178,11 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="main-content" id="mainContent">
+    <main class="main-content" id="mainContent" tabindex="-1">
         <!-- Top Bar -->
         <header class="topbar">
             <div class="topbar-left">
-                <button class="mobile-toggle" id="mobileToggle" type="button" aria-label="Toggle navigation menu">
+                <button class="mobile-toggle" id="mobileToggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false">
                     <i class="fas fa-bars" aria-hidden="true"></i>
                 </button>
                 <div class="breadcrumb">
@@ -184,39 +192,39 @@
                 </div>
             </div>
             <div class="topbar-right">
-                <button class="topbar-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle light/dark theme">
+                <button class="topbar-btn" id="themeToggle" type="button" title="Toggle theme" aria-label="Toggle light/dark theme" aria-pressed="false">
                     <i class="fas fa-moon" aria-hidden="true"></i>
                 </button>
                 {% if current_user.is_authenticated %}
                 <div class="dropdown-panel-wrapper">
-                    <button class="btn btn-secondary btn-sm" onclick="toggleDropdownPanel('orgSwitcherPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="orgSwitcherPanel" title="Switch organization" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;">
+                    <button class="org-switcher" type="button" onclick="toggleDropdownPanel('orgSwitcherPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="orgSwitcherPanel" title="Switch organization">
                         {% if current_org and current_org.logo_path %}
-                        <img src="{{ url_for('setup.organization_logo', org_id=current_org.id) }}" alt="{{ current_org.name }} logo" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0;">
+                        <img src="{{ url_for('setup.organization_logo', org_id=current_org.id) }}" alt="" style="width:22px;height:22px;border-radius:6px;object-fit:cover;flex-shrink:0;">
                         {% else %}
-                        <i class="fas fa-building" aria-hidden="true"></i>
+                        <span class="org-mark" aria-hidden="true">{{ (current_org.name[0] if current_org else '?')|upper }}</span>
                         {% endif %}
-                        <span style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;font-size:14px;">{{ current_org.name if current_org else 'No Organization' }}</span>
-                        <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;"></i>
+                        <span class="org-name">{{ current_org.name if current_org else 'No Organization' }}</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;color:var(--text-muted);"></i>
                     </button>
                     <div class="dropdown-panel" id="orgSwitcherPanel" style="min-width:260px;">
+                        <div class="dropdown-panel-label">Organizations</div>
                         {% for org in user_organizations %}
                         <form method="POST" action="{{ url_for('organizations.switch_organization', org_id=org.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;{{ 'font-weight:600;color:var(--accent-primary);' if current_org and org.id == current_org.id }}">
+                            <button type="submit" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;font:inherit;font-size:var(--text-sm);{{ 'font-weight:600;color:var(--accent-primary);' if current_org and org.id == current_org.id }}">
                                 {% if org.logo_path %}
-                                <img src="{{ url_for('setup.organization_logo', org_id=org.id) }}" alt="{{ org.name }} logo" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;">
+                                <img src="{{ url_for('setup.organization_logo', org_id=org.id) }}" alt="" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex-shrink:0;">
                                 {% else %}
                                 <i class="fas {{ 'fa-check' if current_org and org.id == current_org.id else 'fa-building' }}" aria-hidden="true" style="width:20px;text-align:center;flex-shrink:0;"></i>
                                 {% endif %}
-                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ org.name }}</span>
+                                <span class="truncate">{{ org.name }}</span>
                             </button>
                         </form>
                         {% endfor %}
-                        <div style="border-top:1px solid var(--border-color);margin:6px 0;padding-top:6px;">
-                            <button type="button" onclick="showCreateOrgModal()" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;">
-                                <i class="fas fa-plus" aria-hidden="true"></i> Onboard a New Organization
-                            </button>
-                        </div>
+                        <div class="dropdown-panel-sep"></div>
+                        <button type="button" onclick="showCreateOrgModal()" class="dropdown-panel-item" style="width:100%;border:none;background:none;text-align:left;cursor:pointer;font:inherit;font-size:var(--text-sm);">
+                            <i class="fas fa-plus" aria-hidden="true"></i> Onboard a new organization
+                        </button>
                     </div>
                 </div>
                 <div class="notification-bell-wrapper">
@@ -255,12 +263,22 @@
                         <a href="/notifications" class="notification-dropdown-footer">View all notifications</a>
                     </div>
                 </div>
-                <button class="topbar-btn" type="button" title="Help" aria-label="Help">
-                    <i class="fas fa-question-circle" aria-hidden="true"></i>
-                </button>
-                <a href="/logout" class="topbar-btn" title="Logout" aria-label="Logout" style="text-decoration:none;color:inherit;">
-                    <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
-                </a>
+                <div class="dropdown-panel-wrapper">
+                    <button class="user-menu-btn" type="button" onclick="toggleDropdownPanel('userMenuPanel', this)" aria-haspopup="true" aria-expanded="false" aria-controls="userMenuPanel" aria-label="Account menu for {{ current_user.name }}">
+                        <span class="avatar" aria-hidden="true">{{ current_user.name.split()[0][0] }}{{ current_user.name.split()[-1][0] if ' ' in current_user.name else '' }}</span>
+                        <span class="user-menu-name text-sm font-semibold">{{ current_user.name.split()[0] }}</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:10px;color:var(--text-muted);"></i>
+                    </button>
+                    <div class="dropdown-panel" id="userMenuPanel" style="min-width:220px;right:0;left:auto;">
+                        <div class="dropdown-panel-label">Signed in as</div>
+                        <div style="padding:0 12px 8px;font-size:var(--text-sm);"><div class="font-semibold">{{ current_user.name }}</div><div class="text-muted text-xs">{{ current_membership.role if current_membership else current_user.role }}</div></div>
+                        <div class="dropdown-panel-sep"></div>
+                        <a href="/settings" class="dropdown-panel-item"><i class="fas fa-gear" aria-hidden="true"></i> Settings</a>
+                        <a href="/notifications" class="dropdown-panel-item"><i class="fas fa-bell" aria-hidden="true"></i> Notifications</a>
+                        <div class="dropdown-panel-sep"></div>
+                        <a href="/logout" class="dropdown-panel-item danger"><i class="fas fa-right-from-bracket" aria-hidden="true"></i> Log out</a>
+                    </div>
+                </div>
                 {% else %}
                 <a href="/login" class="btn btn-sm btn-primary" style="text-decoration:none;"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> Login</a>
                 {% endif %}

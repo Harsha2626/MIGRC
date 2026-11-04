@@ -7,6 +7,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initNavSections();
     initTheme();
     initSearch();
+    initMobileDrawer();
+    initSortableTables();
+    initTabs();
+    initConfirmAttrs();
+    initChartHover();
 });
 
 // ============================================================
@@ -71,7 +76,7 @@ function initSidebar() {
 
         // Close sidebar when clicking outside on mobile
         mainContent.addEventListener('click', function() {
-            if (window.innerWidth <= 768) {
+            if (window.innerWidth <= 900) {
                 sidebar.classList.remove('mobile-open');
             }
         });
@@ -111,43 +116,43 @@ function initNavSections() {
 // THEME TOGGLE
 // ============================================================
 function initTheme() {
-    const themeToggle = document.getElementById('themeToggle');
     const html = document.documentElement;
+    const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
-    // Restore theme. If the user hasn't explicitly chosen one yet, default
-    // to their OS preference instead of always forcing light mode.
-    let savedTheme;
-    try {
-        savedTheme = localStorage.getItem('theme');
-    } catch (e) {
-        savedTheme = null;
+    // Explicit choice (localStorage) wins; otherwise follow the OS and keep following it.
+    function stored() { try { return localStorage.getItem('theme'); } catch (e) { return null; } }
+    function effective() { return html.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light'); }
+    function apply(theme) {
+        html.setAttribute('data-theme', theme);
+        updateThemeIcon(theme);
+        document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
     }
-    if (!savedTheme) {
-        savedTheme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-    }
-    html.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
 
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function() {
-            const current = html.getAttribute('data-theme');
-            const next = current === 'light' ? 'dark' : 'light';
-            html.setAttribute('data-theme', next);
+    const saved = stored();
+    if (saved === 'dark' || saved === 'light') html.setAttribute('data-theme', saved);
+    updateThemeIcon(effective());
+
+    if (mq && mq.addEventListener) {
+        mq.addEventListener('change', function() { if (!stored()) updateThemeIcon(effective()); });
+    }
+    document.querySelectorAll('#themeToggle, [data-theme-toggle]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const next = effective() === 'light' ? 'dark' : 'light';
             try { localStorage.setItem('theme', next); } catch (e) { /* storage unavailable */ }
-            updateThemeIcon(next);
+            apply(next);
         });
-    }
+    });
 }
 
 function updateThemeIcon(theme) {
-    const toggle = document.getElementById('themeToggle');
-    const icon = document.querySelector('#themeToggle i');
-    if (icon) {
-        icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-    }
-    if (toggle) {
+    document.querySelectorAll('#themeToggle, [data-theme-toggle]').forEach(function(toggle) {
+        const icon = toggle.querySelector('i');
+        if (icon) icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
         toggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
-    }
+        const label = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+        toggle.setAttribute('aria-label', label);
+        toggle.setAttribute('title', label);
+    });
 }
 
 // ============================================================
@@ -307,35 +312,39 @@ document.addEventListener('keydown', function(e) {
 // ============================================================
 // TOAST NOTIFICATIONS
 // ============================================================
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 4500) {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = 'toast ' + type;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
-    const icons = {
-        success: 'fa-check-circle',
-        error: 'fa-times-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
+    const icons = { success: 'fa-circle-check', error: 'fa-circle-xmark', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+    const colors = { success: '#6fd0a4', error: '#f29a9c', warning: '#f0c674', info: '#8fd3ea' };
 
-    toast.innerHTML = `
-        <i class="fas ${icons[type] || icons.info}" aria-hidden="true" style="color:var(--accent-${type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'primary'})"></i>
-        <span>${message}</span>
-        <button type="button" aria-label="Dismiss notification" style="background:none;border:none;color:var(--text-muted);cursor:pointer;margin-left:auto;padding:4px;" onclick="this.parentElement.remove()">
-            <i class="fas fa-times" aria-hidden="true"></i>
-        </button>
-    `;
-
+    const icon = document.createElement('i');
+    icon.className = 'fas ' + (icons[type] || icons.info);
+    icon.setAttribute('aria-hidden', 'true');
+    icon.style.color = colors[type] || colors.info;
+    icon.style.marginTop = '2px';
+    const text = document.createElement('span');
+    text.textContent = message;   // never innerHTML: messages can carry user input
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Dismiss notification');
+    close.style.cssText = 'background:none;border:none;color:#aab7ca;cursor:pointer;margin-left:auto;padding:2px 4px;';
+    close.innerHTML = '<i class="fas fa-xmark" aria-hidden="true"></i>';
+    close.addEventListener('click', function() { toast.remove(); });
+    toast.append(icon, text, close);
     container.appendChild(toast);
 
-    // Auto remove after 4 seconds
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
-        toast.style.transition = 'all 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    if (duration > 0) {
+        setTimeout(function() {
+            toast.style.transition = 'opacity .25s';
+            toast.style.opacity = '0';
+            setTimeout(function() { toast.remove(); }, 260);
+        }, duration);
+    }
 }
 
 // ============================================================
@@ -393,4 +402,190 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
+}
+
+
+// ============================================================
+// MOBILE DRAWER: scrim, Esc to close, close on navigation
+// ============================================================
+function initMobileDrawer() {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('mobileToggle');
+    if (!sidebar || !toggle) return;
+    let scrim = document.querySelector('.sidebar-scrim');
+    if (!scrim) { scrim = document.createElement('div'); scrim.className = 'sidebar-scrim'; document.body.appendChild(scrim); }
+    function sync() {
+        const open = sidebar.classList.contains('mobile-open');
+        scrim.classList.toggle('show', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    toggle.setAttribute('aria-controls', 'sidebar');
+    toggle.addEventListener('click', function() { setTimeout(sync, 0); });
+    scrim.addEventListener('click', function() { sidebar.classList.remove('mobile-open'); sync(); });
+    sidebar.addEventListener('click', function(e) { if (e.target.closest('a.nav-item')) { sidebar.classList.remove('mobile-open'); sync(); } });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && sidebar.classList.contains('mobile-open')) { sidebar.classList.remove('mobile-open'); sync(); toggle.focus(); }
+    });
+}
+
+// ============================================================
+// SORTABLE TABLES
+// Usage: <table class="table-sortable"> and <th data-sort="text|num">Name</th>
+// Optional per-cell override: <td data-value="42">forty-two</td>
+// ============================================================
+function initSortableTables() {
+    document.querySelectorAll('table.table-sortable').forEach(function(table) {
+        table.querySelectorAll('thead th[data-sort]').forEach(function(th) {
+            th.setAttribute('tabindex', '0');
+            function sort() {
+                const idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+                const dir = th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending';
+                th.parentNode.querySelectorAll('th').forEach(function(o) { o.removeAttribute('aria-sort'); });
+                th.setAttribute('aria-sort', dir);
+                const numeric = th.dataset.sort === 'num';
+                const tbody = table.tBodies[0];
+                const rows = Array.from(tbody.rows);
+                const val = function(r) {
+                    const c = r.cells[idx]; if (!c) return '';
+                    const v = c.dataset.value !== undefined ? c.dataset.value : c.textContent.trim();
+                    return numeric ? (parseFloat(String(v).replace(/[^0-9.\-]/g, '')) || 0) : String(v).toLowerCase();
+                };
+                rows.sort(function(a, b) {
+                    const x = val(a), y = val(b);
+                    const r = numeric ? x - y : (x < y ? -1 : x > y ? 1 : 0);
+                    return dir === 'ascending' ? r : -r;
+                });
+                rows.forEach(function(r) { tbody.appendChild(r); });
+            }
+            th.addEventListener('click', sort);
+            th.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sort(); } });
+        });
+    });
+}
+
+// ============================================================
+// TABS (in-page)
+// Markup: <div data-tabs><div class="tabs" role="tablist"><button class="tab" role="tab" data-tab="a">..</button></div>
+//         <div class="tab-panel" data-panel="a">..</div></div>
+// ============================================================
+function initTabs() {
+    document.querySelectorAll('[data-tabs]').forEach(function(root) {
+        const tabs = Array.from(root.querySelectorAll('[role="tab"][data-tab]'));
+        if (!tabs.length) return;
+        function select(tab) {
+            tabs.forEach(function(t) {
+                const on = t === tab;
+                t.classList.toggle('active', on);
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                t.setAttribute('tabindex', on ? '0' : '-1');
+                const panel = root.querySelector('[data-panel="' + t.dataset.tab + '"]');
+                if (panel) panel.hidden = !on;
+            });
+        }
+        tabs.forEach(function(t, i) {
+            t.addEventListener('click', function() { select(t); });
+            t.addEventListener('keydown', function(e) {
+                let n = null;
+                if (e.key === 'ArrowRight') n = tabs[(i + 1) % tabs.length];
+                if (e.key === 'ArrowLeft') n = tabs[(i - 1 + tabs.length) % tabs.length];
+                if (n) { e.preventDefault(); select(n); n.focus(); }
+            });
+        });
+        select(tabs.find(function(t) { return t.classList.contains('active'); }) || tabs[0]);
+    });
+}
+
+// ============================================================
+// CONFIRM DIALOG (replaces window.confirm)
+// confirmDialog({title, message, confirmText, cancelText, danger}) -> Promise<boolean>
+// Declarative: <form data-confirm="Delete this risk?" data-confirm-title="Delete risk"
+//   data-confirm-button="Delete">  (also works on <button>/<a> with data-confirm;
+//   add data-confirm-tone="neutral" for a non-destructive confirmation)
+// ============================================================
+function confirmDialog(opts) {
+    opts = opts || {};
+    return new Promise(function(resolve) {
+        const danger = opts.danger !== false;
+        const esc = function(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
+        let settled = false;
+        const ov = document.getElementById('modalOverlay');
+        let obs = null;
+        const finish = function(v) {
+            if (settled) return; settled = true;
+            if (obs) obs.disconnect();
+            closeModal(); resolve(v);
+        };
+        openModal(opts.title || 'Are you sure?',
+            '<div class="confirm-body"><span class="confirm-icon ' + (danger ? '' : 'neutral') + '"><i class="fas ' + (danger ? 'fa-triangle-exclamation' : 'fa-circle-question') + '" aria-hidden="true"></i></span><div><p>' + esc(opts.message || 'This action cannot be undone.') + '</p></div></div>',
+            '<button type="button" class="btn btn-secondary" data-cd="no">' + esc(opts.cancelText || 'Cancel') + '</button><button type="button" class="btn ' + (danger ? 'btn-danger' : 'btn-primary') + '" data-cd="yes">' + esc(opts.confirmText || 'Confirm') + '</button>');
+        const footer = document.getElementById('modalFooter');
+        footer.querySelector('[data-cd="yes"]').addEventListener('click', function() { finish(true); });
+        footer.querySelector('[data-cd="no"]').addEventListener('click', function() { finish(false); });
+        document.getElementById('modalClose').onclick = function() { finish(false); };
+        ov.onclick = function(e) { if (e.target === ov) finish(false); };
+        // Escape (handled inside openModal) just removes .active: treat that as "cancel".
+        obs = new MutationObserver(function() { if (!ov.classList.contains('active')) finish(false); });
+        obs.observe(ov, { attributes: true, attributeFilter: ['class'] });
+        footer.querySelector('[data-cd="no"]').focus();
+    });
+}
+
+function initConfirmAttrs() {
+    let bypass = false;
+    document.addEventListener('click', function(e) {
+        const el = e.target.closest('[data-confirm]');
+        if (!el || el.tagName === 'FORM' || bypass) return;
+        e.preventDefault();
+        confirmDialog({ title: el.dataset.confirmTitle, message: el.dataset.confirm, confirmText: el.dataset.confirmButton, danger: el.dataset.confirmTone !== 'neutral' }).then(function(ok) {
+            if (!ok) return;
+            if (el.tagName === 'A') { window.location.href = el.href; return; }
+            bypass = true; el.click(); bypass = false;
+        });
+    }, true);
+    document.addEventListener('submit', function(e) {
+        const f = e.target;
+        if (!f.matches || !f.matches('form[data-confirm]') || f.dataset.confirmed) return;
+        e.preventDefault();
+        confirmDialog({ title: f.dataset.confirmTitle, message: f.dataset.confirm, confirmText: f.dataset.confirmButton, danger: f.dataset.confirmTone !== 'neutral' }).then(function(ok) {
+            if (ok) { f.dataset.confirmed = '1'; f.submit(); }
+        });
+    }, true);
+}
+
+// ============================================================
+// SVG TREND CHART HOVER (crosshair + tooltip)
+// <svg class="trend-chart" viewBox=".." data-points='[{"x":..,"y":..,"label":"..","value":..}]'>
+// containing <line class="cross"> and <circle class="dot">; parent must be position:relative.
+// ============================================================
+function initChartHover() {
+    document.querySelectorAll('svg.trend-chart[data-points]').forEach(function(svg) {
+        let pts; try { pts = JSON.parse(svg.dataset.points); } catch (e) { return; }
+        if (!pts || !pts.length) return;
+        const wrap = svg.parentElement;
+        const cross = svg.querySelector('.cross');
+        const dot = svg.querySelector('.dot');
+        const tip = document.createElement('div');
+        tip.className = 'chart-tip'; tip.hidden = true; wrap.appendChild(tip);
+        const vb = svg.viewBox.baseVal;
+        function show(i) {
+            const p = pts[i];
+            cross.setAttribute('x1', p.x); cross.setAttribute('x2', p.x); cross.style.display = '';
+            dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y); dot.style.display = '';
+            const r = svg.getBoundingClientRect();
+            tip.textContent = p.label + ': ' + p.value + '%';
+            tip.style.left = (p.x / vb.width * r.width) + 'px';
+            tip.style.top = (p.y / vb.height * r.height) + 'px';
+            tip.hidden = false;
+        }
+        function hide() { cross.style.display = 'none'; dot.style.display = 'none'; tip.hidden = true; }
+        hide();
+        svg.addEventListener('pointermove', function(e) {
+            const r = svg.getBoundingClientRect();
+            const x = (e.clientX - r.left) / r.width * vb.width;
+            let best = 0, bd = Infinity;
+            pts.forEach(function(p, i) { const d = Math.abs(p.x - x); if (d < bd) { bd = d; best = i; } });
+            show(best);
+        });
+        svg.addEventListener('pointerleave', hide);
+    });
 }
