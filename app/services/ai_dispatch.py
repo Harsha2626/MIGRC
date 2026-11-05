@@ -79,6 +79,9 @@ DEFAULT_FREE_MODELS = [
 AUTH_BLOCK_SIGNATURES = ('PAID_MODEL_AUTH_REQUIRED', 'ENTITLEMENT_ERROR')
 AUTH_BLOCK_LIMIT = 3
 
+# Vision-capable model used via Cline direct for image evidence (override: CLINE_VISION_MODEL).
+DEFAULT_VISION_MODEL = 'xiaomi/mimo-v2.6-flash'
+
 DISCOVERY_TTL_SECONDS = 300
 DISCOVERY_TIMEOUT = 3
 _discovery_cache = {'at': 0.0, 'key': None, 'models': None}
@@ -95,7 +98,7 @@ CLINE_SYSTEM_PROMPT = (
 STATUS_CHECK_TIMEOUT = 2  # seconds - this is a UI status ping, not a real call; fail fast
 
 
-def _cline_complete(prompt_text, model_id, timeout):
+def _cline_complete(prompt_text, model_id, timeout, images=None):
     """
     Calls Cline's hosted API (api.cline.bot) directly over plain HTTP, bypassing the local
     OpenCode server entirely, and returns the reply text.
@@ -114,13 +117,19 @@ def _cline_complete(prompt_text, model_id, timeout):
     api_key = os.environ.get('CLINE_API_KEY')
     if not api_key:
         raise ValueError('CLINE_API_KEY is not set')
+    user_content = prompt_text
+    if images:  # images: [(mime, raw_bytes)] -> OpenAI-style multimodal content parts
+        user_content = [{'type': 'text', 'text': prompt_text}] + [
+            {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{base64.b64encode(raw).decode()}'}}
+            for mime, raw in images
+        ]
     body = json.dumps({
         'model': model_id,
         'temperature': 0.2,
         'top_p': 0.9,
         'messages': [
             {'role': 'system', 'content': CLINE_SYSTEM_PROMPT},
-            {'role': 'user', 'content': prompt_text},
+            {'role': 'user', 'content': user_content},
         ],
     }).encode('utf-8')
     req = urllib.request.Request(
@@ -339,7 +348,7 @@ def _wait_for_reply(base_url, password, session_id, deadline):
         time.sleep(REPLY_POLL_SECONDS)
 
 
-def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
+def run_compliance_agent(prompt_text, parse_fn, log_tag='request', images=None):
     """
     Runs prompt_text through each candidate model in turn (see _candidate_models), calling
     parse_fn(reply_text) on every reply received. The first candidate whose parse_fn result is
@@ -353,6 +362,14 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
     """
     cfg = _config()
     candidates = _candidate_models(*cfg) if cfg else _candidate_models()
+    if images:
+        # Image requests go to Cline direct on a vision model only: the pinned/default text
+        # models can't see images, and the free OpenCode models are entitlement-gated or too
+        # slow (verified live 2026-11-05). No CLINE_API_KEY -> no suggestion (fail open).
+        if not os.environ.get('CLINE_API_KEY'):
+            logger.warning('AI dispatch (%s): image review needs CLINE_API_KEY, skipping', log_tag)
+            return None
+        candidates = [('clinedirect', os.environ.get('CLINE_VISION_MODEL', DEFAULT_VISION_MODEL), None)]
     needs_opencode_server = any(provider_id != 'clinedirect' for provider_id, _, _ in candidates)
 
     base_url = password = None
@@ -385,7 +402,7 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request'):
             session_id = None
             try:
                 if provider_id == 'clinedirect':
-                    full_text = _cline_complete(prompt_text, model_id, attempt_timeout)
+                    full_text = _cline_complete(prompt_text, model_id, attempt_timeout, images)
                 else:
                     session = _request(base_url, password, 'POST', '/api/session', {
                         'location': {'directory': scratch_dir},

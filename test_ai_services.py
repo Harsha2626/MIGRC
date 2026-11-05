@@ -171,7 +171,7 @@ def test_dispatch_returns_none_without_password(monkeypatch):
 
 def test_dispatch_cline_direct_when_pinned(monkeypatch):
     monkeypatch.setenv('OPENCODE_MODEL', 'clinedirect/m/x')
-    monkeypatch.setattr(ai_dispatch, '_cline_complete', lambda prompt, model, timeout: 'hello')
+    monkeypatch.setattr(ai_dispatch, '_cline_complete', lambda prompt, model, timeout, images=None: 'hello')
     assert ai_dispatch.run_compliance_agent('p', lambda t: t) == 'hello'
 
 
@@ -293,3 +293,21 @@ def test_suggest_answers_fails_open(app, monkeypatch):
         template = T()
     with app.app_context():
         assert ai_questionnaire.suggest_answers(A(), 1) is None
+
+
+def test_dispatch_images_use_cline_vision_model_only(monkeypatch):
+    seen = {}
+    def fake(prompt, model, timeout, images=None):
+        seen.update(model=model, images=images)
+        return 'ok'
+    monkeypatch.setattr(ai_dispatch, '_cline_complete', fake)
+    monkeypatch.setenv('CLINE_API_KEY', 'k')
+    monkeypatch.delenv('OPENCODE_MODEL', raising=False)
+    img = [('image/png', b'x')]
+    assert ai_dispatch.run_compliance_agent('p', lambda t: t, images=img) == 'ok'
+    assert seen == {'model': ai_dispatch.DEFAULT_VISION_MODEL, 'images': img}
+
+
+def test_dispatch_images_without_cline_key_fails_open(monkeypatch):
+    monkeypatch.delenv('CLINE_API_KEY', raising=False)
+    assert ai_dispatch.run_compliance_agent('p', lambda t: t, images=[('image/png', b'x')]) is None
