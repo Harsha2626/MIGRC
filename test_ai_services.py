@@ -311,3 +311,19 @@ def test_dispatch_images_use_cline_vision_model_only(monkeypatch):
 def test_dispatch_images_without_cline_key_fails_open(monkeypatch):
     monkeypatch.delenv('CLINE_API_KEY', raising=False)
     assert ai_dispatch.run_compliance_agent('p', lambda t: t, images=[('image/png', b'x')]) is None
+
+
+def test_load_content_kinds(tmp_path):
+    from flask import Flask
+    from app.services import ai_evidence_review as r
+    app = Flask(__name__); app.config['UPLOAD_FOLDER'] = str(tmp_path)
+    (tmp_path / 'a.csv').write_text('Activity,Lawful basis,Retention\n' + 'Payroll,Contract,7y\n' * 10)
+    (tmp_path / 'b.png').write_bytes(b'x')
+    (tmp_path / 'c.pptx').write_bytes(b'x')
+    class E:
+        def __init__(self, f): self.file_path = f
+    with app.app_context():
+        a, t, k = r._load_content(E('a.csv')); assert k == 'document' and 'Payroll' in t and a is None
+        a, t, k = r._load_content(E('b.png')); assert k == 'image' and a[0][0] == 'image/png'
+        assert r._load_content(E('c.pptx')) == (None, None, None)
+        assert r._load_content(E('missing.pdf')) == (None, None, None)

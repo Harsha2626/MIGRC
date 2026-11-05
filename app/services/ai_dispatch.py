@@ -81,6 +81,8 @@ AUTH_BLOCK_LIMIT = 3
 
 # Vision-capable model used via Cline direct for image evidence (override: CLINE_VISION_MODEL).
 DEFAULT_VISION_MODEL = 'xiaomi/mimo-v2.6-flash'
+# Scanned PDFs need a model with PDF input (verified live 2026-11-05); override: CLINE_PDF_MODEL.
+DEFAULT_PDF_MODEL = 'z-ai/glm-5.3-flash'
 
 DISCOVERY_TTL_SECONDS = 300
 DISCOVERY_TIMEOUT = 3
@@ -119,10 +121,12 @@ def _cline_complete(prompt_text, model_id, timeout, images=None):
         raise ValueError('CLINE_API_KEY is not set')
     user_content = prompt_text
     if images:  # images: [(mime, raw_bytes)] -> OpenAI-style multimodal content parts
-        user_content = [{'type': 'text', 'text': prompt_text}] + [
-            {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{base64.b64encode(raw).decode()}'}}
-            for mime, raw in images
-        ]
+        def part(mime, raw):
+            data_uri = f'data:{mime};base64,{base64.b64encode(raw).decode()}'
+            if mime == 'application/pdf':
+                return {'type': 'file', 'file': {'filename': 'evidence.pdf', 'file_data': data_uri}}
+            return {'type': 'image_url', 'image_url': {'url': data_uri}}
+        user_content = [{'type': 'text', 'text': prompt_text}] + [part(m, r) for m, r in images]
     body = json.dumps({
         'model': model_id,
         'temperature': 0.2,
@@ -369,7 +373,10 @@ def run_compliance_agent(prompt_text, parse_fn, log_tag='request', images=None):
         if not os.environ.get('CLINE_API_KEY'):
             logger.warning('AI dispatch (%s): image review needs CLINE_API_KEY, skipping', log_tag)
             return None
-        candidates = [('clinedirect', os.environ.get('CLINE_VISION_MODEL', DEFAULT_VISION_MODEL), None)]
+        has_pdf = any(m == 'application/pdf' for m, _ in images)
+        model = (os.environ.get('CLINE_PDF_MODEL', DEFAULT_PDF_MODEL) if has_pdf
+                 else os.environ.get('CLINE_VISION_MODEL', DEFAULT_VISION_MODEL))
+        candidates = [('clinedirect', model, None)]
     needs_opencode_server = any(provider_id != 'clinedirect' for provider_id, _, _ in candidates)
 
     base_url = password = None

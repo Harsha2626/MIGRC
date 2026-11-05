@@ -98,7 +98,7 @@
         <h3><i class="fas fa-folder-open" style="margin-right:8px;"></i> Uploaded Evidence</h3>
         <div style="display:flex;gap:8px;">
             {% if current_user.can_write and evidence_list|selectattr('status','equalto','Pending Review')|list|length > 0 %}
-            <form method="POST" action="{{ url_for('compliance.evaluate_control_evidence', framework_id=framework.id, control_id=control.id) }}" onsubmit="return confirm('Run AI evidence review for all pending evidence on this control? Images (png/jpg) are inspected visually like a compliance manager; other files are judged from title/description. May take a minute.');">
+            <form method="POST" action="{{ url_for('compliance.evaluate_control_evidence', framework_id=framework.id, control_id=control.id) }}" onsubmit="return confirm('Run AI evidence review for all pending evidence on this control? Images and documents (png, jpg, pdf, docx, xlsx, csv) are read and inspected like a compliance manager; other files (doc, ppt, pptx) are judged from title/description only. May take a minute.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-wand-magic-sparkles"></i> Evaluate Evidence with AI</button>
             </form>
@@ -138,7 +138,7 @@
                         <div style="font-size:11px;margin-top:4px;padding:6px 8px;border-radius:4px;background:var(--accent-primary-light);color:var(--accent-primary);">
                             <div><i class="fas fa-wand-magic-sparkles"></i>
                                 AI validation: <strong>{{ ev.ai_suggested_status }}</strong>
-                                {% if (ev.file_path or '').lower().endswith(('.png','.jpg','.jpeg')) %}<span title="The image itself was inspected by the AI"><i class="fas fa-image"></i> image inspected</span>{% endif %}
+                                {% if (ev.file_path or '').lower().endswith(('.png','.jpg','.jpeg','.pdf','.docx','.xlsx','.csv')) %}<span title="The file's actual content was read by the AI"><i class="fas fa-file-circle-check"></i> content inspected</span>{% endif %}
                                 {% if ev.ai_confidence %}({{ (ev.ai_confidence * 100)|round|int }}% confidence){% endif %}
                             </div>
                             {% if ev.ai_rationale %}<div style="margin-top:2px;color:var(--text-secondary);">{{ ev.ai_rationale }}</div>{% endif %}

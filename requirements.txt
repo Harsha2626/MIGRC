@@ -23,3 +23,6 @@ google-auth-oauthlib==1.2.1
 google-api-python-client==2.149.0
 pytest==8.3.4
 cryptography>=43
+pypdf
+python-docx
+openpyxl
