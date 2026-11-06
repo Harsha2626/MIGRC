@@ -11,7 +11,7 @@ from app.models import (
 )
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
-from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf
+from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf, build_ai_verdict_report_pdf
 from app.services.ai_evidence_review import review_evidence as ai_review_evidence
 from app.utils import allowed_file, require_permission
 
@@ -586,6 +586,8 @@ def _recalculate_control_status(control_id):
         row = ControlStatus(control_id=control_id, organization_id=org.id)
         db.session.add(row)
 
+    if row.status == 'Not Applicable':  # explicitly marked out of scope; evidence doesn't change that
+        return
     if not org_mappings:
         row.status = 'Not Assessed'
         return
@@ -633,6 +635,51 @@ def _take_compliance_snapshot(framework_id):
     snapshot.not_assessed = fw.not_assessed
     snapshot.not_applicable = fw.not_applicable
     snapshot.total_controls = fw.total_controls
+
+
+@compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>/scope', methods=['POST'])
+@login_required
+@require_permission('write')
+def set_control_scope(framework_id, control_id):
+    """Mark a control out of scope (status 'Not Applicable', excluded from the score; a reason is
+    mandatory) or bring it back into scope (re-derived from the org's evidence)."""
+    org = g.current_org
+    fw = Framework.visible_to(org.id if org else -1).filter_by(id=framework_id).first_or_404()
+    ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
+    row = ControlStatus.query.filter_by(control_id=ctrl.id, organization_id=org.id).first()
+    if not row:
+        row = ControlStatus(control_id=ctrl.id, organization_id=org.id)
+        db.session.add(row)
+
+    if request.form.get('action') == 'in':
+        row.status, row.scope_reason = 'Not Assessed', None
+        _recalculate_control_status(ctrl.id)
+        msg = f'{current_user.name} brought control "{ctrl.code}" back into scope'
+    else:
+        reason = request.form.get('reason', '').strip()
+        if not reason:
+            flash('A reason is required to mark a control out of scope.', 'error')
+            return redirect(url_for('compliance.control_detail', framework_id=fw.id, control_id=ctrl.id))
+        row.status, row.scope_reason = 'Not Applicable', reason
+        msg = f'{current_user.name} marked control "{ctrl.code}" out of scope: {reason}'
+
+    log_activity('updated', 'Control', ctrl.code, msg)
+    _take_compliance_snapshot(fw.id)
+    db.session.commit()
+    flash(msg + '.', 'success')
+    return redirect(url_for('compliance.control_detail', framework_id=fw.id, control_id=ctrl.id))
+
+
+@compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>/ai-report.pdf')
+@login_required
+def control_ai_report_pdf(framework_id, control_id):
+    org_id = g.current_org.id if g.current_org else -1
+    fw = Framework.visible_to(org_id).filter_by(id=framework_id).first_or_404()
+    ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
+    evidence = [m.evidence for m in EvidenceMapping.for_org(org_id, ctrl.id).order_by(EvidenceMapping.id)]
+    pdf_bytes = build_ai_verdict_report_pdf(fw, ctrl, evidence)
+    return Response(pdf_bytes, mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=AI_evidence_review_{secure_filename(ctrl.code) or ctrl.id}.pdf'})
 
 
 @compliance_bp.route('/compliance/<int:framework_id>/report.pdf')

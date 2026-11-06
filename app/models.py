@@ -84,6 +84,13 @@ class Organization(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def has_logo(self):
+        """True only if a logo is recorded AND its file exists - a DB row can outlive the file."""
+        from flask import current_app
+        import os
+        return bool(self.logo_path) and os.path.isfile(os.path.join(current_app.config['UPLOAD_FOLDER'], self.logo_path))
+
 
 class DepartmentOwner(db.Model):
     __tablename__ = 'department_owners'
@@ -305,6 +312,11 @@ class Control(db.Model):
         row = self._org_status_row()
         return row.owner if row else None
 
+    @property
+    def org_scope_reason(self):
+        row = self._org_status_row()
+        return row.scope_reason if row else None
+
 
 class ControlStatus(db.Model):
     """Per-organization tracking of a shared Control's assessment: pass/fail status and owner.
@@ -315,6 +327,7 @@ class ControlStatus(db.Model):
     control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=False)
     status = db.Column(db.String(30), default='Not Assessed')
     owner = db.Column(db.String(100))
+    scope_reason = db.Column(db.Text)  # why the control is out of scope (status 'Not Applicable')
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (db.UniqueConstraint('organization_id', 'control_id', name='uq_org_control_status'),)

@@ -6,7 +6,6 @@
 {% set entity_icons = {'Risk': 'fa-triangle-exclamation', 'Policy': 'fa-file-shield', 'Vendor': 'fa-building',
     'Asset': 'fa-server', 'Audit': 'fa-magnifying-glass-chart', 'Evidence': 'fa-file-lines',
     'Employee': 'fa-user', 'TrainingCampaign': 'fa-graduation-cap', 'AccessReview': 'fa-user-lock'} %}
-{% set not_assessed_total = total_controls - passing_controls - failing_controls - na_controls %}
 {% set kpi_accent = {'blue': 'primary', 'red': 'danger', 'purple': 'primary', 'orange': 'warning'} %}
 
 <div class="page-header">
@@ -51,7 +50,7 @@
         <div class="card-header">
             <div>
                 <h2 class="card-title">Control status</h2>
-                <div class="card-subtitle">{{ total_controls }} controls in scope</div>
+                <div class="card-subtitle"><span id="donutTotalCount">{{ total_controls }}</span> controls in scope</div>
             </div>
             <label class="sr-only" for="controlsDonutFilter">Framework</label>
             <select class="filter-select" id="controlsDonutFilter" onchange="updateControlsDonut(this.value)">
@@ -72,7 +71,7 @@
             <ul class="legend-list">
                 <li><span class="swatch" style="background:var(--accent-success)"></span> Passing <span class="count" id="donutPassingCount">{{ passing_controls }}</span></li>
                 <li><span class="swatch" style="background:var(--accent-danger)"></span> Failing <span class="count" id="donutFailingCount">{{ failing_controls }}</span></li>
-                <li><span class="swatch" style="background:var(--accent-warning)"></span> Not assessed <span class="count" id="donutNotAssessedCount">{{ not_assessed_total }}</span></li>
+                <li><span class="swatch" style="background:var(--accent-warning)"></span> Not assessed <span class="count" id="donutNotAssessedCount">{{ total_controls - passing_controls - failing_controls - na_controls }}</span></li>
                 <li><span class="swatch" style="background:var(--border-strong)"></span> Not applicable <span class="count" id="donutNaCount">{{ na_controls }}</span></li>
             </ul>
         </div>
@@ -339,7 +338,7 @@
     var FRAMEWORKS = {{ frameworks|tojson }};
     var ALL = {
         id: 'all', passing: {{ passing_controls }}, failing: {{ failing_controls }},
-        not_assessed: {{ not_assessed_total }}, not_applicable: {{ na_controls }},
+        not_assessed: {{ total_controls - passing_controls - failing_controls - na_controls }}, not_applicable: {{ na_controls }},
         compliance_score: {{ compliance_score }}
     };
     var COLORS = ['var(--accent-success)', 'var(--accent-danger)', 'var(--accent-warning)', 'var(--border-strong)'];
@@ -373,6 +372,7 @@
         var d = id === 'all' ? ALL : FRAMEWORKS.find(function (fw) { return String(fw.id) === String(id); });
         if (!d) return;
         drawRing(d);
+        document.getElementById('donutTotalCount').textContent = d.total_controls !== undefined ? d.total_controls : {{ total_controls }};
         document.getElementById('donutScoreValue').textContent = d.compliance_score + '%';
         document.getElementById('donutPassingCount').textContent = d.passing;
         document.getElementById('donutFailingCount').textContent = d.failing;

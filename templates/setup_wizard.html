@@ -69,15 +69,15 @@
                     <form method="POST" action="{{ url_for('setup.save_organization') }}" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-group">
-                            <label for="orgLogoBtn">Organization logo</label>
+                            <label for="orgLogoBtn">Organization logo</label>{% if org and org.logo_path and not org.has_logo %}<div class="form-help" style="color:var(--accent-danger);">The saved logo file is missing on the server - please upload it again.</div>{% endif %}
                             <div class="flex-center gap-12">
                                 <div class="logo-upload-box">
-                                    {% if org and org.logo_path %}<img class="wz-logo-img" src="{{ url_for('setup.organization_logo', org_id=org.id) }}" alt="Organization logo">
+                                    {% if org and org.has_logo %}<img class="wz-logo-img" src="{{ url_for('setup.organization_logo', org_id=org.id) }}" alt="Organization logo">
                                     {% else %}<i class="fas fa-building" aria-hidden="true"></i>{% endif %}
                                 </div>
                                 <button type="button" id="orgLogoBtn" class="btn btn-sm btn-secondary" onclick="document.getElementById('orgLogoInput').click()"><i class="fas fa-upload" aria-hidden="true"></i> Upload logo</button>
-                                <span class="form-help" id="orgLogoName" aria-live="polite">PNG or JPG, shown on reports.</span>
-                                <input type="file" name="logo" id="orgLogoInput" accept="image/*" hidden onchange="document.getElementById('orgLogoName').textContent = this.files[0] ? this.files[0].name : 'PNG or JPG, shown on reports.'">
+                                <span class="form-help" id="orgLogoName" aria-live="polite">PNG, JPG, GIF, WEBP or SVG, up to 10 MB.</span>
+                                <input type="file" name="logo" id="orgLogoInput" accept="image/*" hidden onchange="document.getElementById('orgLogoName').textContent = this.files[0] ? this.files[0].name : 'PNG, JPG, GIF, WEBP or SVG, up to 10 MB.'">
                             </div>
                         </div>
                         <div class="form-grid">

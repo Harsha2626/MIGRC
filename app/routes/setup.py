@@ -216,30 +216,48 @@ def save_organization():
         flash('No active organization.', 'error')
         return redirect(url_for('setup.setup_wizard'))
 
-    name = request.form.get('name', '').strip()
-    if name:
-        org.name = name
-    org.legal_name = request.form.get('legal_name', '').strip()
-    org.company_url = request.form.get('company_url', '').strip()
-    org.work_arrangement = request.form.get('work_arrangement') or org.work_arrangement
-    org.business_address = request.form.get('business_address', '').strip()
-    org.industry = request.form.get('industry', '').strip()
-    org.geographic_scope = request.form.getlist('geographic_scope')
+    f = request.form
+    if f.get('name', '').strip():
+        org.name = f['name'].strip()
+    # Only touch fields the submitting form actually contains (wizard and Settings post different subsets).
+    for field in ('legal_name', 'company_url', 'business_address', 'industry'):
+        if field in f:
+            setattr(org, field, f[field].strip())
+    if f.get('work_arrangement'):
+        org.work_arrangement = f['work_arrangement']
+    if 'geographic_scope' in f:
+        org.geographic_scope = f.getlist('geographic_scope')
 
+    error = False
     file = request.files.get('logo')
     if file and file.filename:
         if allowed_file(file.filename, IMAGE_EXTENSIONS):
             filename = secure_filename(file.filename)
             timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
             unique_filename = f'org{org.id}_{timestamp}_{filename}'
-            file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
-            org.logo_path = unique_filename
+            folder = current_app.config['UPLOAD_FOLDER']
+            try:
+                file.save(os.path.join(folder, unique_filename))
+            except OSError as e:
+                current_app.logger.error('Logo save failed: %s', e)
+                flash('Logo could not be saved (server storage problem) - please try again later.', 'error')
+                error = True
+            else:
+                old = org.logo_path
+                org.logo_path = unique_filename
+                if old and old != unique_filename:
+                    try:
+                        os.remove(os.path.join(folder, old))
+                    except OSError:
+                        pass
         else:
-            flash('Logo not saved — use PNG, JPG, GIF, WEBP, or SVG.', 'error')
+            flash('Logo not saved - use PNG, JPG, GIF, WEBP, or SVG.', 'error')
+            error = True
 
     db.session.commit()
-    flash('Organization details saved.', 'success')
-    return redirect(url_for('setup.setup_wizard'))
+    if not error:
+        flash('Organization details saved.', 'success')
+    return redirect(url_for('main.settings') if f.get('next') == 'settings' else url_for('setup.setup_wizard'))
 
 
 @setup_bp.route('/setup/organization/<int:org_id>/logo')

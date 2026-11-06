@@ -9,6 +9,9 @@
 {% endblock %}
 
 {% block content %}
+{% if control.org_status == 'Not Applicable' %}
+<div class="card" style="margin-bottom:20px;"><div class="card-body"><i class="fas fa-ban"></i> <strong>Out of scope.</strong> {{ control.org_scope_reason or 'No reason recorded.' }}</div></div>
+{% endif %}
 <div class="page-header">
     <div>
         <h1>{{ control.code }} — {{ control.title }}</h1>
@@ -18,6 +21,22 @@
         <span class="badge {% if control.org_status == 'Passing' %}badge-success{% elif control.org_status == 'Failing' %}badge-danger{% elif control.org_status == 'Not Applicable' %}badge-neutral{% else %}badge-warning{% endif %}" style="font-size:14px;padding:8px 16px;">
             {{ control.org_status }}
         </span>
+        {% if current_user.can_write %}
+        {% if control.org_status == 'Not Applicable' %}
+        <form method="POST" action="{{ url_for('compliance.set_control_scope', framework_id=framework.id, control_id=control.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="in">
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-rotate-left"></i> Bring back in scope</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('compliance.set_control_scope', framework_id=framework.id, control_id=control.id) }}" style="display:inline;" onsubmit="var r = prompt('Why is this control out of scope? (required)'); if (!r || !r.trim()) { return false; } this.reason.value = r.trim(); return true;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="out">
+            <input type="hidden" name="reason" value="">
+            <button type="submit" class="btn btn-secondary"><i class="fas fa-ban"></i> Mark out of scope</button>
+        </form>
+        {% endif %}
+        {% endif %}
         <a href="/compliance/{{ framework.id }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
@@ -102,6 +121,9 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-wand-magic-sparkles"></i> Evaluate Evidence with AI</button>
             </form>
+            {% endif %}
+            {% if evidence_list|selectattr('ai_suggested_status')|list|length > 0 %}
+            <a href="{{ url_for('compliance.control_ai_report_pdf', framework_id=framework.id, control_id=control.id) }}" class="btn btn-sm btn-secondary"><i class="fas fa-file-pdf"></i> Download AI Report</a>
             {% endif %}
             {% if current_user.can_write %}
             <button class="btn btn-sm btn-primary" onclick="document.getElementById('uploadSection').style.display = document.getElementById('uploadSection').style.display === 'none' ? '' : 'none'">

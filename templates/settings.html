@@ -34,37 +34,40 @@
 
                 <section class="pd-section" aria-labelledby="sec-identity">
                     <div><h3 id="sec-identity">Identity</h3><p class="hint">Logo and names shown on reports and the Trust Center.</p></div>
-                    <div>
+                    <form method="POST" action="{{ url_for('setup.save_organization') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="next" value="settings">
                         <div class="form-group">
                             <span class="form-label" id="logoLabel">Organization Logo <span class="required-star">*</span></span>
                             <div class="pd-logo-row" role="group" aria-labelledby="logoLabel">
                                 <div class="logo-upload-box">
-                                    <img id="orgLogoPreview" hidden alt="Organization logo preview">
-                                    <i class="fas fa-building" id="orgLogoFallback" aria-hidden="true"></i>
+                                    {% if current_org and current_org.has_logo %}<img id="orgLogoPreview" src="{{ url_for('setup.organization_logo', org_id=current_org.id) }}" alt="Organization logo">{% else %}<img id="orgLogoPreview" hidden alt="Organization logo preview">{% endif %}
+                                    <i class="fas fa-building" id="orgLogoFallback" aria-hidden="true" {% if current_org and current_org.has_logo %}hidden{% endif %}></i>
                                 </div>
                                 <div>
                                     <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('orgLogoInput').click()">Replace Logo</button>
-                                    <div class="form-help">Select an image (max size 2MB)</div>
+                                    <div class="form-help">PNG, JPG, GIF, WEBP or SVG (max 2 MB)</div>
                                 </div>
-                                <input type="file" id="orgLogoInput" accept="image/*" hidden aria-label="Organization logo file" onchange="previewOrgLogo(this)">
+                                <input type="file" name="logo" id="orgLogoInput" accept="image/*" hidden aria-label="Organization logo file" onchange="previewOrgLogo(this)">
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="orgName">Organization Name <span class="required-star">*</span></label>
-                            <input type="text" class="form-control" id="orgName" maxlength="100" value="Midevops_NFR-POC" oninput="updateFieldCounter('orgName','orgNameCount',100)">
-                            <div class="field-counter" id="orgNameCount">16/100</div>
+                            <input type="text" class="form-control" id="orgName" name="name" maxlength="100" value="{{ current_org.name if current_org else '' }}" oninput="updateFieldCounter('orgName','orgNameCount',100)">
+                            <div class="field-counter" id="orgNameCount">{{ (current_org.name|length) if current_org else 0 }}/100</div>
                         </div>
                         <div class="form-group">
                             <label for="orgLegalName">Legal Name <span class="required-star">*</span></label>
-                            <input type="text" class="form-control" id="orgLegalName" maxlength="100" value="Midevops Services Pvt Ltd" oninput="updateFieldCounter('orgLegalName','orgLegalNameCount',100)">
-                            <div class="field-counter" id="orgLegalNameCount">26/100</div>
+                            <input type="text" class="form-control" id="orgLegalName" name="legal_name" maxlength="100" value="{{ (current_org.legal_name or '') if current_org else '' }}" oninput="updateFieldCounter('orgLegalName','orgLegalNameCount',100)">
+                            <div class="field-counter" id="orgLegalNameCount">{{ ((current_org.legal_name or "")|length) if current_org else 0 }}/100</div>
                         </div>
                         <div class="form-group">
                             <label for="orgUrl">Company URL</label>
-                            <input type="text" class="form-control" id="orgUrl" maxlength="200" value="https://www.midevops.io" oninput="updateFieldCounter('orgUrl','orgUrlCount',200)">
-                            <div class="field-counter" id="orgUrlCount">23/200</div>
+                            <input type="text" class="form-control" id="orgUrl" name="company_url" maxlength="200" value="{{ (current_org.company_url or '') if current_org else '' }}" oninput="updateFieldCounter('orgUrl','orgUrlCount',200)">
+                            <div class="field-counter" id="orgUrlCount">{{ ((current_org.company_url or "")|length) if current_org else 0 }}/200</div>
                         </div>
-                    </div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save identity</button>
+                    </form>
                 </section>
 
                 <section class="pd-section" aria-labelledby="sec-profile">

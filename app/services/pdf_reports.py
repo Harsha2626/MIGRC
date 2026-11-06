@@ -115,6 +115,46 @@ def build_compliance_report_pdf(framework, subtitle=None):
     return bytes(pdf.output())
 
 
+def build_ai_verdict_report_pdf(framework, control, evidence_list):
+    """Per-control report of the AI's evidence verdicts. Suggestions only - a human decides."""
+    pdf = Report(f'AI Evidence Review - {control.code}')
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(*INK)
+    pdf.multi_cell(0, 6, _safe(f'Framework: {framework.name}\nControl: {control.code} - {control.title}'), new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('Helvetica', 'I', 9)
+    pdf.set_text_color(*MUTED)
+    pdf.multi_cell(0, 5, 'AI-generated suggestions for human review; they do not change evidence status on their own.', new_x='LMARGIN', new_y='NEXT')
+    pdf.ln(2)
+
+    pdf.section(f'Evidence ({len(evidence_list)})')
+    for ev in evidence_list:
+        if pdf.get_y() > 245:
+            pdf.add_page()
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.set_text_color(*INK)
+        pdf.multi_cell(0, 6, _safe(ev.title), new_x='LMARGIN', new_y='NEXT')
+        pdf.set_font('Helvetica', '', 9)
+        pdf.set_text_color(*MUTED)
+        pdf.multi_cell(0, 5, _safe(f'File: {ev.file_name or "-"}   Human status: {ev.status}'
+                                   + (f' (by {ev.reviewed_by})' if ev.reviewed_by else '')), new_x='LMARGIN', new_y='NEXT')
+        if ev.ai_reviewed_at and ev.ai_suggested_status:
+            colour = {'Approved': GREEN, 'Rejected': RED}.get(ev.ai_suggested_status, AMBER)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(*colour)
+            conf = f' ({round(ev.ai_confidence * 100)}% confidence)' if ev.ai_confidence is not None else ''
+            pdf.cell(0, 6, _safe(f'AI verdict: {ev.ai_suggested_status}{conf}'), ln=True)
+            pdf.set_font('Helvetica', '', 9)
+            pdf.set_text_color(*INK)
+            pdf.multi_cell(0, 5, _safe(ev.ai_rationale or 'No rationale given.'), new_x='LMARGIN', new_y='NEXT')
+            pdf.set_text_color(*MUTED)
+            pdf.cell(0, 5, f'Reviewed by AI: {ev.ai_reviewed_at.strftime("%d %b %Y %H:%M UTC")}', ln=True)
+        else:
+            pdf.cell(0, 6, 'No AI verdict yet.', ln=True)
+        pdf.ln(4)
+
+    return bytes(pdf.output())
+
+
 def build_audit_report_pdf(audit, evidence_items, findings):
     pdf = Report(f'Audit Report - {audit.name}')
     pdf.set_font('Helvetica', '', 10)
