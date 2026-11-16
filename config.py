@@ -49,3 +49,9 @@ class Config:
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
     GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
     GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI')
+
+    # Microsoft Entra ID directory sync (multi-tenant app registration). Inert unless all three are
+    # set - see app/routes/entra_oauth.py.
+    ENTRA_CLIENT_ID = os.environ.get('ENTRA_CLIENT_ID')
+    ENTRA_CLIENT_SECRET = os.environ.get('ENTRA_CLIENT_SECRET')
+    ENTRA_REDIRECT_URI = os.environ.get('ENTRA_REDIRECT_URI')

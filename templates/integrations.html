@@ -9,13 +9,53 @@
     <div>
         <div class="page-eyebrow">Connections</div>
         <h1>Integrations</h1>
-        <p>Google Workspace is the only integration available today. The rest are on the roadmap and are not yet functional.</p>
+        <p>Connect an integration, or see what is planned. Planned items are not yet functional.</p>
     </div>
 </div>
 
-<section class="integ-section" aria-labelledby="integ-available">
-    <h2 id="integ-available">Available now</h2>
+
+{% for category, items in planned_categories %}
+<section class="integ-section" aria-labelledby="integ-cat-{{ loop.index }}">
+    <h2 id="integ-cat-{{ loop.index }}">{{ category }}</h2>
     <div class="integration-grid">
+        {% if category == 'Identity Providers' %}
+        <div class="integration-card">
+            <div class="integration-card-head">
+                <div class="integration-badge blue"><i class="fab fa-microsoft" aria-hidden="true"></i></div>
+                <h3>Microsoft Entra ID</h3>
+            </div>
+            <div class="tag-list mb-16"><span class="tag">Employee Directory</span></div>
+            {% if entra_connection %}
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    Connected as <strong>{{ entra_connection.account }}</strong><br>
+                    {% if entra_connection.domain %}Domain: {{ entra_connection.domain }}<br>{% endif %}
+                    Connected {{ entra_connection.connected_at.strftime('%d %b %Y') if entra_connection.connected_at else 'recently' }}<br>
+                    {% if entra_connection.last_synced_at %}Last synced {{ entra_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never synced{% endif %}
+                </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('entra_oauth.sync_employees') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-rotate" aria-hidden="true"></i> Sync employees</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('entra_oauth.disconnect') }}"
+                          data-confirm="Disconnect Microsoft Entra ID? Employees already imported are kept, but they will no longer sync."
+                          data-confirm-title="Disconnect Microsoft Entra ID" data-confirm-button="Disconnect">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
+                </div>
+            {% elif entra_configured %}
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <div class="integ-meta">Import your employee directory and keep it in sync.</div>
+                <div class="integ-actions"><a href="{{ url_for('entra_oauth.connect') }}" class="btn btn-sm btn-primary"><i class="fas fa-plug" aria-hidden="true"></i> Connect</a></div>
+            {% else %}
+                <div><span class="pill pill-warning"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>Not configured</span></div>
+                <div class="integ-meta">The server has no Microsoft Entra credentials (<code class="mono">ENTRA_CLIENT_ID</code> / <code class="mono">ENTRA_CLIENT_SECRET</code> / <code class="mono">ENTRA_REDIRECT_URI</code>). Ask an administrator to configure them.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if category == 'Identity Providers' %}
         <div class="integration-card">
             <div class="integration-card-head">
                 <div class="integration-badge green"><i class="fab fa-google" aria-hidden="true"></i></div>
@@ -51,13 +91,7 @@
                 <div class="integ-meta">The server has no Google OAuth credentials (<code class="mono">GOOGLE_CLIENT_ID</code> / <code class="mono">GOOGLE_CLIENT_SECRET</code>). Ask an administrator to configure them.</div>
             {% endif %}
         </div>
-    </div>
-</section>
-
-{% for category, items in planned_categories %}
-<section class="integ-section" aria-labelledby="integ-cat-{{ loop.index }}">
-    <h2 id="integ-cat-{{ loop.index }}">{{ category }} <span class="text-sm text-muted">(roadmap)</span></h2>
-    <div class="integration-grid">
+        {% endif %}
         {% for item in items %}
         <div class="integration-card is-planned">
             <div class="integration-card-head">

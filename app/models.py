@@ -126,6 +126,26 @@ class GoogleWorkspaceConnection(db.Model):
     connected_by = db.relationship('User')
 
 
+class EntraConnection(db.Model):
+    """One org's connected Microsoft Entra tenant (Graph directory sync). Tokens are Fernet-encrypted;
+    see app/routes/entra_oauth.py. tenant_id is unique so a tenant can't be linked to two orgs."""
+    __tablename__ = 'entra_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    tenant_id = db.Column(db.String(64), nullable=False, unique=True)
+    account = db.Column(db.String(255), nullable=False)
+    domain = db.Column(db.String(255))
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text)
+    token_expiry = db.Column(db.DateTime)
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime)
+
+    organization = db.relationship('Organization', backref=db.backref('entra_connection', uselist=False))
+    connected_by = db.relationship('User')
+
+
 class OrganizationMembership(db.Model):
     __tablename__ = 'organization_memberships'
     id = db.Column(db.Integer, primary_key=True)

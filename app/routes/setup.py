@@ -5,7 +5,7 @@ from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app.models import (
     db, SetupTask, Framework, OrganizationFramework, Policy, Employee, Vendor, Risk, Audit, Evidence, ControlStatus,
-    Organization, OrganizationMembership, DepartmentOwner, GoogleWorkspaceConnection,
+    Organization, OrganizationMembership, DepartmentOwner, GoogleWorkspaceConnection, EntraConnection,
 )
 from app.routes.policies import POLICY_DEPARTMENTS
 from app.services.ai_opencode_policy_evaluation import check_server_status
@@ -139,7 +139,7 @@ def setup_wizard():
 
     # Google Workspace is a real, working IDP integration - being connected satisfies
     # this task even if it was never manually marked done.
-    if google_connection:
+    if google_connection or (org and EntraConnection.query.filter_by(organization_id=org.id).first()):
         manual_done['connect_identity_provider'] = True
 
     # AI Assist status is a live, per-machine check (not stored in the DB): each

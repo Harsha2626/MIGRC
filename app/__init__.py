@@ -91,6 +91,7 @@ def create_app():
     from app.routes.setup import setup_bp
     from app.routes.organizations import organizations_bp
     from app.routes.google_oauth import google_oauth_bp
+    from app.routes.entra_oauth import entra_oauth_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -107,6 +108,7 @@ def create_app():
     app.register_blueprint(setup_bp)
     app.register_blueprint(organizations_bp)
     app.register_blueprint(google_oauth_bp)
+    app.register_blueprint(entra_oauth_bp)
     from app.routes.incidents import incidents_bp
     app.register_blueprint(incidents_bp)
 
