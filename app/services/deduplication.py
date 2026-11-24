@@ -11,7 +11,7 @@ def cleanup_duplicate_frameworks(session=None):
     keeps the one with the highest number of controls (and lowest ID as tie-breaker),
     re-points any foreign keys if necessary, and safely removes the redundant duplicate.
     """
-    from app.models import db, Framework, Control, ComplianceSnapshot
+    from app.models import db, Framework, Control, ComplianceSnapshot, OrganizationFramework
 
     if session is None:
         session = db.session
@@ -43,11 +43,8 @@ def cleanup_duplicate_frameworks(session=None):
             logger.info(f"Deduplicating shared framework '{name}': keeping ID={winner.id} ({winner.controls.count()} controls), removing duplicates: {[d.id for d in duplicates]}")
 
             for dup in duplicates:
-                # Repoint snapshots
-                ComplianceSnapshot.query.filter_by(framework_id=dup.id).update(
-                    {'framework_id': winner.id}, synchronize_session=False
-                )
-                # Safely handle snapshots: delete duplicate snapshots for dates that already exist on winner
+                # Merge snapshots: keep the existing row when the winner already has one for
+                # that org/date (unique constraint), otherwise re-point the duplicate's row.
                 for snap in ComplianceSnapshot.query.filter_by(framework_id=dup.id).all():
                     existing = ComplianceSnapshot.query.filter_by(
                         organization_id=snap.organization_id,
@@ -59,10 +56,24 @@ def cleanup_duplicate_frameworks(session=None):
                     else:
                         snap.framework_id = winner.id
 
+                # Keep every org that had adopted the duplicate tracking the winner instead of
+                # silently losing the framework (a duplicate's adoption rows would otherwise be
+                # cascade-deleted with it).
+                for adoption in OrganizationFramework.query.filter_by(framework_id=dup.id).all():
+                    existing = OrganizationFramework.query.filter_by(
+                        organization_id=adoption.organization_id,
+                        framework_id=winner.id,
+                    ).first()
+                    if existing:
+                        session.delete(adoption)
+                    else:
+                        adoption.framework_id = winner.id
+
                 # Repoint controls if any existed on duplicate
                 Control.query.filter_by(framework_id=dup.id).update(
                     {'framework_id': winner.id}, synchronize_session=False
                 )
+                session.flush()
                 session.delete(dup)
 
             session.commit()
@@ -92,9 +103,6 @@ def cleanup_duplicate_frameworks(session=None):
             logger.info(f"Deduplicating org {org_id} framework '{name}': keeping ID={winner.id}, removing duplicates: {[d.id for d in duplicates]}")
 
             for dup in duplicates:
-                ComplianceSnapshot.query.filter_by(framework_id=dup.id).update(
-                    {'framework_id': winner.id}, synchronize_session=False
-                )
                 for snap in ComplianceSnapshot.query.filter_by(framework_id=dup.id).all():
                     existing = ComplianceSnapshot.query.filter_by(
                         organization_id=snap.organization_id,
@@ -109,6 +117,7 @@ def cleanup_duplicate_frameworks(session=None):
                 Control.query.filter_by(framework_id=dup.id).update(
                     {'framework_id': winner.id}, synchronize_session=False
                 )
+                session.flush()
                 session.delete(dup)
 
             session.commit()

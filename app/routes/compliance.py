@@ -1,7 +1,7 @@
 import os
 import re
 from datetime import datetime, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g, abort
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +13,7 @@ from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf, build_ai_verdict_report_pdf
 from app.services.ai_evidence_review import review_evidence as ai_review_evidence
-from app.utils import allowed_file, require_permission
+from app.utils import allowed_file, require_permission, safe_next_url
 
 compliance_bp = Blueprint('compliance', __name__)
 
@@ -21,6 +21,16 @@ compliance_bp = Blueprint('compliance', __name__)
 def _code_sort_key(code):
     """Natural sort so '4.1' < '4.2' < ... < '10.2' < 'A.5.1' < ... < 'A.5.10' < 'A.5.11'."""
     return [int(part) if part.isdigit() else part for part in re.split(r'(\d+)', code or '')]
+
+
+def _visible_framework(framework_id):
+    return Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first()
+
+
+def _inactive_shared_framework(framework_id):
+    """A library framework this org hasn't added yet, or None. Shared definitions are safe to
+    show (no org owns them); private frameworks belonging to another org stay hidden."""
+    return Framework.query.filter_by(id=framework_id, organization_id=None).first()
 
 
 @compliance_bp.route('/compliance')
@@ -120,6 +130,7 @@ def add_framework():
         return redirect(url_for('main.dashboard'))
 
     framework_id = request.form.get('framework_id', '').strip()
+    next_url = safe_next_url(request.form.get('next'))
 
     # Picking an existing shared-library framework: just opt this org into it (no new row).
     if framework_id and framework_id != '__custom__':
@@ -147,7 +158,7 @@ def add_framework():
             flash(f'Framework "{shared_fw.name}" is already active in your organization.', 'error')
             return redirect(url_for('compliance.compliance'))
         flash(f'Framework "{shared_fw.name}" added to your organization.', 'success')
-        return redirect(url_for('compliance.compliance'))
+        return redirect(next_url or url_for('compliance.compliance'))
 
     # Otherwise, a brand-new custom framework private to this org.
     name = request.form.get('custom_name', '').strip()
@@ -244,7 +255,14 @@ def delete_framework(framework_id):
 @compliance_bp.route('/compliance/<int:framework_id>')
 @login_required
 def framework_detail(framework_id):
-    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
+    fw = _visible_framework(framework_id)
+    if not fw:
+        shared_fw = _inactive_shared_framework(framework_id)
+        if not shared_fw:
+            abort(404)
+        return render_template('framework_inactive.html', page='compliance', framework=shared_fw,
+                               can_add=bool(g.current_org) and current_user.can_write,
+                               controls_total=shared_fw.controls.count())
     controls = Control.query.filter_by(framework_id=fw.id).all()
     controls.sort(key=lambda c: _code_sort_key(c.code))
 
@@ -274,7 +292,12 @@ def framework_detail(framework_id):
 @compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>')
 @login_required
 def control_detail(framework_id, control_id):
-    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
+    fw = _visible_framework(framework_id)
+    if not fw:
+        if _inactive_shared_framework(framework_id):
+            flash('Add this framework to your organization before opening its controls.', 'info')
+            return redirect(url_for('compliance.framework_detail', framework_id=framework_id))
+        abort(404)
     ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
 
     # Get all evidence mapped to this control

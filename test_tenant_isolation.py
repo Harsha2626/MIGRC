@@ -187,3 +187,23 @@ def test_policy_assignees_restricted_to_org_members(app, client):
     client.post(f'/policies/{pid}/assignees', data={'user_ids': [str(ua), str(ub)]})
     with app.app_context():
         assert {u.id for u in Policy.query.get(pid).assignees} == {ua}
+
+
+def test_login_redirects_to_safe_next(app, client):
+    _, uid = _org(app, 'Next Org', 'next@x.test')
+    from app.models import User
+    with app.app_context():
+        email = User.query.get(uid).email
+    resp = client.post('/login?next=/compliance', data={'email': email, 'password': 'password123'})
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/compliance')
+
+
+def test_login_rejects_external_next(app, client):
+    _, uid = _org(app, 'Evil Org', 'evilnext@x.test')
+    from app.models import User
+    with app.app_context():
+        email = User.query.get(uid).email
+    resp = client.post('/login?next=https://evil.example/phish', data={'email': email, 'password': 'password123'})
+    assert resp.status_code == 302
+    assert 'evil.example' not in resp.headers['Location']

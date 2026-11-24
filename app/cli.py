@@ -30,6 +30,8 @@ def run_daily_jobs_for_org(org):
     try:
         snaps = ensure_snapshots_for_today()
         notifs = ensure_notifications_for_today()
+        from app.services.integration_scans import run_scans_for_org
+        run_scans_for_org(org)
     finally:
         g.current_org = None
     return snaps, notifs

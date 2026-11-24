@@ -1,9 +1,27 @@
 from functools import wraps
 from datetime import datetime, date
+from urllib.parse import urlsplit
 from flask import current_app, flash, redirect, request, url_for
 from flask_login import current_user
 
 DATE_FORMATS = ['%Y-%m-%d', '%d %b %Y', '%d %B %Y']
+
+
+def safe_next_url(target):
+    """Return target only if it's a same-site absolute path, else None.
+
+    Used for post-login redirects; rejecting schemes, netlocs and protocol-relative
+    URLs prevents the classic `?next=https://evil.example` open redirect.
+    """
+    if not target:
+        return None
+    target = target.strip()
+    if not target.startswith('/') or target.startswith('//') or '\\' in target:
+        return None
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc:
+        return None
+    return target
 
 
 def require_permission(perm):

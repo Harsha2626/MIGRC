@@ -33,8 +33,8 @@ def soc2_readiness_pdf():
     frameworks = Framework.visible_to(g.current_org.id if g.current_org else -1).all()
     soc2 = next((fw for fw in frameworks if 'soc 2' in fw.name.lower() or 'soc2' in fw.name.lower()), None)
     if not soc2:
-        return Response('SOC 2 framework has not been configured yet. Add it under Compliance first.',
-            status=404, mimetype='text/plain')
+        flash('SOC 2 readiness needs the SOC 2 framework added under Compliance first.', 'info')
+        return redirect(url_for('reports.reports'))
     pdf_bytes = build_soc2_readiness_pdf(soc2)
     return Response(pdf_bytes, mimetype='application/pdf',
         headers={'Content-Disposition': 'attachment; filename=soc2_readiness_report.pdf'})

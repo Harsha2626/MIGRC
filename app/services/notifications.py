@@ -52,6 +52,9 @@ def notify_all_users(type_, title, message, link=None, dedupe_key=None):
     if created:
         db.session.commit()
         _maybe_email(created)
+        from app.routes.slack import post_to_slack
+        esc = lambda s: str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')  # stop <!channel> pings
+        post_to_slack(org.id, f'*{esc(title)}*\n{esc(message)}')
     return created
 
 

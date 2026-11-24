@@ -19,6 +19,8 @@ def create_app():
                 static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 
     app.config.from_object('config.Config')
+    # re-read per app: Config evaluates env at import, so a later DATABASE_URL (tests) would otherwise be ignored
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', app.config['SQLALCHEMY_DATABASE_URI'])
     app.jinja_env.filters['timesince'] = timesince
 
     debug_enabled = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
@@ -109,6 +111,16 @@ def create_app():
     app.register_blueprint(organizations_bp)
     app.register_blueprint(google_oauth_bp)
     app.register_blueprint(entra_oauth_bp)
+    from app.routes.azure import azure_bp
+    app.register_blueprint(azure_bp)
+    from app.routes.scans import scans_bp
+    app.register_blueprint(scans_bp)
+    from app.routes.okta import okta_bp
+    app.register_blueprint(okta_bp)
+    from app.routes.slack import slack_bp
+    app.register_blueprint(slack_bp)
+    from app.routes.jira import jira_bp
+    app.register_blueprint(jira_bp)
     from app.routes.incidents import incidents_bp
     app.register_blueprint(incidents_bp)
 

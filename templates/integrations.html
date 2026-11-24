@@ -14,7 +14,7 @@
 </div>
 
 
-{% for category, items in planned_categories %}
+{% for category, items, live in planned_categories %}{% if items or live or category in ('Cloud Providers','Identity Providers','SaaS Application') %}
 <section class="integ-section" aria-labelledby="integ-cat-{{ loop.index }}">
     <h2 id="integ-cat-{{ loop.index }}">{{ category }}</h2>
     <div class="integration-grid">
@@ -92,6 +92,199 @@
             {% endif %}
         </div>
         {% endif %}
+        {% if category == 'Cloud Providers' %}
+        <div class="integration-card">
+            <div class="integration-card-head">
+                <div class="integration-badge blue"><i class="fab fa-microsoft" aria-hidden="true"></i></div>
+                <h3>Microsoft Azure</h3>
+            </div>
+            <div class="tag-list mb-16"><span class="tag">Asset inventory</span></div>
+            {% if azure_connection %}
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    Subscription <strong>{{ azure_connection.subscription_name or azure_connection.subscription_id }}</strong><br>
+                    Connected {{ azure_connection.connected_at.strftime('%d %b %Y') if azure_connection.connected_at else 'recently' }}<br>
+                    {% if azure_connection.last_synced_at %}Last synced {{ azure_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never synced{% endif %}
+                </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('azure.sync_assets') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-rotate" aria-hidden="true"></i> Sync assets</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('scans.scan', provider='azure') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-shield-halved" aria-hidden="true"></i> Run scan</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('azure.disconnect') }}"
+                          data-confirm="Disconnect Microsoft Azure? Assets already imported are kept, but they will no longer sync."
+                          data-confirm-title="Disconnect Microsoft Azure" data-confirm-button="Disconnect">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
+                </div>
+            {% else %}
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <form method="POST" action="{{ url_for('azure.connect') }}" class="integ-meta">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="form-control mb-8" name="tenant_id" placeholder="Tenant ID" required autocomplete="off">
+                    <input class="form-control mb-8" name="client_id" placeholder="Client (application) ID" required autocomplete="off">
+                    <input class="form-control mb-8" name="client_secret" type="password" placeholder="Client secret value" required autocomplete="new-password">
+                    <input class="form-control mb-8" name="subscription_id" placeholder="Subscription ID" required autocomplete="off">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plug" aria-hidden="true"></i> Connect</button>
+                </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if category == 'Identity Providers' %}
+        <div class="integration-card">
+            <div class="integration-card-head">
+                <div class="integration-badge blue" aria-hidden="true">OK</div>
+                <h3>Okta</h3>
+            </div>
+            <div class="tag-list mb-16"><span class="tag">Employee directory</span></div>
+            {% if okta_connection %}
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    <strong>{{ okta_connection.domain }}</strong><br>
+                    Connected {{ okta_connection.connected_at.strftime('%d %b %Y') if okta_connection.connected_at else 'recently' }}<br>
+                    {% if okta_connection.last_synced_at %}Last synced {{ okta_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never synced{% endif %}
+                </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('okta.sync_employees') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-rotate" aria-hidden="true"></i> Sync employees</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('scans.scan', provider='okta') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-shield-halved" aria-hidden="true"></i> Run scan</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('okta.disconnect') }}"
+                          data-confirm="Disconnect Okta? Employees already imported are kept, but they will no longer sync."
+                          data-confirm-title="Disconnect Okta" data-confirm-button="Disconnect">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
+                </div>
+            {% else %}
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <form method="POST" action="{{ url_for('okta.connect') }}" class="integ-meta">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="form-control mb-8" name="domain" placeholder="Okta domain (acme.okta.com)" required autocomplete="off">
+                    <input class="form-control mb-8" name="api_token" type="password" placeholder="API token" required autocomplete="new-password">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plug" aria-hidden="true"></i> Connect</button>
+                </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if category == 'SaaS Application' %}
+        <div class="integration-card">
+            <div class="integration-card-head">
+                <div class="integration-badge green"><i class="fab fa-slack" aria-hidden="true"></i></div>
+                <h3>Slack</h3>
+            </div>
+            <div class="tag-list mb-16"><span class="tag">Notifications</span><span class="tag">Employee directory</span></div>
+            {% if slack_connection %}
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    <strong>{{ slack_connection.team_name }}</strong> &middot; #{{ slack_connection.channel }}<br>
+                    Connected {{ slack_connection.connected_at.strftime('%d %b %Y') if slack_connection.connected_at else 'recently' }}<br>
+                    {% if slack_connection.last_synced_at %}Last synced {{ slack_connection.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never synced{% endif %}
+                </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('slack.sync_employees') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-rotate" aria-hidden="true"></i> Sync employees</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('slack.disconnect') }}"
+                          data-confirm="Disconnect Slack? Employees already imported are kept, but alerts and syncing will stop."
+                          data-confirm-title="Disconnect Slack" data-confirm-button="Disconnect">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
+                </div>
+            {% else %}
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <form method="POST" action="{{ url_for('slack.connect') }}" class="integ-meta">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="form-control mb-8" name="bot_token" type="password" placeholder="Bot token (xoxb-...)" required autocomplete="new-password">
+                    <input class="form-control mb-8" name="channel" placeholder="Alert channel ID (C0123...) or name" required autocomplete="off">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plug" aria-hidden="true"></i> Connect</button>
+                </form>
+            {% endif %}
+        </div>
+        <div class="integration-card">
+            <div class="integration-card-head">
+                <div class="integration-badge blue"><i class="fab fa-jira" aria-hidden="true"></i></div>
+                <h3>Jira</h3>
+            </div>
+            <div class="tag-list mb-16"><span class="tag">Remediation tickets</span><span class="tag">Risk tracking</span></div>
+            {% if jira_connection %}
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    <strong>{{ jira_connection.site_url }}</strong> &middot; {{ jira_connection.project_key }}<br>
+                    Connected {{ jira_connection.connected_at.strftime('%d %b %Y') if jira_connection.connected_at else 'recently' }}<br>
+                    Create issues from a risk's detail page.
+                </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('jira.disconnect') }}"
+                          data-confirm="Disconnect Jira? Issue links already saved on risks are kept."
+                          data-confirm-title="Disconnect Jira" data-confirm-button="Disconnect">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
+                </div>
+            {% else %}
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <form method="POST" action="{{ url_for('jira.connect') }}" class="integ-meta">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="form-control mb-8" name="site_url" placeholder="https://yourcompany.atlassian.net" required autocomplete="off">
+                    <input class="form-control mb-8" name="email" type="email" placeholder="Atlassian account email" required autocomplete="off">
+                    <input class="form-control mb-8" name="api_token" type="password" placeholder="API token" required autocomplete="new-password">
+                    <input class="form-control mb-8" name="project_key" placeholder="Project key (e.g. SEC)" required autocomplete="off">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plug" aria-hidden="true"></i> Connect</button>
+                </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% for spec in live %}{% set c = conns.get(spec.key) %}
+        <div class="integration-card">
+            <div class="integration-card-head">
+                <div class="integration-badge {{ spec.color }}" aria-hidden="true"><i class="{{ spec.icon }}"></i></div>
+                <h3>{{ spec.name }}</h3>
+            </div>
+            <div class="tag-list mb-16">{% for cap in spec.capabilities %}<span class="tag">{{ cap }}</span>{% endfor %}</div>
+            {% if c %}
+                <div><span class="pill pill-active"><i class="fas fa-check" aria-hidden="true"></i>Connected</span></div>
+                <div class="integ-meta">
+                    {% if c.account_label %}<strong>{{ c.account_label }}</strong><br>{% endif %}
+                    {% if c.last_synced_at %}Last scanned {{ c.last_synced_at.strftime('%d %b %Y, %H:%M') }} UTC{% else %}Never scanned{% endif %}
+                </div>
+                <div class="integ-actions">
+                    <form method="POST" action="{{ url_for('scans.scan', provider=spec.key) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-shield-halved" aria-hidden="true"></i> Run scan</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('scans.disconnect', provider=spec.key) }}"
+                          data-confirm="Disconnect {{ spec.name }}? Evidence and risks already created are kept."
+                          data-confirm-title="Disconnect {{ spec.name }}" data-confirm-button="Disconnect">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Disconnect</button>
+                    </form>
+                </div>
+            {% else %}
+                <div><span class="pill pill-neutral pill-dot">Not connected</span></div>
+                <form method="POST" action="{{ url_for('scans.connect', provider=spec.key) }}" class="integ-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% for f in spec.fields %}
+                    <label class="form-label" for="{{ spec.key }}-{{ f.name }}">{{ f.label }}</label>
+                    <input class="form-control" id="{{ spec.key }}-{{ f.name }}" name="{{ f.name }}" type="{{ 'password' if f.secret else 'text' }}"
+                           placeholder="{{ f.placeholder or '' }}" autocomplete="off" required>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-sm btn-primary mt-8">Connect</button>
+                </form>
+            {% endif %}
+        </div>
+        {% endfor %}
         {% for item in items %}
         <div class="integration-card is-planned">
             <div class="integration-card-head">
@@ -105,5 +298,5 @@
         {% endfor %}
     </div>
 </section>
-{% endfor %}
+{% endif %}{% endfor %}
 {% endblock %}

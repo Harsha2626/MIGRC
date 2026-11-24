@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ framework.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('compliance.compliance') }}">Compliance</a> <span>/</span> <span>{{ framework.name }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-eyebrow">Compliance Frameworks</div>
+        <h1>{{ framework.name }}</h1>
+        <p>{{ framework.category or 'Framework' }} &middot; {{ controls_total }} controls in the shared library</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('compliance.compliance') }}" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to compliance</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <div class="empty-state-icon"><i class="fas fa-book" aria-hidden="true"></i></div>
+            <h3>{{ framework.name }} is not active for {{ current_org.name if current_org else 'your organization' }}</h3>
+            <p>
+                This framework is part of the shared library. Add it to your organization to start
+                tracking control status, evidence and progress against it.
+            </p>
+            {% if framework.description %}<p class="text-sm text-muted">{{ framework.description }}</p>{% endif %}
+            {% if can_add %}
+            <form method="POST" action="{{ url_for('compliance.add_framework') }}" class="mt-16">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="framework_id" value="{{ framework.id }}">
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus" aria-hidden="true"></i> Add {{ framework.name }} to {{ current_org.name if current_org else 'my organization' }}</button>
+            </form>
+            {% else %}
+            <p class="text-sm text-muted">Ask an Admin or Compliance Manager to add it from the Frameworks library.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

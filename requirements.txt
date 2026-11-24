@@ -26,3 +26,4 @@ cryptography>=43
 pypdf
 python-docx
 openpyxl
+boto3==1.44.6

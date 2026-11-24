@@ -255,3 +255,86 @@ def test_choose_frameworks_task_true_for_private_framework(app):
 
         org = Organization.query.get(org_id)
         assert _auto_completion(org)['choose_frameworks'] is True
+
+
+# ---------------------------------------------------------------------------
+# Direct links to a shared framework the current org has not added yet
+# ---------------------------------------------------------------------------
+
+def test_unadopted_shared_framework_shows_add_page_not_404(client, app):
+    org_id, user_id = _make_org_and_admin(app, org_name='Inactive Org', email='inactive@acme.test')
+    fw_id = _make_shared_framework(app, name='ISO Inactive')
+    _login(client, user_id, org_id)
+
+    resp = client.get(f'/compliance/{fw_id}')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'ISO Inactive' in html
+    assert 'Add ISO Inactive' in html
+
+    add = client.post('/compliance/add', data={'framework_id': str(fw_id), 'next': f'/compliance/{fw_id}'})
+    assert add.status_code == 302
+    assert add.headers['Location'].endswith(f'/compliance/{fw_id}')
+    assert client.get(f'/compliance/{fw_id}').status_code == 200
+
+
+def test_private_framework_of_another_org_still_404s(client, app):
+    from app.models import db, Framework
+
+    org_a, user_a = _make_org_and_admin(app, org_name='Private A', email='privatea@acme.test')
+    org_b, user_b = _make_org_and_admin(app, org_name='Private B', email='privateb@acme.test')
+    with app.app_context():
+        fw = Framework(organization_id=org_a, name='Org A only', category='Security', icon='shield')
+        db.session.add(fw)
+        db.session.commit()
+        fw_id = fw.id
+
+    _login(client, user_b, org_b)
+    assert client.get(f'/compliance/{fw_id}').status_code == 404
+
+
+def test_control_link_for_unadopted_shared_framework_redirects_to_add_page(client, app):
+    org_id, user_id = _make_org_and_admin(app, org_name='Control Redirect', email='ctrlredirect@acme.test')
+    fw_id = _make_shared_framework(app, name='ISO Redirect')
+    from app.models import Control
+    with app.app_context():
+        ctrl_id = Control.query.filter_by(framework_id=fw_id).first().id
+
+    _login(client, user_id, org_id)
+    resp = client.get(f'/compliance/{fw_id}/control/{ctrl_id}')
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith(f'/compliance/{fw_id}')
+
+
+# ---------------------------------------------------------------------------
+# Deduplication must not drop an org's adoption
+# ---------------------------------------------------------------------------
+
+def test_framework_deduplication_keeps_adoptions_and_snapshots(app):
+    from datetime import date
+    from app.models import db, Framework, Control, OrganizationFramework, ComplianceSnapshot
+    from app.services.deduplication import cleanup_duplicate_frameworks
+
+    org_id, _ = _make_org_and_admin(app, org_name='Dedup Org', email='dedup@acme.test')
+    with app.app_context():
+        winner = Framework(name='Dedup FW', description='keep', category='Security', icon='shield')
+        duplicate = Framework(name='Dedup FW', description='drop', category='Security', icon='shield')
+        db.session.add_all([winner, duplicate])
+        db.session.flush()
+        for i in range(2):
+            db.session.add(Control(code=f'W{i}', title=f'W{i}', framework_id=winner.id))
+        db.session.add(Control(code='D0', title='D0', framework_id=duplicate.id))
+        db.session.add(OrganizationFramework(organization_id=org_id, framework_id=duplicate.id))
+        db.session.add(ComplianceSnapshot(organization_id=org_id, framework_id=winner.id, snapshot_date=date.today()))
+        db.session.add(ComplianceSnapshot(organization_id=org_id, framework_id=duplicate.id, snapshot_date=date.today()))
+        db.session.commit()
+        winner_id, duplicate_id = winner.id, duplicate.id
+
+        cleanup_duplicate_frameworks()
+
+        assert db.session.get(Framework, duplicate_id) is None
+        adoptions = OrganizationFramework.query.filter_by(organization_id=org_id).all()
+        assert [a.framework_id for a in adoptions] == [winner_id]
+        assert Framework.visible_to(org_id).filter_by(id=winner_id).first() is not None
+        snaps = ComplianceSnapshot.query.filter_by(organization_id=org_id, framework_id=winner_id).all()
+        assert len(snaps) == 1

@@ -25,6 +25,10 @@
         {% if risk.status == 'Open' %}<span class="pill pill-danger"><i class="fas fa-circle-exclamation" aria-hidden="true"></i>{{ risk.status }}</span>
         {% elif risk.status == 'In Treatment' %}<span class="pill pill-warning"><i class="fas fa-wrench" aria-hidden="true"></i>{{ risk.status }}</span>
         {% else %}<span class="pill pill-success"><i class="fas fa-check" aria-hidden="true"></i>{{ risk.status }}</span>{% endif %}
+        {% if risk.jira_key %}<span class="pill pill-neutral"><i class="fab fa-jira" aria-hidden="true"></i>{{ risk.jira_key }}</span>
+        {% elif risk.organization.jira_connection %}<form method="POST" action="{{ url_for('jira.create_issue', risk_id=risk.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary"><i class="fab fa-jira" aria-hidden="true"></i> Create Jira issue</button></form>{% endif %}
         <a href="/risks" class="btn btn-secondary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     </div>
 </div>

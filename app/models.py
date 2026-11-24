@@ -126,6 +126,91 @@ class GoogleWorkspaceConnection(db.Model):
     connected_by = db.relationship('User')
 
 
+class AzureConnection(db.Model):
+    """One org's Azure subscription, accessed via a read-only service principal; see app/routes/azure.py.
+    client_secret is Fernet-encrypted."""
+    __tablename__ = 'azure_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    tenant_id = db.Column(db.String(64), nullable=False)
+    client_id = db.Column(db.String(64), nullable=False)
+    client_secret = db.Column(db.Text, nullable=False)
+    subscription_id = db.Column(db.String(64), nullable=False)
+    subscription_name = db.Column(db.String(255))
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime)
+
+    organization = db.relationship('Organization', backref=db.backref('azure_connection', uselist=False))
+    connected_by = db.relationship('User')
+
+
+class OktaConnection(db.Model):
+    """One org's Okta tenant, accessed via a read-only API token; see app/routes/okta.py.
+    api_token is Fernet-encrypted."""
+    __tablename__ = 'okta_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    domain = db.Column(db.String(255), nullable=False)
+    api_token = db.Column(db.Text, nullable=False)
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime)
+
+    organization = db.relationship('Organization', backref=db.backref('okta_connection', uselist=False))
+    connected_by = db.relationship('User')
+
+
+class SlackConnection(db.Model):
+    """One org's Slack workspace, accessed via a bot token; see app/routes/slack.py.
+    bot_token is Fernet-encrypted."""
+    __tablename__ = 'slack_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    team_id = db.Column(db.String(32))
+    team_name = db.Column(db.String(255))
+    bot_token = db.Column(db.Text, nullable=False)
+    channel = db.Column(db.String(100), nullable=False)
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime)
+
+    organization = db.relationship('Organization', backref=db.backref('slack_connection', uselist=False))
+    connected_by = db.relationship('User')
+
+
+class JiraConnection(db.Model):
+    """One org's Jira Cloud site + project, accessed with an API token; see app/routes/jira.py.
+    api_token is Fernet-encrypted."""
+    __tablename__ = 'jira_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    site_url = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    api_token = db.Column(db.Text, nullable=False)
+    project_key = db.Column(db.String(20), nullable=False)
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    organization = db.relationship('Organization', backref=db.backref('jira_connection', uselist=False))
+    connected_by = db.relationship('User')
+
+
+class IntegrationConnection(db.Model):
+    """Generic provider connection (registry in app/integrations). config is a Fernet-encrypted JSON blob
+    of the provider's credential fields."""
+    __tablename__ = 'integration_connections'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    provider = db.Column(db.String(40), nullable=False)
+    config = db.Column(db.Text, nullable=False)
+    account_label = db.Column(db.String(255))
+    connected_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime)
+    __table_args__ = (db.UniqueConstraint('organization_id', 'provider'),)
+
+
 class EntraConnection(db.Model):
     """One org's connected Microsoft Entra tenant (Graph directory sync). Tokens are Fernet-encrypted;
     see app/routes/entra_oauth.py. tenant_id is unique so a tenant can't be linked to two orgs."""
@@ -415,6 +500,7 @@ class Risk(db.Model):
     __tablename__ = 'risks'
     id = db.Column(db.Integer, primary_key=True)
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    organization = db.relationship('Organization', foreign_keys=[organization_id])
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     category = db.Column(db.String(50))
@@ -425,6 +511,7 @@ class Risk(db.Model):
     status = db.Column(db.String(30), default='Open')
     treatment = db.Column(db.String(30))
     treatment_plan = db.Column(db.Text)
+    jira_key = db.Column(db.String(30))
     linked_control_id = db.Column(db.Integer, db.ForeignKey('controls.id'), nullable=True)
     residual_likelihood = db.Column(db.String(20), nullable=True)
     residual_impact = db.Column(db.String(20), nullable=True)

@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import current_app, Blueprint, render_template, redirect, url_for, flash, request, session, g
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import db, User, OrganizationMembership
-from app.utils import require_permission
+from app.utils import require_permission, safe_next_url
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -39,7 +39,7 @@ def _record_failed_login(key):
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('main.dashboard'))
+        return redirect(safe_next_url(request.args.get('next')) or url_for('main.dashboard'))
 
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
@@ -64,7 +64,7 @@ def login():
             if membership:
                 session['current_org_id'] = membership.organization_id
 
-            next_page = request.args.get('next')
+            next_page = safe_next_url(request.form.get('next') or request.args.get('next'))
             return redirect(next_page or url_for('main.dashboard'))
 
         _record_failed_login(key)
