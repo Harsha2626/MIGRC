@@ -122,6 +122,13 @@
                 <button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-wand-magic-sparkles"></i> Evaluate Evidence with AI</button>
             </form>
             {% endif %}
+            {% set unevaluated = evidence_list|rejectattr('ai_suggested_status')|list|length %}
+            {% set with_gaps = evidence_list|selectattr('open_gaps')|list|length %}
+            {% set clean = evidence_list|selectattr('ai_suggested_status')|list|length - with_gaps %}
+            {% if evidence_list %}<span class="text-muted" style="font-size:12px;">Evidence gaps: {{ clean }} clear · {{ with_gaps }} with gaps · {{ unevaluated }} not evaluated</span>{% endif %}
+            {% if current_user.can_review_evidence and clean > 0 %}
+            <form method="POST" action="{{ url_for('compliance.approve_clean_evidence', framework_id=framework.id, control_id=control.id) }}" onsubmit="return confirm('Approve all pending evidence the AI approved with no open gaps?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-sm btn-secondary"><i class="fas fa-check-double"></i> Approve gap-free</button></form>
+            {% endif %}
             {% if evidence_list|selectattr('ai_suggested_status')|list|length > 0 %}
             <a href="{{ url_for('compliance.control_ai_report_pdf', framework_id=framework.id, control_id=control.id) }}" class="btn btn-sm btn-secondary"><i class="fas fa-file-pdf"></i> Download AI Report</a>
             {% endif %}
@@ -164,6 +171,29 @@
                                 {% if ev.ai_confidence %}({{ (ev.ai_confidence * 100)|round|int }}% confidence){% endif %}
                             </div>
                             {% if ev.ai_rationale %}<div style="margin-top:2px;color:var(--text-secondary);">{{ ev.ai_rationale }}</div>{% endif %}
+                            <div style="margin-top:4px;font-weight:600;">
+                                {% if ev.open_gaps %}<i class="fas fa-triangle-exclamation"></i> {{ ev.open_gaps }} open gap{{ '' if ev.open_gaps == 1 else 's' }}{% else %}<i class="fas fa-circle-check"></i> No open gaps{% endif %}
+                                {% if current_user.can_write %}
+                                <form action="{{ url_for('compliance.recheck_evidence', evidence_id=ev.id) }}" method="POST" style="display:inline;float:right;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-sm btn-icon" title="Refresh AI analysis"><i class="fas fa-rotate"></i></button></form>
+                                {% endif %}
+                            </div>
+                            {% for gp in ev.gaps %}
+                            <div style="margin-top:4px;padding:4px 6px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-secondary);{% if gp.state != 'open' %}opacity:.6;{% endif %}">
+                                <div style="{% if gp.state != 'open' %}text-decoration:line-through;{% endif %}"><strong>Gap:</strong> {{ gp.gap }}</div>
+                                {% if gp.suggestion %}<div><strong>Suggestion:</strong> {{ gp.suggestion }}</div>{% endif %}
+                                {% if current_user.can_write %}
+                                <form action="{{ url_for('compliance.set_evidence_gap', evidence_id=ev.id, idx=loop.index0) }}" method="POST" style="margin-top:2px;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    {% if gp.state == 'open' %}
+                                    <button name="state" value="done" class="btn btn-sm">Mark done</button>
+                                    <button name="state" value="ignored" class="btn btn-sm">Ignore</button>
+                                    {% else %}
+                                    <span>{{ gp.state|capitalize }}</span> <button name="state" value="open" class="btn btn-sm">Reopen</button>
+                                    {% endif %}
+                                </form>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
                         </div>
                         {% elif ev.status == 'Pending Review' %}
                         <div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-muted);">

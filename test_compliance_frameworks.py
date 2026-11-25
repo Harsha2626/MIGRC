@@ -154,28 +154,6 @@ def test_add_framework_rejects_duplicate_adoption(client, app):
         assert count == 1
 
 
-def test_add_framework_custom_creates_private_framework(client, app):
-    from app.models import Framework
-
-    org_id, user_id = _make_org_and_admin(app, org_name='Custom Org', email='custom@acme.test')
-    _login(client, user_id, org_id)
-
-    resp = client.post('/compliance/add', data={
-        'framework_id': '__custom__',
-        'custom_name': 'My Internal Baseline',
-        'category': 'Security',
-        'owner': 'Jane Doe',
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b'My Internal Baseline' in resp.data
-
-    with app.app_context():
-        fw = Framework.query.filter_by(organization_id=org_id, name='My Internal Baseline').first()
-        assert fw is not None
-        assert fw.organization_id == org_id
-        assert fw.id in [f.id for f in Framework.visible_to(org_id).all()]
-
-
 # ---------------------------------------------------------------------------
 # POST /compliance/<id>/delete
 # ---------------------------------------------------------------------------

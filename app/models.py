@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, date
 from flask import g
 from flask_sqlalchemy import SQLAlchemy
@@ -461,10 +462,22 @@ class Evidence(db.Model):
     ai_confidence = db.Column(db.Float)
     ai_rationale = db.Column(db.Text)
     ai_reviewed_at = db.Column(db.DateTime)
+    ai_gaps = db.Column(db.Text)  # JSON [{gap, suggestion, state: open|done|ignored}]
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     uploaded_by = db.relationship('User', backref='evidence_uploads')
+
+    @property
+    def gaps(self):
+        try:
+            return json.loads(self.ai_gaps) if self.ai_gaps else []
+        except ValueError:
+            return []
+
+    @property
+    def open_gap_count(self):
+        return sum(1 for g in self.gaps if g.get('state') == 'open')
     evidence_mappings = db.relationship('EvidenceMapping', backref='evidence', lazy='dynamic', cascade='all, delete-orphan')
 
 

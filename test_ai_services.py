@@ -327,3 +327,46 @@ def test_load_content_kinds(tmp_path):
         a, t, k = r._load_content(E('b.png')); assert k == 'image' and a[0][0] == 'image/png'
         assert r._load_content(E('c.pptx')) == (None, None, None)
         assert r._load_content(E('missing.pdf')) == (None, None, None)
+
+
+def test_review_parses_gaps_and_apply_stores_them(app, monkeypatch):
+    from app.services import ai_evidence_review as r
+    from app.models import db, Evidence
+
+    reply = '```json\n{"status":"Needs Human Review","confidence":0.6,"rationale":"x","gaps":[{"gap":"No date","suggestion":"Add date"},{"junk":1}]}\n```'
+    monkeypatch.setattr(r, 'run_compliance_agent', lambda prompt, parse_fn, **kw: parse_fn(reply))
+    with app.app_context():
+        ev = Evidence(title='t', description='a long enough description')
+        db.session.add(ev); db.session.flush()
+        ctrl = type('C', (), {'code': 'A1', 'title': 'T', 'description': '', 'evidence_requirement': '', 'test_criteria': ''})()
+        assert r.apply_review(ev, ctrl)
+        assert ev.gaps == [{'gap': 'No date', 'suggestion': 'Add date', 'state': 'open'}]
+        assert ev.open_gap_count == 1
+
+
+# ---- evidence review: placeholder/not-final guard ----
+def test_evidence_review_downgrades_sample_and_pending():
+    from types import SimpleNamespace as NS
+    from app.services.ai_evidence_review import _sanity_check_status
+    ev = NS(id=1, title='Screening policy', description='Pending approval by HR head', file_name='x.docx')
+    r = {'status': 'Approved', 'confidence': 0.9, 'rationale': 'ok', 'gaps': []}
+    _sanity_check_status(r, ev, 'SAMPLE background check procedure')
+    assert r['status'] == 'Needs Human Review' and r['confidence'] <= 0.4
+    assert 'pending approval' in r['gaps'][0]['gap'] and 'sample' in r['gaps'][0]['gap']
+    clean = NS(id=2, title='Q3 screening log', description='Completed background checks for 12 hires', file_name='log.xlsx')
+    r = {'status': 'Approved', 'confidence': 0.9, 'rationale': 'ok', 'gaps': []}
+    _sanity_check_status(r, clean, 'Final signed record')
+    assert r['status'] == 'Approved'
+
+
+def test_evidence_review_subject_mismatch_and_low_confidence():
+    from types import SimpleNamespace as NS
+    from app.services.ai_evidence_review import _sanity_check_status
+    ev = NS(id=3, title='Access Control Policy', description='Final signed policy v2.1', file_name='p.docx')
+    r = {'status': 'Approved', 'confidence': 0.95, 'rationale': 'good', 'subject_matches_control': False,
+         'document_subject': 'Access control policy', 'gaps': []}
+    _sanity_check_status(r, ev, 'Final')
+    assert r['status'] == 'Rejected' and 'Subject mismatch' in r['rationale']
+    r = {'status': 'Approved', 'confidence': 0.5, 'rationale': 'meh', 'gaps': []}
+    _sanity_check_status(r, ev, 'Final')
+    assert r['status'] == 'Needs Human Review'

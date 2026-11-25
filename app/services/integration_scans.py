@@ -19,7 +19,7 @@ from app.integrations import Check, registry
 from app.models import (db, Evidence, EvidenceMapping, Control, OrganizationFramework, AzureConnection,
                         OktaConnection, IntegrationConnection, Risk)
 from app.services.crypto import decrypt
-from app.services.ai_evidence_review import review_evidence
+from app.services.ai_evidence_review import apply_review
 
 log = logging.getLogger(__name__)
 TIMEOUT = 20
@@ -185,10 +185,7 @@ def run_scan(org, provider, ai=True):
         if ai:
             m = ev.evidence_mappings.first()
             if m:
-                s = review_evidence(ev, m.control)
-                if s:
-                    ev.ai_suggested_status, ev.ai_confidence = s['status'], s['confidence']
-                    ev.ai_rationale, ev.ai_reviewed_at = s['rationale'], datetime.utcnow()
+                apply_review(ev, m.control)
     conn.last_synced_at = now
     db.session.commit()
     return len(checks), failed, mapped, opened
