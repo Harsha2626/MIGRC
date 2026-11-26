@@ -1,7 +1,8 @@
+import json
 import os
 import re
 from datetime import datetime, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g, abort
+from flask import jsonify, Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g, abort, send_from_directory
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +13,7 @@ from app.models import (
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
 from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf, build_ai_verdict_report_pdf
-from app.services.ai_evidence_review import review_evidence as ai_review_evidence
+from app.services.ai_evidence_review import apply_review
 from app.utils import allowed_file, require_permission, safe_next_url
 
 compliance_bp = Blueprint('compliance', __name__)
@@ -133,7 +134,7 @@ def add_framework():
     next_url = safe_next_url(request.form.get('next'))
 
     # Picking an existing shared-library framework: just opt this org into it (no new row).
-    if framework_id and framework_id != '__custom__':
+    if framework_id:
         try:
             framework_id = int(framework_id)
         except ValueError:
@@ -160,34 +161,7 @@ def add_framework():
         flash(f'Framework "{shared_fw.name}" added to your organization.', 'success')
         return redirect(next_url or url_for('compliance.compliance'))
 
-    # Otherwise, a brand-new custom framework private to this org.
-    name = request.form.get('custom_name', '').strip()
-    if not name:
-        flash('Please select a framework or name a custom one.', 'error')
-        return redirect(url_for('compliance.compliance'))
-
-    if Framework.query.filter_by(organization_id=g.current_org.id, name=name).first():
-        flash(f'A framework named "{name}" already exists in your organization.', 'error')
-        return redirect(url_for('compliance.compliance'))
-
-    category = request.form.get('category', 'Security')
-    owner = request.form.get('owner', '').strip()
-    target_date = request.form.get('target_date')
-
-    fw = Framework(
-        organization_id=g.current_org.id,
-        name=name,
-        category=category,
-        owner=owner,
-        status='Not Started',
-        icon='shield-halved',
-        target_date=datetime.strptime(target_date, '%Y-%m-%d').date() if target_date else None,
-    )
-    db.session.add(fw)
-    log_activity('created', 'Framework', name)
-    db.session.commit()
-
-    flash(f'Framework "{name}" added. It has no controls yet — controls are currently seeded, not added from the UI.', 'success')
+    flash('Please select a framework from the library.', 'error')
     return redirect(url_for('compliance.compliance'))
 
 
@@ -311,6 +285,7 @@ def control_detail(framework_id, control_id):
             'description': ev.description,
             'file_name': ev.file_name,
             'file_type': ev.file_type,
+            'file_path': ev.file_path,
             'file_size': ev.file_size,
             'source_type': ev.source_type,
             'uploaded_by': ev.uploaded_by.name if ev.uploaded_by else '—',
@@ -320,6 +295,8 @@ def control_detail(framework_id, control_id):
             'ai_confidence': ev.ai_confidence,
             'ai_rationale': ev.ai_rationale,
             'ai_reviewed_at': ev.ai_reviewed_at,
+            'gaps': ev.gaps,
+            'open_gaps': ev.open_gap_count,
             'created_at': ev.created_at,
             'audit_period_start': ev.audit_period_start,
             'audit_period_end': ev.audit_period_end,
@@ -417,12 +394,7 @@ def upload_evidence(framework_id, control_id):
         db.session.add(EvidenceMapping(evidence_id=evidence.id, control_id=cid_int))
 
     # AI-suggested review (no-op if no local AI backend is configured/reachable)
-    suggestion = ai_review_evidence(evidence, ctrl)
-    if suggestion:
-        evidence.ai_suggested_status = suggestion.get('status')
-        evidence.ai_confidence = suggestion.get('confidence')
-        evidence.ai_rationale = suggestion.get('rationale')
-        evidence.ai_reviewed_at = datetime.utcnow()
+    apply_review(evidence, ctrl)
 
     db.session.commit()
 
@@ -530,12 +502,7 @@ def evaluate_control_evidence(framework_id, control_id):
 
     evaluated = 0
     for evidence in pending:
-        suggestion = ai_review_evidence(evidence, ctrl)
-        if suggestion:
-            evidence.ai_suggested_status = suggestion.get('status')
-            evidence.ai_confidence = suggestion.get('confidence')
-            evidence.ai_rationale = suggestion.get('rationale')
-            evidence.ai_reviewed_at = datetime.utcnow()
+        if apply_review(evidence, ctrl):
             evaluated += 1
             # Commit after each item, not just once at the end - each AI call can take up to a
             # few minutes (see DEFAULT_FREE_MODELS fallback in ai_dispatch.py), so a control with
@@ -555,7 +522,133 @@ def evaluate_control_evidence(framework_id, control_id):
     return redirect(url_for('compliance.control_detail', framework_id=framework_id, control_id=control_id))
 
 
+# ---- AI GAPS: mark done/ignored, refresh one item, bulk-publish clean items ----
+def _org_evidence_or_404(evidence_id):
+    return Evidence.query.filter_by(id=evidence_id, organization_id=g.current_org.id if g.current_org else -1).first_or_404()
+
+
+@compliance_bp.route('/evidence/<int:evidence_id>/gap/<int:idx>', methods=['POST'])
+@login_required
+@require_permission('write')
+def set_evidence_gap(evidence_id, idx):
+    ev = _org_evidence_or_404(evidence_id)
+    state = request.form.get('state')
+    gaps = ev.gaps
+    if state not in ('open', 'done', 'ignored') or not 0 <= idx < len(gaps):
+        abort(400)
+    gaps[idx]['state'] = state
+    ev.ai_gaps = json.dumps(gaps)
+    db.session.commit()
+    return redirect(request.referrer or '/')
+
+
+@compliance_bp.route('/evidence/<int:evidence_id>/ai-recheck', methods=['POST'])
+@login_required
+@require_permission('write')
+def recheck_evidence(evidence_id):
+    ev = _org_evidence_or_404(evidence_id)
+    m = ev.evidence_mappings.first()
+    if m and apply_review(ev, m.control):
+        db.session.commit()
+        flash('AI analysis refreshed.', 'success')
+    else:
+        flash('AI analysis unavailable right now - nothing was changed.', 'error')
+    return redirect(request.referrer or '/')
+
+
+@compliance_bp.route('/compliance/<int:framework_id>/control/<int:control_id>/approve-clean', methods=['POST'])
+@login_required
+@require_permission('review_evidence')
+def approve_clean_evidence(framework_id, control_id):
+    """Bulk-approve pending evidence the AI approved with no open gaps. Still a human click."""
+    fw = Framework.visible_to(g.current_org.id if g.current_org else -1).filter_by(id=framework_id).first_or_404()
+    ctrl = Control.query.filter_by(id=control_id, framework_id=fw.id).first_or_404()
+    n = 0
+    for m in ctrl.evidence_mappings:
+        ev = m.evidence
+        if (ev and ev.organization_id == (g.current_org.id if g.current_org else -1) and ev.status == 'Pending Review'
+                and ev.ai_suggested_status == 'Approved' and ev.ai_reviewed_at and not ev.open_gap_count):
+            ev.status, ev.reviewed_by, ev.reviewed_at = 'Approved', current_user.name, datetime.utcnow()
+            ev.review_notes = 'Bulk-approved: AI approved with no open gaps.'
+            n += 1
+    if n:
+        _recalculate_control_status(ctrl.id)
+        _take_compliance_snapshot(fw.id)
+        log_activity('approved', 'Evidence', ctrl.code, f'{current_user.name} bulk-approved {n} gap-free evidence item(s)')
+        db.session.commit()
+    flash(f'{n} evidence item(s) approved.' if n else 'No gap-free AI-approved evidence to publish.', 'success' if n else 'info')
+    return redirect(url_for('compliance.control_detail', framework_id=framework_id, control_id=control_id))
+
+
 # ---- EVIDENCE DELETE ----
+# ---- EVIDENCE PREVIEW (inline, org-scoped) ----
+_PREVIEW_MIME = {'pdf': 'application/pdf', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg'}
+
+
+def _framed(resp):
+    # App default is X-Frame-Options DENY; the preview modal frames it from the same origin.
+    resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    resp.headers['Content-Security-Policy'] = "frame-ancestors 'self'; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; object-src 'self'"
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
+
+
+@compliance_bp.route('/evidence/<int:evidence_id>/details')
+@login_required
+def evidence_details(evidence_id):
+    ev = _org_evidence_or_404(evidence_id)
+    if not ev.ai_reviewed_at:
+        gap_label = 'Not Evaluated'
+    else:
+        gap_label = 'Gaps Detected' if ev.open_gap_count else 'No Gaps'
+    iso = lambda d: d.isoformat(timespec='minutes') if d else None
+    return jsonify(
+        id=ev.id, title=ev.title, description=ev.description, file_name=ev.file_name, file_type=ev.file_type,
+        file_size=ev.file_size, source=ev.source_type, uploaded_by=ev.uploaded_by.name if ev.uploaded_by else None,
+        uploaded_at=iso(ev.created_at), period=[str(ev.audit_period_start or ''), str(ev.audit_period_end or '')],
+        status=ev.status, reviewed_by=ev.reviewed_by, reviewed_at=iso(ev.reviewed_at), review_notes=ev.review_notes,
+        ai=dict(status=ev.ai_suggested_status, confidence=ev.ai_confidence, rationale=ev.ai_rationale, gap_label=gap_label, gaps=ev.gaps),
+        controls=[dict(code=m.control.code, title=m.control.title, framework=m.control.framework.name) for m in ev.evidence_mappings])
+
+
+@compliance_bp.route('/evidence/<int:evidence_id>/preview')
+@login_required
+def preview_evidence(evidence_id):
+    ev = _org_evidence_or_404(evidence_id)
+    ext = (ev.file_type or '').lower()
+    folder = current_app.config['UPLOAD_FOLDER']
+    path = os.path.join(folder, ev.file_path or '')
+    if not ev.file_path or not os.path.isfile(path):
+        abort(404)
+    if request.args.get('download'):
+        return send_from_directory(folder, ev.file_path, as_attachment=True, download_name=ev.file_name or ev.file_path)
+    if ext in _PREVIEW_MIME:
+        return _framed(send_from_directory(folder, ev.file_path, mimetype=_PREVIEW_MIME[ext], as_attachment=False))
+    from markupsafe import escape
+    rows = []  # shortcut: text/table preview only, first 200 rows; no formatting fidelity
+    if ext == 'csv':
+        import csv
+        with open(path, newline='', encoding='utf-8', errors='replace') as f:
+            rows = [r for _, r in zip(range(200), csv.reader(f))]
+    elif ext == 'xlsx':
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        rows = [[('' if c is None else c) for c in r] for _, r in zip(range(200), wb.worksheets[0].iter_rows(values_only=True))]
+    elif ext == 'docx':
+        import docx
+        d = docx.Document(path)
+        rows = [[p.text] for p in d.paragraphs if p.text.strip()]
+        for t in d.tables:
+            rows += [[c.text for c in r.cells] for r in t.rows]
+    else:
+        abort(415)
+    body = ''.join('<tr>' + ''.join(f'<td>{escape(str(c))}</td>' for c in r) + '</tr>' for r in rows)
+    html = ('<!doctype html><meta charset="utf-8"><style>body{font:13px system-ui;margin:12px}'
+            'td{border:1px solid #ccc;padding:3px 8px;vertical-align:top}table{border-collapse:collapse}</style>'
+            f'<table>{body}</table>')
+    return _framed(Response(html, mimetype='text/html'))
+
+
 @compliance_bp.route('/evidence/<int:evidence_id>/delete', methods=['POST'])
 @login_required
 @require_permission('delete')

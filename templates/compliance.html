@@ -18,9 +18,6 @@
         <p>Manage and monitor your compliance across multiple frameworks.</p>
     </div>
     <div class="page-actions">
-        {% if current_user.can_write %}
-        <button type="button" class="btn btn-secondary" onclick="showAddFrameworkModal()"><i class="fas fa-plus" aria-hidden="true"></i> Custom framework</button>
-        {% endif %}
         <button type="button" class="btn btn-primary" onclick="document.getElementById('frameworksLibraryTab').click()"><i class="fas fa-book" aria-hidden="true"></i> Browse library</button>
     </div>
 </div>
@@ -165,41 +162,6 @@
 
 {% block scripts %}
 <script>
-function showAddFrameworkModal() {
-    openModal('Add custom framework', `
-        <form id="frameworkForm" method="POST" action="/compliance/add">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="framework_id" value="__custom__">
-            <div class="alert alert-info"><i class="fas fa-circle-info" aria-hidden="true"></i><div>Looking for a standard like ISO 27001 or SOC 2? Check the <strong>Frameworks library</strong> tab instead. This form is only for a framework specific to your organization.</div></div>
-            <div class="form-group">
-                <label for="cfName">Framework name <span class="required-star">*</span></label>
-                <input type="text" id="cfName" name="custom_name" class="form-control" placeholder="e.g. Internal Security Baseline" required>
-            </div>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="cfCategory">Category</label>
-                    <select id="cfCategory" name="category" class="form-control">
-                        <option>Security</option>
-                        <option>Privacy</option>
-                        <option>Healthcare</option>
-                        <option>Other</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="cfTarget">Target completion date</label>
-                    <input type="date" id="cfTarget" name="target_date" class="form-control">
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="cfOwner">Owner</label>
-                <input type="text" id="cfOwner" name="owner" class="form-control" placeholder="Framework owner name">
-                <div class="form-help">Custom frameworks start with no controls; controls are not authored from the UI.</div>
-            </div>
-        </form>
-    `, '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="var f=document.getElementById(\'frameworkForm\'); if (f.reportValidity()) f.submit()">Add framework</button>');
-    setTimeout(function () { var i = document.getElementById('cfName'); if (i) i.focus(); }, 50);
-}
-
 function applyLibraryFilter() {
     const search = document.getElementById('librarySearch').value.toLowerCase();
     let shown = 0;

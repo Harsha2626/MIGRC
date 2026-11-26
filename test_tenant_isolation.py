@@ -207,3 +207,10 @@ def test_login_rejects_external_next(app, client):
     resp = client.post('/login?next=https://evil.example/phish', data={'email': email, 'password': 'password123'})
     assert resp.status_code == 302
     assert 'evil.example' not in resp.headers['Location']
+
+
+def test_security_headers_present(client):
+    r = client.get('/login')
+    assert r.headers['X-Content-Type-Options'] == 'nosniff'
+    assert r.headers['X-Frame-Options'] == 'DENY'
+    assert 'frame-ancestors' in r.headers['Content-Security-Policy']

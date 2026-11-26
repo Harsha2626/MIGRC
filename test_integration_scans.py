@@ -274,7 +274,7 @@ def test_ai_suggestion_stored_but_status_untouched(app, fake):
     _connect(app, a)
     fake.checks = [_ck()]
     sugg = {'status': 'Approved', 'confidence': 0.9, 'rationale': 'looks fine'}
-    with patch('app.services.integration_scans.review_evidence', return_value=sugg) as rv:
+    with patch('app.services.ai_evidence_review.review_evidence', return_value=sugg) as rv:
         _scan(app, a, ai=True)
         assert rv.call_count == 1
     from app.models import Evidence
@@ -289,7 +289,7 @@ def test_ai_none_tolerated_and_skipped_without_mapping(app, fake):
     _fw(app, [a])
     _connect(app, a)
     fake.checks = [_ck('Mapped'), _ck('Unmapped', kw=('zzznomatch',))]
-    with patch('app.services.integration_scans.review_evidence', return_value=None) as rv:
+    with patch('app.services.ai_evidence_review.review_evidence', return_value=None) as rv:
         _scan(app, a, ai=True)
         assert rv.call_count == 1  # unmapped evidence has nothing to review against
     from app.models import Evidence
@@ -302,7 +302,7 @@ def test_ai_false_never_calls_review(app, fake):
     _fw(app, [a])
     _connect(app, a)
     fake.checks = [_ck()]
-    with patch('app.services.integration_scans.review_evidence') as rv:
+    with patch('app.services.ai_evidence_review.review_evidence') as rv:
         _scan(app, a, ai=False)
         rv.assert_not_called()
 
@@ -329,7 +329,7 @@ def test_run_scans_for_org_isolates_failures(app, fake):
     integ._REGISTRY['fake'] = boom.spec()   # restored by monkeypatch.setitem teardown
     fake.checks = [_ck('Good', kw=())]
     integ._REGISTRY['fake2'] = fake.spec('fake2')
-    with patch('app.services.integration_scans.review_evidence', return_value=None):
+    with patch('app.services.ai_evidence_review.review_evidence', return_value=None):
         with app.app_context():
             res = run_scans_for_org(Organization.query.get(a))
             assert isinstance(res['fake'], RuntimeError)
@@ -459,7 +459,7 @@ def test_scan_route_success_and_permissions(app, fake):
     c, oid = _admin_client(app)
     _connect(app, oid)
     fake.checks = [_ck('X', passed=False, kw=())]
-    with patch('app.services.integration_scans.review_evidence', return_value=None):
+    with patch('app.services.ai_evidence_review.review_evidence', return_value=None):
         r = c.post('/integrations/fake/scan', follow_redirects=True)
     assert b'Scan complete: 1 checks, 1 failed' in r.data
     with app.app_context():

@@ -1,5 +1,5 @@
 import os
-from flask import Flask, g
+from flask import Flask, g, request
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
 from flask_wtf import CSRFProtect
@@ -19,6 +19,22 @@ def create_app():
                 static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 
     app.config.from_object('config.Config')
+    # Behind nginx: trust one proxy hop so request.remote_addr (login rate limit) and scheme are the client's.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    @app.after_request
+    def security_headers(resp):
+        h = resp.headers
+        h.setdefault('X-Content-Type-Options', 'nosniff')
+        h.setdefault('X-Frame-Options', 'DENY')
+        h.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+        h.setdefault('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+        # shortcut: no script-src CSP (templates use inline scripts), tighten once they're externalised
+        h.setdefault('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+        if request.is_secure:
+            h.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+        return resp
     # re-read per app: Config evaluates env at import, so a later DATABASE_URL (tests) would otherwise be ignored
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', app.config['SQLALCHEMY_DATABASE_URI'])
     app.jinja_env.filters['timesince'] = timesince
