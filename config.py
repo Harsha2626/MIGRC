@@ -19,6 +19,7 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'migrc-dev-secret-key-change-in-production')
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///' + os.path.join(basedir, 'migrc.db'))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    WTF_CSRF_TIME_LIMIT = None  # token lives as long as the session; default 1h breaks long-open evidence pages
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     # Secure cookies by default; relaxed only for local dev (FLASK_ENV=development or sqlite).
