@@ -12,7 +12,7 @@ from app.models import (
 )
 from app.services.activity import log_activity
 from app.services.notifications import notify_evidence_rejected
-from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf, build_ai_verdict_report_pdf
+from app.services.pdf_reports import build_compliance_report_pdf, build_soc2_readiness_pdf, build_ai_verdict_report_pdf, build_framework_ai_report_pdf
 from app.services.ai_evidence_review import apply_review
 from app.utils import allowed_file, require_permission, safe_next_url
 
@@ -796,6 +796,42 @@ def control_ai_report_pdf(framework_id, control_id):
     pdf_bytes = build_ai_verdict_report_pdf(fw, ctrl, evidence)
     return Response(pdf_bytes, mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename=AI_evidence_review_{secure_filename(ctrl.code) or ctrl.id}.pdf'})
+
+
+@compliance_bp.route('/compliance/<int:framework_id>/ai-report.zip')
+@login_required
+def framework_ai_report_zip(framework_id):
+    """Auditor pack: overall AI report + index.csv + one folder per evidence (ISO-EVD-<ORG>-<control>-NN)
+    holding the evidence file and its AI review."""
+    import csv, io, re, zipfile
+    org = g.current_org
+    org_id = org.id if org else -1
+    fw = Framework.visible_to(org_id).filter_by(id=framework_id).first_or_404()
+    controls = sorted(Control.query.filter_by(framework_id=fw.id).all(), key=lambda c: _code_sort_key(c.code))
+    org_tag = re.sub(r'[^A-Z0-9]', '', (org.name.split() or ['ORG'])[0].upper()) if org else 'ORG'
+    ev, ids = {}, {}
+    for c in controls:
+        ev[c.id] = [m.evidence for m in EvidenceMapping.for_org(org_id, c.id).order_by(EvidenceMapping.id)]
+        for n, e in enumerate(ev[c.id], 1):
+            ids[(c.id, e.id)] = f'ISO-EVD-{org_tag}-{c.code}-{n:02d}'
+    folder = current_app.config['UPLOAD_FOLDER']
+    buf, index = io.BytesIO(), io.StringIO()
+    w = csv.writer(index)
+    w.writerow(['Evidence ID', 'Control', 'Control title', 'File', 'Human status', 'AI verdict', 'AI confidence', 'Open findings'])
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('AI_evidence_review_report.pdf', build_framework_ai_report_pdf(fw, controls, ev, ids))
+        for c in controls:
+            for e in ev[c.id]:
+                eid = ids[(c.id, e.id)]
+                path = os.path.join(folder, e.file_path or '')
+                if e.file_path and os.path.isfile(path):
+                    z.write(path, f'{eid}/{secure_filename(e.file_name or e.file_path)}')
+                z.writestr(f'{eid}/{eid}_AI_review.pdf', build_ai_verdict_report_pdf(fw, c, [e]))
+                w.writerow([eid, c.code, c.title, e.file_name, e.status, e.ai_suggested_status or '',
+                            e.ai_confidence if e.ai_confidence is not None else '', e.open_gap_count])
+        z.writestr('index.csv', index.getvalue())
+    return Response(buf.getvalue(), mimetype='application/zip',
+        headers={'Content-Disposition': f"attachment; filename={secure_filename(fw.name)}_AI_evidence_pack.zip"})
 
 
 @compliance_bp.route('/compliance/<int:framework_id>/report.pdf')

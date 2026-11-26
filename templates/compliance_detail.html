@@ -22,6 +22,7 @@
             <button type="submit" class="btn btn-danger-outline"><i class="fas fa-trash" aria-hidden="true"></i> {% if framework.is_shared %}Remove from organization{% else %}Delete{% endif %}</button>
         </form>
         {% endif %}
+        <a href="/compliance/{{ framework.id }}/ai-report.zip" class="btn btn-secondary"><i class="fas fa-robot" aria-hidden="true"></i> AI report (ZIP)</a>
         <a href="/compliance/{{ framework.id }}/report.pdf" class="btn btn-primary"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download report</a>
     </div>
 </div>

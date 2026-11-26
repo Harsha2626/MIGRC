@@ -155,6 +155,65 @@ def build_ai_verdict_report_pdf(framework, control, evidence_list):
     return bytes(pdf.output())
 
 
+def build_framework_ai_report_pdf(framework, controls, evidence_by_control, ids):
+    """Whole-framework report of stored AI evidence verdicts. Suggestions only - a human decides.
+    controls: ordered Control list; evidence_by_control: {control_id: [Evidence]}; ids: {(control_id, evidence_id): 'ISO-EVD-...'}."""
+    allev = [e for c in controls for e in evidence_by_control.get(c.id, [])]
+    ai = lambda v: sum(1 for e in allev if e.ai_reviewed_at and e.ai_suggested_status == v)
+    pdf = Report(f'{framework.name} - AI Evidence Review')
+    pdf.set_font('Helvetica', 'I', 9)
+    pdf.set_text_color(*MUTED)
+    pdf.multi_cell(0, 5, 'AI-generated suggestions for human review; they do not change evidence status on their own.', new_x='LMARGIN', new_y='NEXT')
+    pdf.section('Summary')
+    pdf.kpi_row([('Controls', len(controls)), ('Evidence', len(allev)), ('AI Approved', ai('Approved')),
+                 ('AI Needs Review', ai('Needs Human Review')), ('AI Rejected', ai('Rejected'))])
+    pdf.kpi_row([('Controls w/o evidence', sum(1 for c in controls if not evidence_by_control.get(c.id))),
+                 ('No AI verdict', sum(1 for e in allev if not e.ai_reviewed_at)),
+                 ('Human Approved', sum(1 for e in allev if e.status == 'Approved')),
+                 ('Human Rejected', sum(1 for e in allev if e.status == 'Rejected')),
+                 ('Pending', sum(1 for e in allev if e.status == 'Pending Review'))])
+    for c in controls:
+        evs = evidence_by_control.get(c.id, [])
+        if pdf.get_y() > 245:
+            pdf.add_page()
+        pdf.section(f'{c.code} - {c.title[:70]}')
+        if not evs:
+            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_text_color(*MUTED)
+            pdf.cell(0, 6, 'No evidence uploaded.', ln=True)
+        for ev in evs:
+            if pdf.get_y() > 250:
+                pdf.add_page()
+            pdf.set_font('Helvetica', 'B', 9.5)
+            pdf.set_text_color(*INK)
+            eid = ids[(c.id, ev.id)]
+            pdf.multi_cell(0, 5.5, _safe(f'[{eid}] {ev.title}'), new_x='LMARGIN', new_y='NEXT')
+            pdf.set_font('Helvetica', '', 8.5)
+            pdf.set_text_color(*MUTED)
+            pdf.multi_cell(0, 5, _safe(f'File: {eid}/{ev.file_name or "-"}   Human status: {ev.status}'), new_x='LMARGIN', new_y='NEXT')
+            if ev.ai_reviewed_at and ev.ai_suggested_status:
+                pdf.set_font('Helvetica', 'B', 9)
+                pdf.set_text_color(*{'Approved': GREEN, 'Rejected': RED}.get(ev.ai_suggested_status, AMBER))
+                conf = f' ({round(ev.ai_confidence * 100)}% confidence)' if ev.ai_confidence is not None else ''
+                pdf.cell(0, 5.5, _safe(f'AI verdict: {ev.ai_suggested_status}{conf}'), ln=True)
+                pdf.set_font('Helvetica', '', 8.5)
+                pdf.set_text_color(*INK)
+                pdf.multi_cell(0, 4.8, _safe(ev.ai_rationale or 'No rationale given.'), new_x='LMARGIN', new_y='NEXT')
+                for n, gp in enumerate(ev.gaps, 1):
+                    if pdf.get_y() > 265:
+                        pdf.add_page()
+                    pdf.set_text_color(*AMBER)
+                    pdf.multi_cell(0, 4.8, _safe(f'Finding {eid}-F{n:02d} [{gp.get("state", "open")}]: {gp.get("gap", "")}'), new_x='LMARGIN', new_y='NEXT')
+                    if gp.get('suggestion'):
+                        pdf.set_text_color(*MUTED)
+                        pdf.multi_cell(0, 4.8, _safe(f'   Suggestion: {gp["suggestion"]}'), new_x='LMARGIN', new_y='NEXT')
+            else:
+                pdf.set_font('Helvetica', 'I', 8.5)
+                pdf.cell(0, 5.5, 'No AI verdict yet.', ln=True)
+            pdf.ln(2)
+    return bytes(pdf.output())
+
+
 def build_audit_report_pdf(audit, evidence_items, findings):
     pdf = Report(f'Audit Report - {audit.name}')
     pdf.set_font('Helvetica', '', 10)
