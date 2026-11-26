@@ -103,7 +103,7 @@
                             {% else %}<span class="pill pill-pending"><i class="fas fa-clock" aria-hidden="true"></i>{{ item.status }}</span>{% endif %}
                         </td>
                         <td class="text-sm">
-                            {% if item.evidence %}{{ item.evidence.title }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                            {% if item.evidence %}{{ item.evidence.title }}{% if item.evidence.file_path %} <a href="{{ url_for('compliance.preview_evidence', evidence_id=item.evidence.id) }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i> Preview</a>{% endif %}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
                         </td>
                         <td>
                             <div class="cluster">

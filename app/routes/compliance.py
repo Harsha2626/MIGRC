@@ -2,7 +2,7 @@ import json
 import os
 import re
 from datetime import datetime, date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g, abort
+from flask import jsonify, Blueprint, render_template, request, redirect, url_for, flash, current_app, Response, g, abort, send_from_directory
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import IntegrityError
@@ -285,6 +285,7 @@ def control_detail(framework_id, control_id):
             'description': ev.description,
             'file_name': ev.file_name,
             'file_type': ev.file_type,
+            'file_path': ev.file_path,
             'file_size': ev.file_size,
             'source_type': ev.source_type,
             'uploaded_by': ev.uploaded_by.name if ev.uploaded_by else '—',
@@ -580,6 +581,74 @@ def approve_clean_evidence(framework_id, control_id):
 
 
 # ---- EVIDENCE DELETE ----
+# ---- EVIDENCE PREVIEW (inline, org-scoped) ----
+_PREVIEW_MIME = {'pdf': 'application/pdf', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg'}
+
+
+def _framed(resp):
+    # App default is X-Frame-Options DENY; the preview modal frames it from the same origin.
+    resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    resp.headers['Content-Security-Policy'] = "frame-ancestors 'self'; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; object-src 'self'"
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
+
+
+@compliance_bp.route('/evidence/<int:evidence_id>/details')
+@login_required
+def evidence_details(evidence_id):
+    ev = _org_evidence_or_404(evidence_id)
+    if not ev.ai_reviewed_at:
+        gap_label = 'Not Evaluated'
+    else:
+        gap_label = 'Gaps Detected' if ev.open_gap_count else 'No Gaps'
+    iso = lambda d: d.isoformat(timespec='minutes') if d else None
+    return jsonify(
+        id=ev.id, title=ev.title, description=ev.description, file_name=ev.file_name, file_type=ev.file_type,
+        file_size=ev.file_size, source=ev.source_type, uploaded_by=ev.uploaded_by.name if ev.uploaded_by else None,
+        uploaded_at=iso(ev.created_at), period=[str(ev.audit_period_start or ''), str(ev.audit_period_end or '')],
+        status=ev.status, reviewed_by=ev.reviewed_by, reviewed_at=iso(ev.reviewed_at), review_notes=ev.review_notes,
+        ai=dict(status=ev.ai_suggested_status, confidence=ev.ai_confidence, rationale=ev.ai_rationale, gap_label=gap_label, gaps=ev.gaps),
+        controls=[dict(code=m.control.code, title=m.control.title, framework=m.control.framework.name) for m in ev.evidence_mappings])
+
+
+@compliance_bp.route('/evidence/<int:evidence_id>/preview')
+@login_required
+def preview_evidence(evidence_id):
+    ev = _org_evidence_or_404(evidence_id)
+    ext = (ev.file_type or '').lower()
+    folder = current_app.config['UPLOAD_FOLDER']
+    path = os.path.join(folder, ev.file_path or '')
+    if not ev.file_path or not os.path.isfile(path):
+        abort(404)
+    if request.args.get('download'):
+        return send_from_directory(folder, ev.file_path, as_attachment=True, download_name=ev.file_name or ev.file_path)
+    if ext in _PREVIEW_MIME:
+        return _framed(send_from_directory(folder, ev.file_path, mimetype=_PREVIEW_MIME[ext], as_attachment=False))
+    from markupsafe import escape
+    rows = []  # shortcut: text/table preview only, first 200 rows; no formatting fidelity
+    if ext == 'csv':
+        import csv
+        with open(path, newline='', encoding='utf-8', errors='replace') as f:
+            rows = [r for _, r in zip(range(200), csv.reader(f))]
+    elif ext == 'xlsx':
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        rows = [[('' if c is None else c) for c in r] for _, r in zip(range(200), wb.worksheets[0].iter_rows(values_only=True))]
+    elif ext == 'docx':
+        import docx
+        d = docx.Document(path)
+        rows = [[p.text] for p in d.paragraphs if p.text.strip()]
+        for t in d.tables:
+            rows += [[c.text for c in r.cells] for r in t.rows]
+    else:
+        abort(415)
+    body = ''.join('<tr>' + ''.join(f'<td>{escape(str(c))}</td>' for c in r) + '</tr>' for r in rows)
+    html = ('<!doctype html><meta charset="utf-8"><style>body{font:13px system-ui;margin:12px}'
+            'td{border:1px solid #ccc;padding:3px 8px;vertical-align:top}table{border-collapse:collapse}</style>'
+            f'<table>{body}</table>')
+    return _framed(Response(html, mimetype='text/html'))
+
+
 @compliance_bp.route('/evidence/<int:evidence_id>/delete', methods=['POST'])
 @login_required
 @require_permission('delete')

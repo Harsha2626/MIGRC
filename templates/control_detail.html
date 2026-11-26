@@ -159,6 +159,7 @@
                         <div style="font-size:11px;color:var(--text-muted);">
                             {{ ev.file_name }}
                             {% if ev.file_size %}· {{ (ev.file_size / 1024)|round|int }} KB{% endif %}
+                            {% if ev.file_path %}· <a href="#" class="ev-preview" data-src="{{ url_for('compliance.preview_evidence', evidence_id=ev.id) }}" data-title="{{ ev.title }}"><i class="fas fa-eye"></i> Preview</a>{% endif %}
                         </div>
                         {% if ev.description %}
                         <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">{{ ev.description[:100] }}{% if ev.description|length > 100 %}...{% endif %}</div>
@@ -302,6 +303,8 @@
             <div class="form-group">
                 <label>File * <span style="font-size:11px;color:var(--text-muted);">(pdf, png, jpg, csv, xlsx, doc, docx — max 10MB)</span></label>
                 <input type="file" name="file" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.doc,.docx" required>
+                <button type="button" id="evPrePreview" class="btn btn-sm btn-secondary" style="margin-top:6px;" hidden><i class="fas fa-eye"></i> Preview before upload</button>
+                <span id="evPreNote" style="font-size:11px;color:var(--text-muted);margin-left:6px;"></span>
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
@@ -334,4 +337,69 @@
     </div>
 </div>
 {% endif %}
+<dialog id="evPreview" style="width:min(1180px,96vw);height:88vh;padding:0;border:1px solid var(--border-color,#ccc);border-radius:10px;overflow:hidden;">
+  <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border-color,#ddd);">
+    <strong id="evPreviewTitle" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></strong>
+    <span id="evPos" style="font-size:12px;color:var(--text-muted);"></span>
+    <button type="button" class="btn btn-sm btn-secondary" id="evPrev" title="Previous evidence" aria-label="Previous evidence"><i class="fas fa-chevron-left"></i></button>
+    <button type="button" class="btn btn-sm btn-secondary" id="evNext" title="Next evidence" aria-label="Next evidence"><i class="fas fa-chevron-right"></i></button>
+    <a class="btn btn-sm btn-secondary" id="evDownload" href="#" title="Download original"><i class="fas fa-download"></i> Download</a>
+    <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('evPreview').close()">Close</button>
+  </div>
+  <div style="display:flex;height:calc(100% - 53px);">
+    <div style="flex:1;min-width:0;background:#e9edf1;"><iframe id="evPreviewFrame" title="Evidence preview" style="width:100%;height:100%;border:0;background:#fff;"></iframe></div>
+    <aside id="evDetails" style="width:320px;flex:none;overflow:auto;padding:14px;border-left:1px solid var(--border-color,#ddd);font-size:12.5px;line-height:1.5;" aria-live="polite"></aside>
+  </div>
+</dialog>
+<script>
+(function(){
+  var dlg=document.getElementById('evPreview'),frame=document.getElementById('evPreviewFrame'),side=document.getElementById('evDetails'),
+      links=[].slice.call(document.querySelectorAll('.ev-preview')),cur=-1;
+  function el(tag,txt,css){var e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(css)e.style.cssText=css;return e;}
+  function row(k,v){if(v==null||v==='')return;var d=el('div',null,'margin-bottom:8px;');d.appendChild(el('div',k,'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;'));d.appendChild(el('div',v));side.appendChild(d);}
+  function badge(txt,color){return el('span',txt,'display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;background:'+color+';');}
+  var STATUS={'Approved':'#1a7f4b','Rejected':'#c0392b','Pending Review':'#b9770e'};
+  function render(d){
+    side.textContent='';
+    var h=el('div',null,'margin-bottom:10px;');h.appendChild(badge(d.status,STATUS[d.status]||'#555'));side.appendChild(h);
+    var g=el('div',null,'margin-bottom:10px;padding:8px;border-radius:6px;background:var(--bg-tertiary,#f3f5f7);');
+    g.appendChild(el('div','AI review: '+d.ai.gap_label,'font-weight:600;'));
+    if(d.ai.status)g.appendChild(el('div','Suggested: '+d.ai.status+(d.ai.confidence!=null?' ('+Math.round(d.ai.confidence*100)+'% confidence)':'')));
+    if(d.ai.rationale)g.appendChild(el('div',d.ai.rationale,'margin-top:4px;color:var(--text-secondary);'));
+    d.ai.gaps.forEach(function(x){g.appendChild(el('div','\u2022 '+x.gap+(x.state!=='open'?' ['+x.state+']':''),'margin-top:4px;'));});
+    side.appendChild(g);
+    row('Description',d.description);
+    var cs=el('div',null,'margin-bottom:8px;');cs.appendChild(el('div','Linked controls','font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;'));
+    d.controls.forEach(function(c){cs.appendChild(el('div',c.code+' \u2013 '+c.title));cs.lastChild.title=c.framework;});side.appendChild(cs);
+    row('Source',d.source);row('File',d.file_name+(d.file_size?' \u00b7 '+Math.max(1,Math.round(d.file_size/1024))+' KB':''));
+    row('Uploaded by',d.uploaded_by);row('Uploaded',d.uploaded_at&&d.uploaded_at.replace('T',' '));
+    if(d.period[0]||d.period[1])row('Audit period',d.period[0]+' \u2192 '+d.period[1]);
+    if(d.reviewed_by)row('Reviewed',d.reviewed_by+(d.reviewed_at?' \u00b7 '+d.reviewed_at.replace('T',' '):''));
+    row('Review notes',d.review_notes);
+  }
+  function show(i){
+    if(i<0||i>=links.length)return;cur=i;var a=links[i],src=a.dataset.src,id=src.split('/')[2];
+    document.getElementById('evPreviewTitle').textContent=a.dataset.title;
+    document.getElementById('evPos').textContent=(i+1)+' / '+links.length;
+    document.getElementById('evDownload').href=src+'?download=1';
+    frame.src=src;side.textContent='Loading\u2026';
+    fetch('/evidence/'+id+'/details',{credentials:'same-origin'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){if(cur===i)render(d);}).catch(function(){side.textContent='Details unavailable.';});
+    if(!dlg.open)dlg.showModal();
+  }
+  links.forEach(function(a,i){a.addEventListener('click',function(e){e.preventDefault();show(i);});});
+  document.getElementById('evPrev').onclick=function(){show(cur-1);};
+  document.getElementById('evNext').onclick=function(){show(cur+1);};
+  dlg.addEventListener('keydown',function(e){if(e.key==='ArrowLeft')show(cur-1);if(e.key==='ArrowRight')show(cur+1);});
+  dlg.addEventListener('close',function(){frame.src='about:blank';});
+  // preview a chosen file before it is uploaded (pdf/png/jpg only)
+  var inp=document.querySelector('input[name="file"][accept]'),btn=document.getElementById('evPrePreview'),note=document.getElementById('evPreNote'),url=null;
+  if(!inp)return;
+  inp.addEventListener('change',function(){btn.hidden=!inp.files[0];note.textContent='';});
+  btn.addEventListener('click',function(){var f=inp.files[0];if(!f)return;var ext=f.name.split('.').pop().toLowerCase();
+    if(['pdf','png','jpg','jpeg'].indexOf(ext)<0){note.textContent='Only PDF/PNG/JPG preview before upload; other types preview after upload.';return;}
+    if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(f);
+    document.getElementById('evPreviewTitle').textContent=f.name+' (not uploaded yet)';document.getElementById('evPos').textContent='';
+    document.getElementById('evDownload').href='#';side.textContent='Not uploaded yet - details appear after upload.';frame.src=url;dlg.showModal();});
+})();
+</script>
 {% endblock %}
